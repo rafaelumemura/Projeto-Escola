@@ -1,4 +1,4 @@
-import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
+import { PDFDocument, PDFFont, PDFPage, RGB, StandardFonts, rgb } from "pdf-lib";
 
 type PdfActivity = {
   title?: string | null;
@@ -210,28 +210,205 @@ export async function buildActivityPdf(activity: PdfActivity) {
 }
 
 export async function buildWeeklyPlanPdf(plan: PdfWeeklyPlan, items: PdfWeeklyPlanItem[]) {
-  const writer = await createWriter(plan.title || "Planejamento semanal");
+  const pdf = await PDFDocument.create();
+  const regular = await pdf.embedFont(StandardFonts.Helvetica);
+  const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
+  const landscapeWidth = pageHeight;
+  const landscapeHeight = pageWidth;
+  const tableMargin = 30;
+  const top = landscapeHeight - 34;
+  const timeColumnWidth = 78;
+  const headerHeight = 42;
+  const rowHeight = 68;
+  const rowsPerPage = 6;
+  const dates = dateRange(plan.start_date, plan.end_date, items);
+  const times = uniqueTimes(items);
+  const dateChunks = chunk(dates, 7);
+  const timeChunks = chunk(times, rowsPerPage);
 
-  writer.drawMeta("Data inicial", plan.start_date);
-  writer.drawMeta("Data final", plan.end_date);
+  for (const dateChunk of dateChunks.length ? dateChunks : [[]]) {
+    for (const timeChunk of timeChunks.length ? timeChunks : [["--:--"]]) {
+      const page = pdf.addPage([landscapeWidth, landscapeHeight]);
+      const columnWidth = (landscapeWidth - tableMargin * 2 - timeColumnWidth) / Math.max(dateChunk.length, 1);
+      const tableTop = top - 54;
 
-  const grouped = items.reduce<Record<string, PdfWeeklyPlanItem[]>>((acc, item) => {
-    const key = item.date || "Sem data";
-    acc[key] = acc[key] || [];
-    acc[key].push(item);
-    return acc;
-  }, {});
+      page.drawText("Planejamento mensal", {
+        x: tableMargin,
+        y: top,
+        size: 18,
+        font: bold,
+        color: rgb(0.12, 0.18, 0.15)
+      });
+      page.drawText(`Periodo: ${formatDateLabel(plan.start_date)} a ${formatDateLabel(plan.end_date)}`, {
+        x: tableMargin,
+        y: top - 24,
+        size: 10,
+        font: regular,
+        color: rgb(0.28, 0.31, 0.29)
+      });
 
-  for (const [date, dayItems] of Object.entries(grouped)) {
-    writer.drawSection(date, " ");
+      drawCell(page, tableMargin, tableTop, timeColumnWidth, headerHeight, rgb(0.9, 0.96, 0.92));
+      page.drawText("Horario", {
+        x: tableMargin + 10,
+        y: tableTop + 16,
+        size: 10,
+        font: bold,
+        color: rgb(0.12, 0.18, 0.15)
+      });
 
-    for (const item of dayItems) {
-      const activity = item.activities || item.activity;
-      const time = [item.start_time, item.end_time].filter(Boolean).join(" - ");
-      writer.drawMeta(time || "Horario", activity?.title || "Atividade sem titulo");
-      writer.drawSection("Notas", item.notes);
+      dateChunk.forEach((date, index) => {
+        const x = tableMargin + timeColumnWidth + index * columnWidth;
+        drawCell(page, x, tableTop, columnWidth, headerHeight, rgb(0.9, 0.96, 0.92));
+        const [day, weekday] = dateHeader(date);
+        page.drawText(day, {
+          x: x + 8,
+          y: tableTop + 23,
+          size: 9,
+          font: bold,
+          color: rgb(0.12, 0.18, 0.15)
+        });
+        page.drawText(weekday, {
+          x: x + 8,
+          y: tableTop + 10,
+          size: 8,
+          font: regular,
+          color: rgb(0.28, 0.31, 0.29)
+        });
+      });
+
+      timeChunk.forEach((time, rowIndex) => {
+        const y = tableTop - headerHeight - rowIndex * rowHeight;
+        drawCell(page, tableMargin, y, timeColumnWidth, rowHeight, rgb(1, 1, 1));
+        page.drawText(time, {
+          x: tableMargin + 10,
+          y: y + rowHeight - 22,
+          size: 9,
+          font: bold,
+          color: rgb(0.18, 0.49, 0.35)
+        });
+
+        dateChunk.forEach((date, dateIndex) => {
+          const x = tableMargin + timeColumnWidth + dateIndex * columnWidth;
+          const dayItems = itemsForCell(items, date, time);
+          const text = dayItems
+            .map((item) => {
+              const activity = item.activities || item.activity;
+              return [activity?.title || "Atividade sem titulo", activity?.bncc_code ? `BNCC ${activity.bncc_code}` : ""]
+                .filter(Boolean)
+                .join(" - ");
+            })
+            .join("; ");
+
+          drawCell(page, x, y, columnWidth, rowHeight, rgb(1, 1, 1));
+          drawWrappedCellText(page, text, x + 7, y + rowHeight - 16, columnWidth - 14, regular);
+        });
+      });
     }
   }
 
-  return writer.save();
+  return pdf.save();
+}
+
+function drawCell(page: PDFPage, x: number, y: number, width: number, height: number, color: RGB) {
+  page.drawRectangle({
+    x,
+    y,
+    width,
+    height,
+    color,
+    borderColor: rgb(0.86, 0.88, 0.86),
+    borderWidth: 0.7
+  });
+}
+
+function drawWrappedCellText(
+  page: PDFPage,
+  text: string,
+  x: number,
+  y: number,
+  width: number,
+  font: PDFFont
+) {
+  if (!clean(text)) return;
+  const maxChars = Math.max(14, Math.floor(width / 4.8));
+  const lines = wrapText(text, maxChars).slice(0, 5);
+
+  lines.forEach((line, index) => {
+    page.drawText(line, {
+      x,
+      y: y - index * 10,
+      size: 7.8,
+      font,
+      color: rgb(0.12, 0.14, 0.13)
+    });
+  });
+}
+
+function dateRange(startDate?: string | null, endDate?: string | null, items: PdfWeeklyPlanItem[] = []) {
+  const itemDates = items.map((item) => item.date).filter((date): date is string => Boolean(date)).sort();
+  const start = parseDate(startDate || itemDates[0]);
+  const end = parseDate(endDate || itemDates[itemDates.length - 1] || startDate);
+
+  if (!start || !end || start > end) return [];
+
+  const dates: string[] = [];
+  const cursor = new Date(start);
+
+  while (cursor <= end) {
+    dates.push(toIsoDate(cursor));
+    cursor.setDate(cursor.getDate() + 1);
+  }
+
+  return dates;
+}
+
+function uniqueTimes(items: PdfWeeklyPlanItem[]) {
+  const times = Array.from(new Set(items.map((item) => formatTime(item.start_time)).filter(Boolean))).sort();
+  return times.length ? times : ["--:--"];
+}
+
+function itemsForCell(items: PdfWeeklyPlanItem[], date: string, time: string) {
+  return items.filter((item) => item.date === date && formatTime(item.start_time) === time);
+}
+
+function chunk<T>(items: T[], size: number) {
+  const chunks: T[][] = [];
+
+  for (let index = 0; index < items.length; index += size) {
+    chunks.push(items.slice(index, index + size));
+  }
+
+  return chunks;
+}
+
+function parseDate(value?: string | null) {
+  if (!value) return null;
+  const [year, month, day] = value.split("-").map(Number);
+  if (!year || !month || !day) return null;
+  return new Date(year, month - 1, day);
+}
+
+function toIsoDate(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function formatDateLabel(value?: string | null) {
+  const date = parseDate(value);
+  if (!date) return "A definir";
+  return `${String(date.getDate()).padStart(2, "0")}/${String(date.getMonth() + 1).padStart(2, "0")}/${date.getFullYear()}`;
+}
+
+function dateHeader(value: string) {
+  const date = parseDate(value);
+  if (!date) return [value, ""];
+  const dateLabel = `${String(date.getDate()).padStart(2, "0")}/${String(date.getMonth() + 1).padStart(2, "0")}`;
+  const weekday = new Intl.DateTimeFormat("pt-BR", { weekday: "short" }).format(date).replace(".", "");
+  return [dateLabel, weekday];
+}
+
+function formatTime(value?: string | null) {
+  return value ? value.slice(0, 5) : "--:--";
 }

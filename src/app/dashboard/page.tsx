@@ -35,7 +35,7 @@ export default function DashboardPage() {
   return (
     <ProtectedPage
       title={`Olá, ${profile?.name || "professor(a)"}`}
-      subtitle="Organize sua rotina pedagógica com atividades geradas por IA, coleções e planejamentos semanais."
+      subtitle="Organize sua rotina pedagógica com atividades geradas por IA, coleções e planejamentos mensais."
       actions={
         <Link href="/gerar" className="btn-primary">
           <Sparkles size={17} />
@@ -46,7 +46,7 @@ export default function DashboardPage() {
       <div className="grid gap-4 md:grid-cols-3">
         <SummaryCard icon={<BookOpen size={22} />} label="Atividades salvas" value={activities.length} href="/atividades" />
         <SummaryCard icon={<FolderKanban size={22} />} label="Coleções" value={collections.length} href="/colecoes" />
-        <SummaryCard icon={<CalendarDays size={22} />} label="Planejamentos" value={plans.length} href="/planejamento" />
+        <SummaryCard icon={<CalendarDays size={22} />} label="Planejamentos mensais" value={plans.length} href="/planejamento" />
       </div>
 
       <div className="mt-6 grid gap-6 lg:grid-cols-[1.35fr_0.65fr]">

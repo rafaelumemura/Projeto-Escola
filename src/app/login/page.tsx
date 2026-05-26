@@ -75,7 +75,7 @@ export default function LoginPage() {
             Gere, salve e organize atividades pedagógicas com IA para educação infantil e fundamental 1.
           </p>
           <div className="mt-8 grid gap-3 sm:grid-cols-3">
-            {["Atividades estruturadas", "Coleções temáticas", "Planejamento semanal"].map((item) => (
+            {["Atividades estruturadas", "Coleções temáticas", "Planejamento mensal"].map((item) => (
               <div key={item} className="rounded-lg border border-ink/10 bg-white p-4 text-sm font-semibold text-ink/75">
                 {item}
               </div>

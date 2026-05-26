@@ -8,7 +8,9 @@ export const runtime = "nodejs";
 const payloadSchema = z.object({
   weekly_plan_id: z.string().uuid().optional(),
   weekly_plan: z.record(z.unknown()).optional(),
-  items: z.array(z.record(z.unknown())).optional()
+  items: z.array(z.record(z.unknown())).optional(),
+  start_date: z.string().optional(),
+  end_date: z.string().optional()
 });
 
 export async function POST(request: Request) {
@@ -28,16 +30,25 @@ export async function POST(request: Request) {
 
       if (error) throw error;
 
-      const { data: planItems, error: itemsError } = await supabase
+      let itemsQuery = supabase
         .from("weekly_plan_items")
         .select("*, activities(*)")
-        .eq("weekly_plan_id", payload.weekly_plan_id)
+        .eq("weekly_plan_id", payload.weekly_plan_id);
+
+      if (payload.start_date) itemsQuery = itemsQuery.gte("date", payload.start_date);
+      if (payload.end_date) itemsQuery = itemsQuery.lte("date", payload.end_date);
+
+      const { data: planItems, error: itemsError } = await itemsQuery
         .order("date", { ascending: true })
         .order("start_time", { ascending: true });
 
       if (itemsError) throw itemsError;
 
-      weeklyPlan = plan;
+      weeklyPlan = {
+        ...plan,
+        start_date: payload.start_date || plan.start_date,
+        end_date: payload.end_date || plan.end_date
+      };
       items = planItems || [];
     }
 
@@ -53,7 +64,7 @@ export async function POST(request: Request) {
     return new Response(Buffer.from(bytes), {
       headers: {
         "content-type": "application/pdf",
-        "content-disposition": "attachment; filename=planejamento-semanal.pdf"
+        "content-disposition": "attachment; filename=planejamento-mensal.pdf"
       }
     });
   } catch (error) {
