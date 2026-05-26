@@ -63,13 +63,15 @@ Ele também ativa RLS em todas as tabelas e cria policies para que cada usuário
 
 Os planos disponíveis são:
 
-- Básico: 30 atividades por ciclo de 30 dias
+- Gratuito: 5 atividades por ciclo de 7 dias
+- Básico: 25 atividades por ciclo de 30 dias
 - Completo: 100 atividades por ciclo de 30 dias
 - Pro: 1000 atividades por ciclo de 30 dias, reservado ao admin `rafaelumemura@gmail.com`
 
 Para ativar um ciclo após confirmação de pagamento:
 
 ```sql
+select public.activate_subscription_cycle('USER_ID_AQUI', 'free');
 select public.activate_subscription_cycle('USER_ID_AQUI', 'basic');
 select public.activate_subscription_cycle('USER_ID_AQUI', 'complete');
 ```

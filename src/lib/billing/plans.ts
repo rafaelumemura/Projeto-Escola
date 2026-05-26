@@ -1,18 +1,27 @@
 export const PLAN_DEFINITIONS = {
+  free: {
+    key: "free",
+    name: "Gratuito",
+    activityLimit: 5,
+    periodDays: 7
+  },
   basic: {
     key: "basic",
     name: "Básico",
-    activityLimit: 30
+    activityLimit: 25,
+    periodDays: 30
   },
   complete: {
     key: "complete",
     name: "Completo",
-    activityLimit: 100
+    activityLimit: 100,
+    periodDays: 30
   },
   pro: {
     key: "pro",
     name: "Pro",
-    activityLimit: 1000
+    activityLimit: 1000,
+    periodDays: 30
   }
 } as const;
 
@@ -35,20 +44,20 @@ export type BillingUsage = {
   message: string | null;
 };
 
-export function planName(planKey?: string | null) {
-  if (planKey === "basic" || planKey === "complete" || planKey === "pro") {
-    return PLAN_DEFINITIONS[planKey].name;
-  }
+export function isPlanKey(planKey?: string | null): planKey is PaidPlanKey {
+  return Boolean(planKey && planKey in PLAN_DEFINITIONS);
+}
 
-  return "Sem plano";
+export function planName(planKey?: string | null) {
+  return isPlanKey(planKey) ? PLAN_DEFINITIONS[planKey].name : "Sem plano";
 }
 
 export function planLimit(planKey?: string | null) {
-  if (planKey === "basic" || planKey === "complete" || planKey === "pro") {
-    return PLAN_DEFINITIONS[planKey].activityLimit;
-  }
+  return isPlanKey(planKey) ? PLAN_DEFINITIONS[planKey].activityLimit : 0;
+}
 
-  return 0;
+export function planPeriodDays(planKey?: string | null) {
+  return isPlanKey(planKey) ? PLAN_DEFINITIONS[planKey].periodDays : 30;
 }
 
 export function emptyBillingUsage(message = "Nenhum plano ativo."): BillingUsage {

@@ -85,7 +85,7 @@ export type Database = {
           email: string | null;
           avatar_url: string | null;
           is_admin: boolean;
-          plan: string;
+          plan: "free" | "basic" | "complete" | "pro";
           created_at: string;
         };
         Insert: {
@@ -94,7 +94,7 @@ export type Database = {
           email?: string | null;
           avatar_url?: string | null;
           is_admin?: boolean;
-          plan?: string;
+          plan?: "free" | "basic" | "complete" | "pro";
           created_at?: string;
         };
         Update: {
@@ -102,7 +102,7 @@ export type Database = {
           email?: string | null;
           avatar_url?: string | null;
           is_admin?: boolean;
-          plan?: string;
+          plan?: "free" | "basic" | "complete" | "pro";
         };
       };
       activities: {
@@ -210,7 +210,7 @@ export type Database = {
         Row: {
           id: string;
           user_id: string;
-          plan_key: "basic" | "complete" | "pro";
+          plan_key: "free" | "basic" | "complete" | "pro";
           status: "active" | "past_due" | "suspended" | "canceled";
           activity_limit: number;
           generated_count: number;
@@ -229,7 +229,7 @@ export type Database = {
         Insert: {
           id?: string;
           user_id: string;
-          plan_key: "basic" | "complete" | "pro";
+          plan_key: "free" | "basic" | "complete" | "pro";
           status?: "active" | "past_due" | "suspended" | "canceled";
           activity_limit: number;
           generated_count?: number;
@@ -246,7 +246,7 @@ export type Database = {
           updated_at?: string;
         };
         Update: {
-          plan_key?: "basic" | "complete" | "pro";
+          plan_key?: "free" | "basic" | "complete" | "pro";
           status?: "active" | "past_due" | "suspended" | "canceled";
           activity_limit?: number;
           generated_count?: number;

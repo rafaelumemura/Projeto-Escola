@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { ProtectedPage } from "@/components/layout/ProtectedPage";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { apiFetch } from "@/lib/api/client";
-import type { BillingUsage } from "@/lib/billing/plans";
+import { planName, type BillingUsage } from "@/lib/billing/plans";
 
 export default function ProfilePage() {
   const router = useRouter();
@@ -139,7 +139,7 @@ export default function ProfilePage() {
 
           <div className="grid gap-3">
             <Info label="E-mail" value={profile?.email || user?.email || "-"} />
-            <Info label="Plano atual" value={usage?.plan_name || profile?.plan || "Sem plano"} />
+            <Info label="Plano atual" value={usage?.plan_name || planName(profile?.plan)} />
             <Info label="Uso do ciclo" value={`${usage?.generated_count || 0}/${usage?.activity_limit || 0} atividades`} />
             <Info label="Vencimento" value={usage?.current_period_end ? new Date(usage.current_period_end).toLocaleDateString("pt-BR") : "-"} />
             <Info label="Acesso" value={profile?.is_admin ? "Admin" : "Usuário"} />

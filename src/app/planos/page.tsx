@@ -41,7 +41,7 @@ export default function PlansPage() {
   }
 
   return (
-    <ProtectedPage title="Planos" subtitle="Escolha o volume de atividades geradas por IA para cada ciclo de 30 dias.">
+    <ProtectedPage title="Planos" subtitle="Escolha o volume de atividades geradas por IA para o seu ciclo de uso.">
       {message ? <p className="mb-4 rounded-lg border border-ink/10 bg-white px-4 py-3 text-sm font-semibold text-ink/70">{message}</p> : null}
 
       <div className="grid gap-4 lg:grid-cols-2">
@@ -61,7 +61,7 @@ export default function PlansPage() {
               </div>
 
               <p className="mt-5 text-4xl font-bold text-ink">{plan.activityLimit}</p>
-              <p className="mt-1 text-sm font-semibold text-ink/60">atividades por ciclo de 30 dias</p>
+              <p className="mt-1 text-sm font-semibold text-ink/60">atividades por ciclo de {plan.periodDays} dias</p>
 
               <div className="mt-5 space-y-2 text-sm text-ink/70">
                 <PlanFeature text="Geração de atividades com Claude API" />

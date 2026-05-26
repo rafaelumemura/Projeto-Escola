@@ -354,10 +354,14 @@ for each row execute function public.sync_profile_admin_flag();
 update public.profiles
 set is_admin = lower(coalesce(email, '')) = 'rafaelumemura@gmail.com';
 
+update public.profiles
+set plan = 'free'
+where lower(coalesce(plan, '')) = 'free';
+
 create table if not exists public.billing_subscriptions (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
-  plan_key text not null check (plan_key in ('basic', 'complete', 'pro')),
+  plan_key text not null check (plan_key in ('free', 'basic', 'complete', 'pro')),
   status text not null default 'active' check (status in ('active', 'past_due', 'suspended', 'canceled')),
   activity_limit integer not null,
   generated_count integer not null default 0,
@@ -379,7 +383,7 @@ drop constraint if exists billing_subscriptions_plan_key_check;
 
 alter table public.billing_subscriptions
 add constraint billing_subscriptions_plan_key_check
-check (plan_key in ('basic', 'complete', 'pro'));
+check (plan_key in ('free', 'basic', 'complete', 'pro'));
 
 create index if not exists billing_subscriptions_user_status_idx
 on public.billing_subscriptions(user_id, status, current_period_end desc);
@@ -394,12 +398,31 @@ language sql
 immutable
 as $$
   select case
-    when plan_key = 'basic' then 30
+    when plan_key = 'free' then 5
+    when plan_key = 'basic' then 25
     when plan_key = 'complete' then 100
     when plan_key = 'pro' then 1000
     else 0
   end;
 $$;
+
+create or replace function public.billing_plan_period_days(plan_key text)
+returns integer
+language sql
+immutable
+as $$
+  select case
+    when plan_key = 'free' then 7
+    when plan_key in ('basic', 'complete', 'pro') then 30
+    else 30
+  end;
+$$;
+
+update public.billing_subscriptions
+set activity_limit = public.billing_plan_limit(plan_key),
+    updated_at = now()
+where plan_key in ('free', 'basic', 'complete', 'pro')
+and activity_limit is distinct from public.billing_plan_limit(plan_key);
 
 create or replace function public.activate_subscription_cycle(
   p_user_id uuid,
@@ -418,12 +441,14 @@ declare
   active_subscription public.billing_subscriptions;
   updated_subscription public.billing_subscriptions;
   plan_limit integer;
+  period_days integer;
 begin
-  if p_plan_key not in ('basic', 'complete', 'pro') then
+  if p_plan_key not in ('free', 'basic', 'complete', 'pro') then
     raise exception 'Plano inválido.';
   end if;
 
   plan_limit := public.billing_plan_limit(p_plan_key);
+  period_days := public.billing_plan_period_days(p_plan_key);
 
   select *
   into active_subscription
@@ -454,8 +479,8 @@ begin
       plan_limit,
       0,
       p_started_at,
-      p_started_at + interval '30 days',
-      p_started_at + interval '31 days',
+      p_started_at + make_interval(days => period_days),
+      p_started_at + make_interval(days => period_days + 1),
       p_provider,
       p_provider_customer_id,
       p_provider_subscription_id
@@ -469,8 +494,8 @@ begin
       activity_limit = plan_limit,
       generated_count = 0,
       current_period_start = p_started_at,
-      current_period_end = p_started_at + interval '30 days',
-      grace_ends_at = p_started_at + interval '31 days',
+      current_period_end = p_started_at + make_interval(days => period_days),
+      grace_ends_at = p_started_at + make_interval(days => period_days + 1),
       suspended_at = null,
       inactive_delete_after = null,
       canceled_at = null,

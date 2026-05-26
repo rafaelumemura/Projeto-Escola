@@ -1,5 +1,14 @@
 import { createSupabaseAdminClient } from "@/lib/supabase/server";
-import { emptyBillingUsage, planLimit, planName, type BillingUsage, type PaidPlanKey, type SubscriptionStatus } from "@/lib/billing/plans";
+import {
+  emptyBillingUsage,
+  isPlanKey,
+  planLimit,
+  planName,
+  planPeriodDays,
+  type BillingUsage,
+  type PaidPlanKey,
+  type SubscriptionStatus
+} from "@/lib/billing/plans";
 
 type SubscriptionRow = {
   id: string;
@@ -53,13 +62,14 @@ export async function getBillingUsage(userId: string): Promise<BillingUsage> {
 
 async function createUsageFromProfilePlan(userId: string) {
   const supabase = createSupabaseAdminClient();
-  const { data: profile, error } = await supabase.from("profiles").select("plan").eq("id", userId).single();
+  const { data: profile, error } = await supabase.from("profiles").select("plan, created_at").eq("id", userId).single();
 
-  if (error || (profile?.plan !== "basic" && profile?.plan !== "complete" && profile?.plan !== "pro")) {
+  if (error || !isPlanKey(profile?.plan)) {
     return null;
   }
 
-  const now = new Date().toISOString();
+  const now = profile.plan === "free" && profile.created_at ? new Date(profile.created_at) : new Date();
+  const periodDays = planPeriodDays(profile.plan);
   const { data, error: insertError } = await supabase
     .from("billing_subscriptions")
     .insert({
@@ -68,15 +78,16 @@ async function createUsageFromProfilePlan(userId: string) {
       status: "active",
       activity_limit: planLimit(profile.plan),
       generated_count: 0,
-      current_period_start: now,
-      current_period_end: new Date(Date.now() + 30 * dayMs).toISOString(),
-      grace_ends_at: new Date(Date.now() + 31 * dayMs).toISOString()
+      current_period_start: now.toISOString(),
+      current_period_end: new Date(now.getTime() + periodDays * dayMs).toISOString(),
+      grace_ends_at: new Date(now.getTime() + (periodDays + 1) * dayMs).toISOString()
     })
     .select("*")
     .single();
 
   if (insertError) throw insertError;
-  return subscriptionToUsage(data as SubscriptionRow);
+  const normalized = await normalizeSubscription(data as SubscriptionRow);
+  return subscriptionToUsage(normalized);
 }
 
 async function ensureAdminProUsage(userId: string) {
@@ -202,7 +213,7 @@ async function updateSubscriptionStatus(subscription: SubscriptionRow, status: "
 }
 
 function subscriptionToUsage(subscription: SubscriptionRow): BillingUsage {
-  const planKey = subscription.plan_key === "basic" || subscription.plan_key === "complete" || subscription.plan_key === "pro" ? subscription.plan_key : null;
+  const planKey = isPlanKey(subscription.plan_key) ? subscription.plan_key : null;
   const limit = subscription.activity_limit || planLimit(planKey);
   const generated = Math.max(0, subscription.generated_count || 0);
   const remaining = Math.max(0, limit - generated);
@@ -223,7 +234,7 @@ function subscriptionToUsage(subscription: SubscriptionRow): BillingUsage {
     grace_ends_at: subscription.grace_ends_at,
     inactive_delete_after: subscription.inactive_delete_after,
     can_generate: canGenerate,
-    can_upgrade: planKey === "basic" && subscription.status === "active",
+    can_upgrade: (planKey === "free" || planKey === "basic") && subscription.status === "active",
     message
   };
 }
@@ -238,6 +249,6 @@ function usageMessage(status: SubscriptionStatus, remaining: number, periodEnd: 
   if (status === "past_due") return "Pagamento pendente. Renove o plano para voltar a gerar atividades.";
   if (status === "canceled") return "Plano cancelado.";
   if (remaining <= 0) return "Você usou todas as gerações disponíveis neste ciclo.";
-  if (new Date() > periodEnd) return "Seu ciclo de 30 dias venceu.";
+  if (new Date() > periodEnd) return "Seu ciclo venceu.";
   return null;
 }
