@@ -1,20 +1,21 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
-import { Eye, FolderPlus, Pencil, Plus, Save, Trash2, X } from "lucide-react";
+import { ArrowRight, Eye, FolderKanban, FolderPlus, Pencil, Plus, Save, Trash2, X } from "lucide-react";
 import { ProtectedPage } from "@/components/layout/ProtectedPage";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { apiFetch } from "@/lib/api/client";
 import type { Database } from "@/lib/database.types";
 
 type Collection = Database["public"]["Tables"]["collections"]["Row"];
+type CollectionCard = Collection & { activity_count?: number };
 type Activity = Database["public"]["Tables"]["activities"]["Row"];
 
 export default function CollectionsPage() {
   const { supabase } = useAuth();
-  const [collections, setCollections] = useState<Collection[]>([]);
+  const [collections, setCollections] = useState<CollectionCard[]>([]);
   const [activities, setActivities] = useState<Activity[]>([]);
-  const [selected, setSelected] = useState<Collection | null>(null);
+  const [selected, setSelected] = useState<CollectionCard | null>(null);
   const [collectionActivities, setCollectionActivities] = useState<Activity[]>([]);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -25,14 +26,20 @@ export default function CollectionsPage() {
   const [message, setMessage] = useState<string | null>(null);
 
   async function loadCollections() {
-    const data = await apiFetch<{ collections: Collection[] }>(supabase, "/api/collections");
+    const data = await apiFetch<{ collections: CollectionCard[] }>(supabase, "/api/collections");
     setCollections(data.collections);
-    setSelected((current) => current || data.collections[0] || null);
+    setSelected((current) => {
+      if (!current) return data.collections[0] || null;
+      return data.collections.find((collection) => collection.id === current.id) || data.collections[0] || null;
+    });
   }
 
   async function loadCollectionDetails(collectionId: string) {
     const data = await apiFetch<{ collection: Collection; activities: Activity[] }>(supabase, `/api/collections/${collectionId}`);
-    setSelected(data.collection);
+    setSelected({
+      ...data.collection,
+      activity_count: data.activities.length
+    });
     setEditName(data.collection.name);
     setEditDescription(data.collection.description || "");
     setCollectionActivities(data.activities);
@@ -66,7 +73,7 @@ export default function CollectionsPage() {
       });
       setName("");
       setDescription("");
-      setSelected(data.collection);
+      setSelected({ ...data.collection, activity_count: 0 });
       await loadCollections();
       setMessage("Coleção criada.");
     } catch (error) {
@@ -123,6 +130,7 @@ export default function CollectionsPage() {
         body: { activity_id: activityId }
       });
       await loadCollectionDetails(selected.id);
+      await loadCollections();
       setActivityId("");
       setMessage("Atividade adicionada.");
     } catch (error) {
@@ -139,6 +147,7 @@ export default function CollectionsPage() {
     try {
       await apiFetch(supabase, `/api/collections/${selected.id}/activities/${id}`, { method: "DELETE" });
       await loadCollectionDetails(selected.id);
+      await loadCollections();
       setMessage("Atividade removida.");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Não foi possível remover.");
@@ -151,36 +160,61 @@ export default function CollectionsPage() {
     <ProtectedPage title="Coleções" subtitle="Crie grupos temáticos para reaproveitar atividades em projetos, datas e objetivos pedagógicos.">
       {message ? <p className="mb-4 rounded-lg border border-ink/10 bg-white px-4 py-3 text-sm font-semibold text-ink/70">{message}</p> : null}
 
-      <div className="grid gap-5 lg:grid-cols-[360px_1fr]">
-        <aside className="space-y-4">
-          <form onSubmit={createCollection} className="panel space-y-3 p-4">
-            <div className="flex items-center gap-2 font-bold">
-              <FolderPlus size={18} className="text-leaf" />
-              Nova coleção
-            </div>
+      <div className="space-y-5">
+        <form onSubmit={createCollection} className="panel space-y-3 p-4">
+          <div className="flex items-center gap-2 font-bold">
+            <FolderPlus size={18} className="text-leaf" />
+            Nova coleção
+          </div>
+          <div className="grid gap-3 lg:grid-cols-[1fr_1.4fr_auto]">
             <input className="field" value={name} onChange={(event) => setName(event.target.value)} placeholder="Ex.: Semana da Natureza" required />
-            <textarea className="field min-h-20" value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Descrição opcional" />
-            <button disabled={busy} className="w-full btn-primary">
+            <textarea className="field min-h-10" value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Descrição opcional" />
+            <button disabled={busy} className="btn-primary">
               <Plus size={16} />
               Criar coleção
             </button>
-          </form>
+          </div>
+        </form>
 
-          <div className="space-y-2">
+        <section>
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2 font-bold">
+              <FolderKanban size={18} className="text-leaf" />
+              Coleções salvas
+            </div>
+            <span className="badge">{collections.length} coleções</span>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {collections.map((collection) => (
               <button
                 key={collection.id}
                 onClick={() => setSelected(collection)}
-                className={`w-full rounded-lg border bg-white p-4 text-left transition ${
+                className={`panel block min-h-[180px] p-5 text-left transition hover:-translate-y-0.5 ${
                   selected?.id === collection.id ? "border-leaf ring-2 ring-leaf/15" : "border-ink/10 hover:border-leaf/40"
                 }`}
               >
-                <h2 className="font-bold">{collection.name}</h2>
-                <p className="mt-1 text-sm text-ink/60">{collection.description || "Sem descrição"}</p>
+                <div className="flex items-center justify-between">
+                  <span className="grid h-11 w-11 place-items-center rounded-lg bg-mint text-leaf">
+                    <FolderKanban size={22} />
+                  </span>
+                  <ArrowRight size={18} className="text-ink/35" />
+                </div>
+                <h2 className="mt-5 text-lg font-bold text-ink">{collection.name}</h2>
+                <p className="mt-2 min-h-10 text-sm leading-5 text-ink/60">{collection.description || "Sem descrição"}</p>
+                <p className="mt-4 text-sm font-semibold text-leaf">
+                  {collection.activity_count || 0} {(collection.activity_count || 0) === 1 ? "atividade salva" : "atividades salvas"}
+                </p>
               </button>
             ))}
+
+            {!collections.length ? (
+              <div className="rounded-lg border border-dashed border-ink/20 bg-white p-6 text-center text-sm font-semibold text-ink/60 md:col-span-2 xl:col-span-3">
+                Nenhuma coleção criada ainda.
+              </div>
+            ) : null}
           </div>
-        </aside>
+        </section>
 
         <section className="space-y-4">
           {selected ? (

@@ -13,7 +13,28 @@ export async function GET(request: Request) {
 
     if (error) throw error;
 
-    return ok({ collections: data });
+    const collectionIds = (data || []).map((collection) => collection.id);
+    const counts = new Map<string, number>();
+
+    if (collectionIds.length) {
+      const { data: links, error: linksError } = await supabase
+        .from("collection_activities")
+        .select("collection_id")
+        .in("collection_id", collectionIds);
+
+      if (linksError) throw linksError;
+
+      for (const link of links || []) {
+        counts.set(link.collection_id, (counts.get(link.collection_id) || 0) + 1);
+      }
+    }
+
+    return ok({
+      collections: (data || []).map((collection) => ({
+        ...collection,
+        activity_count: counts.get(collection.id) || 0
+      }))
+    });
   } catch (error) {
     return fail(error);
   }
