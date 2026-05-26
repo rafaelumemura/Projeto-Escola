@@ -1,6 +1,9 @@
 alter table public.profiles
 add column if not exists avatar_url text;
 
+alter table public.profiles
+add column if not exists is_admin boolean not null default false;
+
 create or replace function public.set_updated_at()
 returns trigger
 language plpgsql
@@ -10,6 +13,33 @@ begin
   return new;
 end;
 $$;
+
+create or replace function public.sync_profile_admin_flag()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, auth
+as $$
+declare
+  auth_email text;
+begin
+  select email into auth_email
+  from auth.users
+  where id = new.id;
+
+  new.email := coalesce(auth_email, new.email);
+  new.is_admin := lower(coalesce(auth_email, new.email, '')) = 'rafaelumemura@gmail.com';
+  return new;
+end;
+$$;
+
+drop trigger if exists sync_profile_admin_flag on public.profiles;
+create trigger sync_profile_admin_flag
+before insert or update on public.profiles
+for each row execute function public.sync_profile_admin_flag();
+
+update public.profiles
+set is_admin = lower(coalesce(email, '')) = 'rafaelumemura@gmail.com';
 
 create table if not exists public.billing_subscriptions (
   id uuid primary key default gen_random_uuid(),

@@ -31,6 +31,9 @@ SUPABASE_SERVICE_ROLE_KEY=
 ANTHROPIC_API_KEY=
 ANTHROPIC_MODEL=claude-sonnet-4-5-20250929
 BILLING_MAINTENANCE_SECRET=
+HOTMART_BASIC_URL=
+HOTMART_COMPLETE_URL=
+HOTMART_UPGRADE_URL=
 ```
 
 3. No Supabase, rode o SQL em `supabase/schema.sql`.
@@ -77,6 +80,8 @@ select public.upgrade_subscription_to_complete('USER_ID_AQUI');
 ```
 
 A função `public.billing_maintenance()` suspende planos vencidos após 1 dia de carência e exclui usuários suspensos há mais de 30 dias. Ela também está exposta em `POST /api/billing/maintenance` usando o header `x-maintenance-secret`.
+
+O checkout redireciona para os links configurados em `HOTMART_BASIC_URL`, `HOTMART_COMPLETE_URL` e, para upgrade, `HOTMART_UPGRADE_URL`.
 
 ## APIs internas
 

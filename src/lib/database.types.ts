@@ -84,6 +84,7 @@ export type Database = {
           name: string | null;
           email: string | null;
           avatar_url: string | null;
+          is_admin: boolean;
           plan: string;
           created_at: string;
         };
@@ -92,6 +93,7 @@ export type Database = {
           name?: string | null;
           email?: string | null;
           avatar_url?: string | null;
+          is_admin?: boolean;
           plan?: string;
           created_at?: string;
         };
@@ -99,6 +101,7 @@ export type Database = {
           name?: string | null;
           email?: string | null;
           avatar_url?: string | null;
+          is_admin?: boolean;
           plan?: string;
         };
       };

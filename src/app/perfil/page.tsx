@@ -16,7 +16,11 @@ export default function ProfilePage() {
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const [usage, setUsage] = useState<BillingUsage | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [passwordMessage, setPasswordMessage] = useState<string | null>(null);
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [busy, setBusy] = useState(false);
+  const [passwordBusy, setPasswordBusy] = useState(false);
 
   useEffect(() => {
     setName(profile?.name || "");
@@ -39,18 +43,7 @@ export default function ProfilePage() {
       let avatarUrl = profile?.avatar_url || null;
 
       if (avatarFile) {
-        const extension = avatarFile.name.split(".").pop()?.toLowerCase() || "jpg";
-        const path = `${user.id}/avatar-${Date.now()}.${extension}`;
-        const { error: uploadError } = await supabase.storage.from("avatars").upload(path, avatarFile, {
-          cacheControl: "3600",
-          contentType: avatarFile.type,
-          upsert: true
-        });
-
-        if (uploadError) throw uploadError;
-
-        const { data } = supabase.storage.from("avatars").getPublicUrl(path);
-        avatarUrl = data.publicUrl;
+        avatarUrl = await uploadAvatar(avatarFile);
       }
 
       const { error } = await supabase.from("profiles").update({ name, avatar_url: avatarUrl }).eq("id", user.id);
@@ -69,6 +62,62 @@ export default function ProfilePage() {
     if (!file) return;
     setAvatarFile(file);
     setAvatarPreview(URL.createObjectURL(file));
+  }
+
+  async function uploadAvatar(file: File) {
+    const {
+      data: { session }
+    } = await supabase.auth.getSession();
+
+    if (!session) {
+      throw new Error("Sessão expirada. Entre novamente.");
+    }
+
+    const formData = new FormData();
+    formData.append("avatar", file);
+    const response = await fetch("/api/profile/avatar", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${session.access_token}`
+      },
+      body: formData
+    });
+
+    if (!response.ok) {
+      const data = await response.json().catch(() => null);
+      throw new Error(data?.error || "Não foi possível enviar a foto.");
+    }
+
+    const data = (await response.json()) as { avatar_url: string };
+    return data.avatar_url;
+  }
+
+  async function updatePassword(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (newPassword.length < 6) {
+      setPasswordMessage("A nova senha precisa ter pelo menos 6 caracteres.");
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      setPasswordMessage("As senhas não conferem.");
+      return;
+    }
+
+    setPasswordBusy(true);
+    setPasswordMessage(null);
+    try {
+      const { error } = await supabase.auth.updateUser({ password: newPassword });
+      if (error) throw error;
+      setNewPassword("");
+      setConfirmPassword("");
+      setPasswordMessage("Senha atualizada.");
+    } catch (error) {
+      setPasswordMessage(error instanceof Error ? error.message : "Não foi possível atualizar a senha.");
+    } finally {
+      setPasswordBusy(false);
+    }
   }
 
   async function handleSignOut() {
@@ -93,6 +142,7 @@ export default function ProfilePage() {
             <Info label="Plano atual" value={usage?.plan_name || profile?.plan || "Sem plano"} />
             <Info label="Uso do ciclo" value={`${usage?.generated_count || 0}/${usage?.activity_limit || 0} atividades`} />
             <Info label="Vencimento" value={usage?.current_period_end ? new Date(usage.current_period_end).toLocaleDateString("pt-BR") : "-"} />
+            <Info label="Acesso" value={profile?.is_admin ? "Admin" : "Usuário"} />
             <Info label="Data de cadastro" value={profile?.created_at ? new Date(profile.created_at).toLocaleDateString("pt-BR") : "-"} />
           </div>
 
@@ -102,34 +152,58 @@ export default function ProfilePage() {
           </button>
         </section>
 
-        <form onSubmit={saveProfile} className="panel h-fit space-y-4 p-5">
-          <div>
-            <span className="label mb-2 block">Foto</span>
-            <label className="flex cursor-pointer items-center gap-3 rounded-lg border border-dashed border-ink/20 bg-white p-4 transition hover:border-leaf/40">
-              <AvatarPreview src={avatarPreview} name={name || profile?.email || "Perfil"} compact />
-              <span className="min-w-0">
-                <span className="flex items-center gap-2 text-sm font-semibold text-ink">
-                  <Camera size={16} />
-                  Alterar foto
+        <section className="space-y-5">
+          <form onSubmit={saveProfile} className="panel h-fit space-y-4 p-5">
+            <div>
+              <span className="label mb-2 block">Foto</span>
+              <label className="flex cursor-pointer items-center gap-3 rounded-lg border border-dashed border-ink/20 bg-white p-4 transition hover:border-leaf/40">
+                <AvatarPreview src={avatarPreview} name={name || profile?.email || "Perfil"} compact />
+                <span className="min-w-0">
+                  <span className="flex items-center gap-2 text-sm font-semibold text-ink">
+                    <Camera size={16} />
+                    Alterar foto
+                  </span>
+                  <span className="mt-1 block text-xs text-ink/55">JPG, PNG, WEBP ou GIF até 5 MB</span>
                 </span>
-                <span className="mt-1 block text-xs text-ink/55">JPG, PNG, WEBP ou GIF até 5 MB</span>
-              </span>
-              <input className="hidden" type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={(event) => selectAvatar(event.target.files?.[0])} />
-            </label>
-          </div>
+                <input className="hidden" type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={(event) => selectAvatar(event.target.files?.[0])} />
+              </label>
+            </div>
 
-          <div>
-            <label className="label mb-2 block">Nome</label>
-            <input className="field" value={name} onChange={(event) => setName(event.target.value)} required />
-          </div>
+            <div>
+              <label className="label mb-2 block">Nome</label>
+              <input className="field" value={name} onChange={(event) => setName(event.target.value)} required />
+            </div>
 
-          {message ? <p className="rounded-md bg-mint px-3 py-2 text-sm text-ink/75">{message}</p> : null}
+            {message ? <p className="rounded-md bg-mint px-3 py-2 text-sm text-ink/75">{message}</p> : null}
 
-          <button disabled={busy} className="btn-primary">
-            <Save size={16} />
-            Salvar perfil
-          </button>
-        </form>
+            <button disabled={busy} className="btn-primary">
+              <Save size={16} />
+              Salvar perfil
+            </button>
+          </form>
+
+          <form onSubmit={updatePassword} className="panel h-fit space-y-4 p-5">
+            <div>
+              <p className="label mb-2">Segurança</p>
+              <h2 className="text-lg font-bold text-ink">Alterar senha</h2>
+            </div>
+            <div>
+              <label className="label mb-2 block">Nova senha</label>
+              <input className="field" type="password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} minLength={6} required />
+            </div>
+            <div>
+              <label className="label mb-2 block">Confirmar nova senha</label>
+              <input className="field" type="password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} minLength={6} required />
+            </div>
+
+            {passwordMessage ? <p className="rounded-md bg-mint px-3 py-2 text-sm text-ink/75">{passwordMessage}</p> : null}
+
+            <button disabled={passwordBusy} className="btn-primary">
+              <Save size={16} />
+              Salvar senha
+            </button>
+          </form>
+        </section>
       </div>
     </ProtectedPage>
   );

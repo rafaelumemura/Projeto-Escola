@@ -28,10 +28,42 @@ export async function getBillingUsage(userId: string): Promise<BillingUsage> {
     .maybeSingle();
 
   if (error) throw error;
-  if (!data) return emptyBillingUsage("Escolha um plano para gerar atividades com IA.");
+  if (!data) {
+    const profileUsage = await createUsageFromProfilePlan(userId);
+    if (profileUsage) return profileUsage;
+    return emptyBillingUsage("Escolha um plano para gerar atividades com IA.");
+  }
 
   const normalized = await normalizeSubscription(data as SubscriptionRow);
   return subscriptionToUsage(normalized);
+}
+
+async function createUsageFromProfilePlan(userId: string) {
+  const supabase = createSupabaseAdminClient();
+  const { data: profile, error } = await supabase.from("profiles").select("plan").eq("id", userId).single();
+
+  if (error || (profile?.plan !== "basic" && profile?.plan !== "complete")) {
+    return null;
+  }
+
+  const now = new Date().toISOString();
+  const { data, error: insertError } = await supabase
+    .from("billing_subscriptions")
+    .insert({
+      user_id: userId,
+      plan_key: profile.plan,
+      status: "active",
+      activity_limit: planLimit(profile.plan),
+      generated_count: 0,
+      current_period_start: now,
+      current_period_end: new Date(Date.now() + 30 * dayMs).toISOString(),
+      grace_ends_at: new Date(Date.now() + 31 * dayMs).toISOString()
+    })
+    .select("*")
+    .single();
+
+  if (insertError) throw insertError;
+  return subscriptionToUsage(data as SubscriptionRow);
 }
 
 export async function assertCanGenerateActivity(userId: string) {

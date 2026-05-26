@@ -94,11 +94,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           })}
         </nav>
 
-        <div className="mt-6">
-          <UsageMeter usage={usage} />
-        </div>
-
         <div className="mt-auto space-y-3">
+          <UsageMeter usage={usage} />
           <Link href="/perfil" className="flex items-center gap-3 rounded-lg border border-ink/10 bg-paper p-3 transition hover:border-leaf/35">
             <Avatar src={profile?.avatar_url} name={profile?.name || profile?.email || "Perfil"} />
             <span className="min-w-0">

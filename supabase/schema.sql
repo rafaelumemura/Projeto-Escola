@@ -4,6 +4,8 @@ create table if not exists public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   name text,
   email text,
+  avatar_url text,
+  is_admin boolean not null default false,
   plan text not null default 'free',
   created_at timestamp with time zone not null default now()
 );
@@ -111,11 +113,12 @@ security definer
 set search_path = public
 as $$
 begin
-  insert into public.profiles (id, name, email)
+  insert into public.profiles (id, name, email, is_admin)
   values (
     new.id,
     coalesce(new.raw_user_meta_data->>'name', split_part(new.email, '@', 1)),
-    new.email
+    new.email,
+    lower(coalesce(new.email, '')) = 'rafaelumemura@gmail.com'
   )
   on conflict (id) do nothing;
   return new;
@@ -320,6 +323,36 @@ using (
 
 alter table public.profiles
 add column if not exists avatar_url text;
+
+alter table public.profiles
+add column if not exists is_admin boolean not null default false;
+
+create or replace function public.sync_profile_admin_flag()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, auth
+as $$
+declare
+  auth_email text;
+begin
+  select email into auth_email
+  from auth.users
+  where id = new.id;
+
+  new.email := coalesce(auth_email, new.email);
+  new.is_admin := lower(coalesce(auth_email, new.email, '')) = 'rafaelumemura@gmail.com';
+  return new;
+end;
+$$;
+
+drop trigger if exists sync_profile_admin_flag on public.profiles;
+create trigger sync_profile_admin_flag
+before insert or update on public.profiles
+for each row execute function public.sync_profile_admin_flag();
+
+update public.profiles
+set is_admin = lower(coalesce(email, '')) = 'rafaelumemura@gmail.com';
 
 create table if not exists public.billing_subscriptions (
   id uuid primary key default gen_random_uuid(),

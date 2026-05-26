@@ -25,13 +25,14 @@ export default function PlansPage() {
     setBusyPlan(planKey);
     setMessage(null);
     try {
-      await apiFetch(supabase, "/api/billing/checkout", {
+      const data = await apiFetch<{ redirect_url: string }>(supabase, "/api/billing/checkout", {
         method: "POST",
         body: {
           plan_key: planKey,
           mode: usage?.plan_key === "basic" && planKey === "complete" ? "upgrade" : "new"
         }
       });
+      window.location.href = data.redirect_url;
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Não foi possível iniciar o pagamento.");
     } finally {
