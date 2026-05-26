@@ -37,9 +37,13 @@ create table if not exists public.collections (
   user_id uuid not null references auth.users(id) on delete cascade,
   name text not null,
   description text,
+  color text default '#2f7d58',
   created_at timestamp with time zone not null default now(),
   updated_at timestamp with time zone not null default now()
 );
+
+alter table public.collections
+add column if not exists color text default '#2f7d58';
 
 create table if not exists public.collection_activities (
   id uuid primary key default gen_random_uuid(),

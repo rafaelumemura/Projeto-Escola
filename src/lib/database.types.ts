@@ -110,6 +110,7 @@ export type Database = {
           user_id: string;
           name: string;
           description: string | null;
+          color: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -118,12 +119,14 @@ export type Database = {
           user_id: string;
           name: string;
           description?: string | null;
+          color?: string | null;
           created_at?: string;
           updated_at?: string;
         };
         Update: {
           name?: string;
           description?: string | null;
+          color?: string | null;
           updated_at?: string;
         };
       };

@@ -2,7 +2,8 @@ import { z } from "zod";
 
 export const collectionCreateSchema = z.object({
   name: z.string().min(1, "Informe o nome da colecao."),
-  description: z.string().nullable().optional()
+  description: z.string().nullable().optional(),
+  color: z.string().regex(/^#[0-9a-fA-F]{6}$/, "Informe uma cor hexadecimal valida.").optional()
 });
 
 export const collectionUpdateSchema = collectionCreateSchema.partial();
