@@ -33,11 +33,20 @@ export async function POST(request: Request) {
     }
 
     const bytes = await buildActivityPdf(activity as Parameters<typeof buildActivityPdf>[0]);
+    const title = typeof activity.title === "string" && activity.title.trim() ? activity.title.trim() : "atividade";
+    const filename = `${title.replace(/[\\/]/g, "-")}.pdf`;
+    const fallbackFilename =
+      filename
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/[^\x20-\x7E]/g, "")
+        .replace(/"/g, "")
+        .trim() || "atividade.pdf";
 
     return new Response(Buffer.from(bytes), {
       headers: {
         "content-type": "application/pdf",
-        "content-disposition": "attachment; filename=atividade.pdf"
+        "content-disposition": `attachment; filename="${fallbackFilename}"; filename*=UTF-8''${encodeURIComponent(filename)}`
       }
     });
   } catch (error) {

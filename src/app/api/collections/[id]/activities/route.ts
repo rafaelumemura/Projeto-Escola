@@ -6,6 +6,16 @@ export async function POST(request: Request, { params }: { params: { id: string 
   try {
     const { supabase } = await getAuthenticatedUser(request);
     const payload = collectionActivitySchema.parse(await readJson<unknown>(request));
+    const { data: existing, error: existingError } = await supabase
+      .from("collection_activities")
+      .select("*")
+      .eq("collection_id", params.id)
+      .eq("activity_id", payload.activity_id)
+      .maybeSingle();
+
+    if (existingError) throw existingError;
+    if (existing) return created({ link: existing });
+
     const { data, error } = await supabase
       .from("collection_activities")
       .insert({

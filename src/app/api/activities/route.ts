@@ -32,14 +32,38 @@ export async function GET(request: Request) {
     if (filters.development_area) query = query.ilike("development_area", `%${filters.development_area}%`);
     if (filters.methodology) query = query.eq("methodology", filters.methodology);
     if (filters.activity_type) query = query.eq("activity_type", filters.activity_type);
-    if (filters.created_from) query = query.gte("created_at", filters.created_from);
-    if (filters.created_to) query = query.lte("created_at", filters.created_to);
-
     const { data, error } = await query;
 
     if (error) throw error;
 
-    return ok({ activities: data });
+    const activityIdsForCollections = (data || []).map((activity) => activity.id);
+    const collectionMap = new Map<string, string[]>();
+
+    if (activityIdsForCollections.length) {
+      const { data: collectionLinks, error: collectionLinksError } = await supabase
+        .from("collection_activities")
+        .select("activity_id, collection_id")
+        .in("activity_id", activityIdsForCollections);
+
+      if (collectionLinksError) throw collectionLinksError;
+
+      for (const link of collectionLinks || []) {
+        const current = collectionMap.get(link.activity_id) || [];
+        current.push(link.collection_id);
+        collectionMap.set(link.activity_id, current);
+      }
+    }
+
+    return ok({
+      activities: (data || []).map((activity) => {
+        const collectionIds = collectionMap.get(activity.id) || [];
+        return {
+          ...activity,
+          collection_ids: collectionIds,
+          primary_collection_id: collectionIds[0] || null
+        };
+      })
+    });
   } catch (error) {
     return fail(error);
   }

@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { CalendarPlus, Eye, FileDown, Filter, FolderMinus, FolderPlus, Pencil, Save, Trash2 } from "lucide-react";
+import { Eye, FileDown, Filter, FolderMinus, FolderPlus, Pencil, Save, Trash2 } from "lucide-react";
 import { ProtectedPage } from "@/components/layout/ProtectedPage";
 import { ActivityView } from "@/components/ui/ActivityView";
 import { useAuth } from "@/components/auth/AuthProvider";
@@ -10,8 +10,11 @@ import { activityTypes, methodologies } from "@/lib/activities/types";
 import type { Database, Json } from "@/lib/database.types";
 
 type Activity = Database["public"]["Tables"]["activities"]["Row"];
+type ActivityWithCollections = Activity & {
+  collection_ids?: string[];
+  primary_collection_id?: string | null;
+};
 type Collection = Database["public"]["Tables"]["collections"]["Row"];
-type WeeklyPlan = Database["public"]["Tables"]["weekly_plans"]["Row"];
 
 type EditState = Partial<Activity> & {
   steps_text?: string;
@@ -32,27 +35,21 @@ function textArray(value: string | undefined) {
 
 export default function ActivitiesPage() {
   const { supabase } = useAuth();
-  const [activities, setActivities] = useState<Activity[]>([]);
+  const [activities, setActivities] = useState<ActivityWithCollections[]>([]);
   const [collections, setCollections] = useState<Collection[]>([]);
-  const [plans, setPlans] = useState<WeeklyPlan[]>([]);
-  const [selected, setSelected] = useState<Activity | null>(null);
+  const [selected, setSelected] = useState<ActivityWithCollections | null>(null);
   const [edit, setEdit] = useState<EditState | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [filters, setFilters] = useState({
     age_range: "",
     development_area: "",
     methodology: "",
     activity_type: "",
-    collection_id: "",
-    created_from: "",
-    created_to: ""
+    collection_id: ""
   });
   const [actionCollectionId, setActionCollectionId] = useState("");
-  const [planId, setPlanId] = useState("");
-  const [planDate, setPlanDate] = useState("");
-  const [startTime, setStartTime] = useState("");
-  const [endTime, setEndTime] = useState("");
 
   const query = useMemo(() => {
     const params = new URLSearchParams();
@@ -63,7 +60,7 @@ export default function ActivitiesPage() {
   }, [filters]);
 
   async function loadActivities() {
-    const data = await apiFetch<{ activities: Activity[] }>(supabase, query);
+    const data = await apiFetch<{ activities: ActivityWithCollections[] }>(supabase, query);
     setActivities(data.activities);
     setSelected((current) => {
       if (!current) return data.activities[0] || null;
@@ -74,18 +71,21 @@ export default function ActivitiesPage() {
   useEffect(() => {
     Promise.all([
       loadActivities(),
-      apiFetch<{ collections: Collection[] }>(supabase, "/api/collections"),
-      apiFetch<{ weekly_plans: WeeklyPlan[] }>(supabase, "/api/weekly-plans")
+      apiFetch<{ collections: Collection[] }>(supabase, "/api/collections")
     ])
-      .then(([, collectionData, planData]) => {
+      .then(([, collectionData]) => {
         setCollections(collectionData.collections);
-        setPlans(planData.weekly_plans);
       })
       .catch((error) => setMessage(error instanceof Error ? error.message : "Não foi possível carregar dados."));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query, supabase]);
 
-  function startEdit(activity: Activity) {
+  useEffect(() => {
+    setActionCollectionId(selected?.primary_collection_id || selected?.collection_ids?.[0] || "");
+    setPendingDeleteId(null);
+  }, [selected?.id, selected?.primary_collection_id, selected?.collection_ids]);
+
+  function startEdit(activity: ActivityWithCollections) {
     setSelected(activity);
     setEdit({
       ...activity,
@@ -135,8 +135,7 @@ export default function ActivitiesPage() {
     }
   }
 
-  async function removeActivity(activity: Activity) {
-    if (!window.confirm("Excluir esta atividade?")) return;
+  async function removeActivity(activity: ActivityWithCollections) {
     setBusy(true);
     setMessage(null);
     try {
@@ -161,6 +160,7 @@ export default function ActivitiesPage() {
         method: "POST",
         body: { activity_id: selected.id }
       });
+      await loadActivities();
       setMessage("Atividade adicionada à coleção.");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Não foi possível adicionar à coleção.");
@@ -175,31 +175,10 @@ export default function ActivitiesPage() {
     setMessage(null);
     try {
       await apiFetch(supabase, `/api/collections/${actionCollectionId}/activities/${selected.id}`, { method: "DELETE" });
+      await loadActivities();
       setMessage("Atividade removida da coleção.");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Não foi possível remover da coleção.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function addToPlan() {
-    if (!selected || !planId || !planDate) return setMessage("Escolha atividade, planejamento e data.");
-    setBusy(true);
-    setMessage(null);
-    try {
-      await apiFetch(supabase, `/api/weekly-plans/${planId}/items`, {
-        method: "POST",
-        body: {
-          activity_id: selected.id,
-          date: planDate,
-          start_time: startTime || null,
-          end_time: endTime || null
-        }
-      });
-      setMessage("Atividade adicionada ao planejamento.");
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Não foi possível adicionar ao planejamento.");
     } finally {
       setBusy(false);
     }
@@ -212,9 +191,9 @@ export default function ActivitiesPage() {
           <Filter size={18} className="text-leaf" />
           Filtros
         </div>
-        <div className="grid gap-3 md:grid-cols-4 lg:grid-cols-7">
+        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-5">
           <input className="field" placeholder="Idade" value={filters.age_range} onChange={(event) => setFilters({ ...filters, age_range: event.target.value })} />
-          <input className="field" placeholder="Área" value={filters.development_area} onChange={(event) => setFilters({ ...filters, development_area: event.target.value })} />
+          <input className="field" placeholder="Área de Desenvolvimento" value={filters.development_area} onChange={(event) => setFilters({ ...filters, development_area: event.target.value })} />
           <select className="field" value={filters.methodology} onChange={(event) => setFilters({ ...filters, methodology: event.target.value })}>
             <option value="">Metodologia</option>
             {methodologies.map((item) => <option key={item}>{item}</option>)}
@@ -227,8 +206,6 @@ export default function ActivitiesPage() {
             <option value="">Coleção</option>
             {collections.map((collection) => <option key={collection.id} value={collection.id}>{collection.name}</option>)}
           </select>
-          <input className="field" type="date" value={filters.created_from} onChange={(event) => setFilters({ ...filters, created_from: event.target.value })} />
-          <input className="field" type="date" value={filters.created_to} onChange={(event) => setFilters({ ...filters, created_to: event.target.value })} />
         </div>
       </section>
 
@@ -262,17 +239,27 @@ export default function ActivitiesPage() {
                   <Pencil size={16} />
                   Editar
                 </button>
-                <button onClick={() => downloadPdf(supabase, "/api/pdf/activity", { activity_id: selected.id }, "atividade.pdf")} className="btn-secondary">
+                <button onClick={() => downloadPdf(supabase, "/api/pdf/activity", { activity_id: selected.id }, pdfFileName(selected.title))} className="btn-secondary">
                   <FileDown size={16} />
                   PDF
                 </button>
-                <button disabled={busy} onClick={() => removeActivity(selected)} className="btn-danger">
+                <button
+                  disabled={busy}
+                  onClick={() => {
+                    if (pendingDeleteId === selected.id) {
+                      removeActivity(selected);
+                    } else {
+                      setPendingDeleteId(selected.id);
+                    }
+                  }}
+                  className="btn-danger"
+                >
                   <Trash2 size={16} />
-                  Excluir
+                  {pendingDeleteId === selected.id ? "Confirmar exclusão" : "Excluir"}
                 </button>
               </div>
 
-              <div className="grid gap-3 rounded-lg border border-ink/10 bg-white p-4 md:grid-cols-2">
+              <div className="rounded-lg border border-ink/10 bg-white p-4">
                 <div className="flex gap-2">
                   <select className="field" value={actionCollectionId} onChange={(event) => setActionCollectionId(event.target.value)}>
                     <option value="">Coleção</option>
@@ -283,19 +270,6 @@ export default function ActivitiesPage() {
                   </button>
                   <button disabled={busy} onClick={removeFromCollection} className="btn-secondary px-3" title="Remover da coleção">
                     <FolderMinus size={17} />
-                  </button>
-                </div>
-
-                <div className="grid gap-2 sm:grid-cols-[1fr_130px_95px_95px_auto]">
-                  <select className="field" value={planId} onChange={(event) => setPlanId(event.target.value)}>
-                    <option value="">Planejamento</option>
-                    {plans.map((plan) => <option key={plan.id} value={plan.id}>{plan.title}</option>)}
-                  </select>
-                  <input className="field" type="date" value={planDate} onChange={(event) => setPlanDate(event.target.value)} />
-                  <input className="field" type="time" value={startTime} onChange={(event) => setStartTime(event.target.value)} />
-                  <input className="field" type="time" value={endTime} onChange={(event) => setEndTime(event.target.value)} />
-                  <button disabled={busy} onClick={addToPlan} className="btn-secondary px-3" title="Adicionar ao planejamento">
-                    <CalendarPlus size={17} />
                   </button>
                 </div>
               </div>
@@ -342,6 +316,11 @@ export default function ActivitiesPage() {
       </div>
     </ProtectedPage>
   );
+}
+
+function pdfFileName(title: string | null) {
+  const safeTitle = (title || "atividade").replace(/[\\/]/g, "-").trim() || "atividade";
+  return `${safeTitle}.pdf`;
 }
 
 function EditInput({ label, value, onChange }: { label: string; value?: string | null; onChange: (value: string) => void }) {

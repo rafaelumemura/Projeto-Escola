@@ -6,10 +6,10 @@ export const environments = ["Sala de aula", "Pátio", "Área externa", "Casa", 
 
 export const activityGenerationInputSchema = z.object({
   age_range: z.string().min(1, "Informe a idade ou faixa etaria."),
-  methodology: z.enum(methodologies),
+  methodology: z.string().min(1, "Informe a metodologia."),
   development_area: z.string().min(1, "Informe a area de desenvolvimento."),
   activity_type: z.enum(activityTypes),
-  environment: z.enum(environments),
+  environment: z.string().min(1, "Informe o ambiente."),
   materials: z.string().min(1, "Informe os materiais disponiveis."),
   objective: z.string().min(1, "Informe o objetivo da atividade.")
 });
@@ -47,9 +47,7 @@ export const activityFilterSchema = z.object({
   development_area: z.string().optional(),
   methodology: z.string().optional(),
   activity_type: z.string().optional(),
-  collection_id: z.string().uuid().optional(),
-  created_from: z.string().optional(),
-  created_to: z.string().optional()
+  collection_id: z.string().uuid().optional()
 });
 
 export type ActivityGenerationInput = z.infer<typeof activityGenerationInputSchema>;

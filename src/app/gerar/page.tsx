@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
-import { CalendarPlus, FileDown, FolderPlus, Save, Sparkles } from "lucide-react";
+import { FileDown, Save, Sparkles, Trash2 } from "lucide-react";
 import { ProtectedPage } from "@/components/layout/ProtectedPage";
 import { ActivityView } from "@/components/ui/ActivityView";
 import { useAuth } from "@/components/auth/AuthProvider";
@@ -11,7 +11,6 @@ import type { Database } from "@/lib/database.types";
 
 type Activity = Database["public"]["Tables"]["activities"]["Row"];
 type Collection = Database["public"]["Tables"]["collections"]["Row"];
-type WeeklyPlan = Database["public"]["Tables"]["weekly_plans"]["Row"];
 
 const initialForm: ActivityGenerationInput = {
   age_range: "",
@@ -28,27 +27,48 @@ export default function GenerateActivityPage() {
   const [form, setForm] = useState<ActivityGenerationInput>(initialForm);
   const [generated, setGenerated] = useState<Partial<Activity> | null>(null);
   const [savedActivityId, setSavedActivityId] = useState<string | null>(null);
+  const [savedCollectionId, setSavedCollectionId] = useState<string | null>(null);
   const [collections, setCollections] = useState<Collection[]>([]);
-  const [plans, setPlans] = useState<WeeklyPlan[]>([]);
   const [collectionId, setCollectionId] = useState("");
-  const [planId, setPlanId] = useState("");
-  const [planDate, setPlanDate] = useState("");
-  const [startTime, setStartTime] = useState("");
-  const [endTime, setEndTime] = useState("");
+  const [customMethodology, setCustomMethodology] = useState("");
+  const [customEnvironment, setCustomEnvironment] = useState("");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    Promise.all([
-      apiFetch<{ collections: Collection[] }>(supabase, "/api/collections"),
-      apiFetch<{ weekly_plans: WeeklyPlan[] }>(supabase, "/api/weekly-plans")
-    ])
-      .then(([collectionData, planData]) => {
+    apiFetch<{ collections: Collection[] }>(supabase, "/api/collections")
+      .then((collectionData) => {
         setCollections(collectionData.collections);
-        setPlans(planData.weekly_plans);
       })
       .catch(() => undefined);
   }, [supabase]);
+
+  useEffect(() => {
+    if (!generated || (savedActivityId && savedCollectionId)) return;
+
+    const warning = "Você precisa salvar a atividade em uma coleção ou descartar antes de sair.";
+
+    function handleBeforeUnload(event: BeforeUnloadEvent) {
+      event.preventDefault();
+      event.returnValue = warning;
+    }
+
+    function handleDocumentClick(event: MouseEvent) {
+      const target = event.target instanceof Element ? event.target.closest("a") : null;
+      if (!target) return;
+      if (!window.confirm(warning)) {
+        event.preventDefault();
+      }
+    }
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    document.addEventListener("click", handleDocumentClick, true);
+
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+      document.removeEventListener("click", handleDocumentClick, true);
+    };
+  }, [generated, savedActivityId, savedCollectionId]);
 
   function updateField<K extends keyof ActivityGenerationInput>(key: K, value: ActivityGenerationInput[K]) {
     setForm((current) => ({ ...current, [key]: value }));
@@ -56,14 +76,26 @@ export default function GenerateActivityPage() {
 
   async function handleGenerate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const payload = {
+      ...form,
+      methodology: form.methodology === "Outra" ? customMethodology.trim() : form.methodology,
+      environment: form.environment === "Outro" ? customEnvironment.trim() : form.environment
+    };
+
+    if (!payload.methodology || !payload.environment) {
+      setMessage("Preencha o campo personalizado antes de gerar a atividade.");
+      return;
+    }
+
     setBusy(true);
     setMessage(null);
     setSavedActivityId(null);
+    setSavedCollectionId(null);
 
     try {
       const data = await apiFetch<{ activity: Partial<Activity> }>(supabase, "/api/activities/generate", {
         method: "POST",
-        body: form
+        body: payload
       });
       setGenerated(data.activity);
       setMessage("Atividade gerada. Revise antes de salvar ou exportar.");
@@ -88,11 +120,23 @@ export default function GenerateActivityPage() {
   }
 
   async function handleSave() {
+    if (!collectionId) {
+      setMessage("Escolha uma coleção para salvar a atividade.");
+      return;
+    }
+
     setBusy(true);
     setMessage(null);
     try {
-      await saveIfNeeded();
-      setMessage("Atividade salva com sucesso.");
+      const activityId = await saveIfNeeded();
+      if (savedCollectionId !== collectionId) {
+        await apiFetch(supabase, `/api/collections/${collectionId}/activities`, {
+          method: "POST",
+          body: { activity_id: activityId }
+        });
+        setSavedCollectionId(collectionId);
+      }
+      setMessage("Atividade salva na coleção.");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Não foi possível salvar.");
     } finally {
@@ -109,7 +153,7 @@ export default function GenerateActivityPage() {
         supabase,
         "/api/pdf/activity",
         savedActivityId ? { activity_id: savedActivityId } : { activity: generated },
-        "atividade.pdf"
+        pdfFileName(generated.title || "atividade")
       );
       setMessage("PDF gerado.");
     } catch (error) {
@@ -119,53 +163,11 @@ export default function GenerateActivityPage() {
     }
   }
 
-  async function handleAddToCollection() {
-    if (!collectionId) {
-      setMessage("Escolha uma coleção.");
-      return;
-    }
-
-    setBusy(true);
-    setMessage(null);
-    try {
-      const activityId = await saveIfNeeded();
-      await apiFetch(supabase, `/api/collections/${collectionId}/activities`, {
-        method: "POST",
-        body: { activity_id: activityId }
-      });
-      setMessage("Atividade adicionada à coleção.");
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Não foi possível adicionar à coleção.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function handleAddToPlan() {
-    if (!planId || !planDate) {
-      setMessage("Escolha um planejamento e uma data.");
-      return;
-    }
-
-    setBusy(true);
-    setMessage(null);
-    try {
-      const activityId = await saveIfNeeded();
-      await apiFetch(supabase, `/api/weekly-plans/${planId}/items`, {
-        method: "POST",
-        body: {
-          activity_id: activityId,
-          date: planDate,
-          start_time: startTime || null,
-          end_time: endTime || null
-        }
-      });
-      setMessage("Atividade adicionada ao planejamento.");
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Não foi possível adicionar ao planejamento.");
-    } finally {
-      setBusy(false);
-    }
+  function discardGenerated() {
+    setGenerated(null);
+    setSavedActivityId(null);
+    setSavedCollectionId(null);
+    setMessage("Atividade descartada.");
   }
 
   return (
@@ -180,13 +182,25 @@ export default function GenerateActivityPage() {
             <input className="field" value={form.age_range} onChange={(event) => updateField("age_range", event.target.value)} placeholder="Ex.: 4 anos ou 6 a 7 anos" required />
           </div>
 
-          <SelectField label="Metodologia" value={form.methodology} onChange={(value) => updateField("methodology", value as ActivityGenerationInput["methodology"])} options={methodologies} />
+          <SelectField label="Metodologia" value={form.methodology} onChange={(value) => updateField("methodology", value)} options={methodologies} />
+          {form.methodology === "Outra" ? (
+            <div>
+              <label className="label mb-2 block">Qual metodologia?</label>
+              <input className="field" value={customMethodology} onChange={(event) => setCustomMethodology(event.target.value)} placeholder="Digite a metodologia" required />
+            </div>
+          ) : null}
           <div>
             <label className="label mb-2 block">Área de desenvolvimento/conhecimento</label>
             <input className="field" value={form.development_area} onChange={(event) => updateField("development_area", event.target.value)} placeholder="Ex.: Linguagem, coordenação motora, matemática" required />
           </div>
           <SelectField label="Tipo de atividade" value={form.activity_type} onChange={(value) => updateField("activity_type", value as ActivityGenerationInput["activity_type"])} options={activityTypes} />
-          <SelectField label="Ambiente" value={form.environment} onChange={(value) => updateField("environment", value as ActivityGenerationInput["environment"])} options={environments} />
+          <SelectField label="Ambiente" value={form.environment} onChange={(value) => updateField("environment", value)} options={environments} />
+          {form.environment === "Outro" ? (
+            <div>
+              <label className="label mb-2 block">Qual ambiente?</label>
+              <input className="field" value={customEnvironment} onChange={(event) => setCustomEnvironment(event.target.value)} placeholder="Digite o ambiente" required />
+            </div>
+          ) : null}
           <div>
             <label className="label mb-2 block">Materiais disponíveis</label>
             <textarea className="field min-h-24" value={form.materials} onChange={(event) => updateField("materials", event.target.value)} placeholder="Papéis coloridos, cola, tesoura sem ponta..." required />
@@ -210,50 +224,30 @@ export default function GenerateActivityPage() {
               <div className="flex flex-wrap gap-2">
                 <button disabled={busy} onClick={handleSave} className="btn-primary">
                   <Save size={16} />
-                  {savedActivityId ? "Atividade salva" : "Salvar atividade"}
+                  {savedActivityId && savedCollectionId === collectionId ? "Atividade salva" : "Salvar atividade"}
                 </button>
                 <button disabled={busy} onClick={handlePdf} className="btn-secondary">
                   <FileDown size={16} />
                   Gerar PDF
                 </button>
+                <button disabled={busy} onClick={discardGenerated} className="btn-secondary">
+                  <Trash2 size={16} />
+                  {savedActivityId && savedCollectionId ? "Limpar tela" : "Descartar atividade"}
+                </button>
               </div>
 
-              <div className="grid gap-3 rounded-lg border border-ink/10 bg-white p-4 md:grid-cols-2">
+              <div className="rounded-lg border border-ink/10 bg-white p-4">
                 <div className="space-y-2">
-                  <label className="label block">Adicionar a uma coleção</label>
-                  <div className="flex gap-2">
-                    <select className="field" value={collectionId} onChange={(event) => setCollectionId(event.target.value)}>
-                      <option value="">Selecione</option>
-                      {collections.map((collection) => (
-                        <option key={collection.id} value={collection.id}>
-                          {collection.name}
-                        </option>
-                      ))}
-                    </select>
-                    <button disabled={busy} onClick={handleAddToCollection} className="btn-secondary px-3" title="Adicionar à coleção">
-                      <FolderPlus size={17} />
-                    </button>
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <label className="label block">Adicionar ao planejamento semanal</label>
-                  <div className="grid gap-2 sm:grid-cols-[1fr_130px_95px_95px_auto]">
-                    <select className="field" value={planId} onChange={(event) => setPlanId(event.target.value)}>
-                      <option value="">Planejamento</option>
-                      {plans.map((plan) => (
-                        <option key={plan.id} value={plan.id}>
-                          {plan.title}
-                        </option>
-                      ))}
-                    </select>
-                    <input className="field" type="date" value={planDate} onChange={(event) => setPlanDate(event.target.value)} />
-                    <input className="field" type="time" value={startTime} onChange={(event) => setStartTime(event.target.value)} />
-                    <input className="field" type="time" value={endTime} onChange={(event) => setEndTime(event.target.value)} />
-                    <button disabled={busy} onClick={handleAddToPlan} className="btn-secondary px-3" title="Adicionar ao planejamento">
-                      <CalendarPlus size={17} />
-                    </button>
-                  </div>
+                  <label className="label block">Coleção para salvar</label>
+                  <select className="field" value={collectionId} onChange={(event) => setCollectionId(event.target.value)}>
+                    <option value="">Selecione uma coleção</option>
+                    {collections.map((collection) => (
+                      <option key={collection.id} value={collection.id}>
+                        {collection.name}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-xs font-semibold text-ink/55">Para salvar a atividade, escolha a coleção onde ela ficará organizada.</p>
                 </div>
               </div>
 
@@ -274,6 +268,11 @@ export default function GenerateActivityPage() {
       </div>
     </ProtectedPage>
   );
+}
+
+function pdfFileName(title: string) {
+  const safeTitle = title.replace(/[\\/]/g, "-").trim() || "atividade";
+  return `${safeTitle}.pdf`;
 }
 
 function SelectField({

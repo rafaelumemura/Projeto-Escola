@@ -1,8 +1,9 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
-import { ArrowRight, Eye, FolderKanban, Pencil, Plus, Trash2, X } from "lucide-react";
+import { Check, Eye, FolderKanban, Pencil, Plus, Trash2, X } from "lucide-react";
 import { ProtectedPage } from "@/components/layout/ProtectedPage";
+import { ActivityView } from "@/components/ui/ActivityView";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { apiFetch } from "@/lib/api/client";
 import type { Database } from "@/lib/database.types";
@@ -12,7 +13,6 @@ type CollectionCard = Collection & { activity_count?: number };
 type Activity = Database["public"]["Tables"]["activities"]["Row"];
 type ModalMode = "create" | "edit" | null;
 
-const collectionColors = ["#2f7d58", "#256d85", "#c46d4b", "#8f6ab7", "#d49b31", "#4f7f9f", "#8a6f4d", "#c85d7c"];
 const defaultCollectionColor = "#2f7d58";
 
 export default function CollectionsPage() {
@@ -27,8 +27,17 @@ export default function CollectionsPage() {
   const [color, setColor] = useState(defaultCollectionColor);
   const [editingCollection, setEditingCollection] = useState<CollectionCard | null>(null);
   const [activityId, setActivityId] = useState("");
+  const [confirmDeleteCollection, setConfirmDeleteCollection] = useState(false);
+  const [confirmRemoveActivityId, setConfirmRemoveActivityId] = useState<string | null>(null);
+  const [movingActivityId, setMovingActivityId] = useState<string | null>(null);
+  const [moveTargetCollectionId, setMoveTargetCollectionId] = useState("");
+  const [viewActivity, setViewActivity] = useState<Activity | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+
+  const pageColors = Array.from(
+    new Set(collections.map((collection) => collection.color).filter((item): item is string => Boolean(item)))
+  );
 
   async function loadCollections() {
     const data = await apiFetch<{ collections: CollectionCard[] }>(supabase, "/api/collections");
@@ -60,6 +69,10 @@ export default function CollectionsPage() {
 
   useEffect(() => {
     if (selected?.id) {
+      setConfirmDeleteCollection(false);
+      setConfirmRemoveActivityId(null);
+      setMovingActivityId(null);
+      setMoveTargetCollectionId("");
       loadCollectionDetails(selected.id).catch(() => undefined);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -134,13 +147,14 @@ export default function CollectionsPage() {
   }
 
   async function deleteCollection() {
-    if (!selected || !window.confirm("Excluir esta coleção? As atividades não serão excluídas.")) return;
+    if (!selected) return;
     setBusy(true);
     setMessage(null);
     try {
       await apiFetch(supabase, `/api/collections/${selected.id}`, { method: "DELETE" });
       setSelected(null);
       setCollectionActivities([]);
+      setConfirmDeleteCollection(false);
       await loadCollections();
       setMessage("Coleção excluída.");
     } catch (error) {
@@ -176,11 +190,42 @@ export default function CollectionsPage() {
     setMessage(null);
     try {
       await apiFetch(supabase, `/api/collections/${selected.id}/activities/${id}`, { method: "DELETE" });
+      setConfirmRemoveActivityId(null);
       await loadCollectionDetails(selected.id);
       await loadCollections();
       setMessage("Atividade removida.");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Não foi possível remover.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function cancelMoveActivity() {
+    setMovingActivityId(null);
+    setMoveTargetCollectionId("");
+  }
+
+  async function saveMoveActivity(activityIdToMove: string) {
+    if (!selected || !moveTargetCollectionId || moveTargetCollectionId === selected.id) {
+      cancelMoveActivity();
+      return;
+    }
+
+    setBusy(true);
+    setMessage(null);
+    try {
+      await apiFetch(supabase, `/api/collections/${moveTargetCollectionId}/activities`, {
+        method: "POST",
+        body: { activity_id: activityIdToMove }
+      });
+      await apiFetch(supabase, `/api/collections/${selected.id}/activities/${activityIdToMove}`, { method: "DELETE" });
+      await loadCollectionDetails(selected.id);
+      await loadCollections();
+      cancelMoveActivity();
+      setMessage("Atividade movida para outra coleção.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Não foi possível mover a atividade.");
     } finally {
       setBusy(false);
     }
@@ -220,12 +265,11 @@ export default function CollectionsPage() {
                   if (event.key === "Enter" || event.key === " ") setSelected(collection);
                 }}
                 style={{
-                  borderColor: collection.color || defaultCollectionColor,
+                  borderTopColor: collection.color || defaultCollectionColor,
+                  borderBottomColor: collection.color || defaultCollectionColor,
                   boxShadow: selected?.id === collection.id ? `0 0 0 2px ${collection.color || defaultCollectionColor}22` : undefined
                 }}
-                className={`panel block min-h-[180px] p-5 text-left transition hover:-translate-y-0.5 ${
-                  selected?.id === collection.id ? "border-2" : "border-2"
-                }`}
+                className="panel block min-h-[180px] border-x-0 border-y-[8px] p-5 text-left transition hover:-translate-y-0.5"
               >
                 <div className="flex items-center justify-between">
                   <span className="grid h-11 w-11 place-items-center rounded-lg bg-mint text-leaf">
@@ -243,7 +287,6 @@ export default function CollectionsPage() {
                     >
                       <Pencil size={16} />
                     </button>
-                    <ArrowRight size={18} className="text-ink/35" />
                   </div>
                 </div>
                 <h2 className="mt-5 text-lg font-bold text-ink">{collection.name}</h2>
@@ -273,9 +316,20 @@ export default function CollectionsPage() {
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="badge">{collectionActivities.length} itens</span>
-                    <button type="button" disabled={busy} onClick={deleteCollection} className="btn-danger">
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => {
+                        if (confirmDeleteCollection) {
+                          deleteCollection();
+                        } else {
+                          setConfirmDeleteCollection(true);
+                        }
+                      }}
+                      className="btn-danger"
+                    >
                       <Trash2 size={16} />
-                      Excluir
+                      {confirmDeleteCollection ? "Confirmar exclusão" : "Excluir"}
                     </button>
                   </div>
                 </div>
@@ -296,13 +350,62 @@ export default function CollectionsPage() {
 
                 <div className="space-y-3">
                   {collectionActivities.map((activity) => (
-                    <div key={activity.id} className="flex items-start justify-between gap-3 rounded-lg border border-ink/10 bg-white p-4">
-                      <div>
+                    <div
+                      key={activity.id}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => setViewActivity(activity)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") setViewActivity(activity);
+                      }}
+                      className="grid gap-3 rounded-lg border border-ink/10 bg-white p-4 text-left transition hover:border-leaf/35 lg:grid-cols-[1fr_360px_auto]"
+                    >
+                      <div className="min-w-0">
                         <h3 className="font-bold">{activity.title}</h3>
                         <p className="mt-1 text-sm text-ink/60">{activity.age_range || "Faixa etária"} • {activity.development_area || "Área"}</p>
                       </div>
-                      <button disabled={busy} onClick={() => removeActivity(activity.id)} className="btn-secondary px-3" title="Remover">
-                        <X size={17} />
+                      <div className="flex gap-2" onClick={(event) => event.stopPropagation()}>
+                        <select
+                          className="field"
+                          value={movingActivityId === activity.id ? moveTargetCollectionId : selected.id}
+                          onChange={(event) => {
+                            setMovingActivityId(activity.id);
+                            setMoveTargetCollectionId(event.target.value);
+                          }}
+                          title="Mudar coleção"
+                        >
+                          {collections.map((collection) => (
+                            <option key={collection.id} value={collection.id}>
+                              {collection.name}
+                            </option>
+                          ))}
+                        </select>
+                        {movingActivityId === activity.id ? (
+                          <>
+                            <button type="button" disabled={busy} onClick={cancelMoveActivity} className="btn-secondary px-3" title="Cancelar mudança">
+                              <X size={17} />
+                            </button>
+                            <button type="button" disabled={busy} onClick={() => saveMoveActivity(activity.id)} className="btn-secondary px-3" title="Salvar mudança">
+                              <Check size={17} />
+                            </button>
+                          </>
+                        ) : null}
+                      </div>
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          if (confirmRemoveActivityId === activity.id) {
+                            removeActivity(activity.id);
+                          } else {
+                            setConfirmRemoveActivityId(activity.id);
+                          }
+                        }}
+                        className={confirmRemoveActivityId === activity.id ? "btn-danger px-3" : "btn-secondary px-3"}
+                        title="Remover da coleção"
+                      >
+                        {confirmRemoveActivityId === activity.id ? "Confirmar" : <X size={17} />}
                       </button>
                     </div>
                   ))}
@@ -333,7 +436,26 @@ export default function CollectionsPage() {
           onNameChange={setName}
           onDescriptionChange={setDescription}
           onColorChange={setColor}
+          pageColors={pageColors}
         />
+      ) : null}
+
+      {viewActivity ? (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-ink/45 px-4 py-6">
+          <div className="mx-auto w-full max-w-4xl">
+            <div className="mb-3 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setViewActivity(null)}
+                className="grid h-10 w-10 place-items-center rounded-md border border-ink/10 bg-white text-ink/60 shadow-soft hover:text-ink"
+                title="Fechar"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <ActivityView activity={viewActivity} />
+          </div>
+        </div>
       ) : null}
     </ProtectedPage>
   );
@@ -349,7 +471,8 @@ function CollectionModal({
   onSubmit,
   onNameChange,
   onDescriptionChange,
-  onColorChange
+  onColorChange,
+  pageColors
 }: {
   mode: Exclude<ModalMode, null>;
   name: string;
@@ -361,7 +484,14 @@ function CollectionModal({
   onNameChange: (value: string) => void;
   onDescriptionChange: (value: string) => void;
   onColorChange: (value: string) => void;
+  pageColors: string[];
 }) {
+  const [hexInput, setHexInput] = useState(color.toUpperCase());
+
+  useEffect(() => {
+    setHexInput(color.toUpperCase());
+  }, [color]);
+
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-ink/45 px-4 py-6">
       <form onSubmit={onSubmit} className="w-full max-w-lg rounded-lg border border-ink/10 bg-white p-5 shadow-soft">
@@ -388,21 +518,58 @@ function CollectionModal({
 
           <div>
             <span className="label mb-2 block">Cor da coleção</span>
-            <div className="flex flex-wrap items-center gap-2">
-              {collectionColors.map((option) => (
-                <button
-                  key={option}
-                  type="button"
-                  onClick={() => onColorChange(option)}
-                  className="h-9 w-9 rounded-full border-2 transition"
-                  style={{
-                    backgroundColor: option,
-                    borderColor: color === option ? "#1d2320" : "transparent"
-                  }}
-                  title={option}
-                />
-              ))}
-              <input className="h-9 w-14 rounded-md border border-ink/15 bg-white p-1" type="color" value={color} onChange={(event) => onColorChange(event.target.value)} />
+            <div className="overflow-hidden rounded-lg border border-ink/10 bg-white">
+              <input
+                className="h-36 w-full cursor-pointer border-0 p-0"
+                type="color"
+                value={color}
+                onChange={(event) => onColorChange(event.target.value)}
+                title="Escolher cor"
+              />
+              <div
+                className="h-3"
+                style={{
+                  background:
+                    "linear-gradient(90deg, #ff2d2d, #ffb000, #fff500, #24d943, #16c7ff, #3038ff, #b229ff, #ff2d8a)"
+                }}
+              />
+              <div className="space-y-3 p-3">
+                <label className="grid grid-cols-[auto_1fr] items-center gap-2 text-sm font-semibold text-ink/70">
+                  HEX
+                  <input
+                    className="field"
+                    value={hexInput}
+                    onChange={(event) => {
+                      const value = event.target.value.trim().toUpperCase();
+                      setHexInput(value);
+                      if (/^#[0-9A-F]{6}$/.test(value)) onColorChange(value);
+                    }}
+                    onBlur={() => {
+                      if (!/^#[0-9A-F]{6}$/.test(hexInput)) setHexInput(color.toUpperCase());
+                    }}
+                  />
+                </label>
+                {pageColors.length ? (
+                  <div>
+                    <p className="mb-2 text-xs font-semibold text-ink/55">Cores na página</p>
+                    <div className="flex flex-wrap gap-2">
+                      {pageColors.map((option) => (
+                        <button
+                          key={option}
+                          type="button"
+                          onClick={() => onColorChange(option)}
+                          className="h-7 w-7 rounded-full border-2 transition"
+                          style={{
+                            backgroundColor: option,
+                            borderColor: color.toLowerCase() === option.toLowerCase() ? "#1d2320" : "transparent"
+                          }}
+                          title={option}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
             </div>
           </div>
         </div>
