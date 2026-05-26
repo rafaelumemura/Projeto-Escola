@@ -150,7 +150,10 @@ function findNextPlannedItem(items: PlannedItem[]) {
   const upcoming = items
     .filter((item) => item.date)
     .map((item) => ({ item, date: parsePlannedDate(item) }))
-    .filter((entry): entry is { item: PlannedItem; date: Date } => Boolean(entry.date) && entry.date >= now)
+    .filter((entry): entry is { item: PlannedItem; date: Date } => {
+      if (!entry.date) return false;
+      return entry.date >= now;
+    })
     .sort((a, b) => a.date.getTime() - b.date.getTime());
 
   return upcoming[0]?.item || null;
