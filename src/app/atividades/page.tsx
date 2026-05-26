@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { Eye, FileDown, Filter, FolderMinus, FolderPlus, Pencil, Save, Trash2 } from "lucide-react";
+import { Eye, FileDown, Filter, FolderMinus, FolderPlus, Pencil, Printer, Save, Trash2 } from "lucide-react";
 import { ProtectedPage } from "@/components/layout/ProtectedPage";
 import { ActivityView } from "@/components/ui/ActivityView";
 import { useAuth } from "@/components/auth/AuthProvider";
@@ -243,6 +243,10 @@ export default function ActivitiesPage() {
                   <FileDown size={16} />
                   PDF
                 </button>
+                <button onClick={() => downloadPdf(supabase, "/api/pdf/activity-material", { activity_id: selected.id }, materialPdfFileName(selected.title))} className="btn-secondary">
+                  <Printer size={16} />
+                  Material imprimível
+                </button>
                 <button
                   disabled={busy}
                   onClick={() => {
@@ -321,6 +325,11 @@ export default function ActivitiesPage() {
 function pdfFileName(title: string | null) {
   const safeTitle = (title || "atividade").replace(/[\\/]/g, "-").trim() || "atividade";
   return `${safeTitle}.pdf`;
+}
+
+function materialPdfFileName(title: string | null) {
+  const safeTitle = (title || "atividade").replace(/[\\/]/g, "-").trim() || "atividade";
+  return `${safeTitle}-material.pdf`;
 }
 
 function EditInput({ label, value, onChange }: { label: string; value?: string | null; onChange: (value: string) => void }) {

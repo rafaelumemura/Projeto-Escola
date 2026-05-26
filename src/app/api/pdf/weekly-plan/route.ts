@@ -10,7 +10,8 @@ const payloadSchema = z.object({
   weekly_plan: z.record(z.unknown()).optional(),
   items: z.array(z.record(z.unknown())).optional(),
   start_date: z.string().optional(),
-  end_date: z.string().optional()
+  end_date: z.string().optional(),
+  title: z.string().optional()
 });
 
 export async function POST(request: Request) {
@@ -46,6 +47,7 @@ export async function POST(request: Request) {
 
       weeklyPlan = {
         ...plan,
+        title: payload.title || plan.title,
         start_date: payload.start_date || plan.start_date,
         end_date: payload.end_date || plan.end_date
       };
@@ -64,7 +66,7 @@ export async function POST(request: Request) {
     return new Response(Buffer.from(bytes), {
       headers: {
         "content-type": "application/pdf",
-        "content-disposition": "attachment; filename=planejamento-mensal.pdf"
+        "content-disposition": "attachment; filename=planejamento.pdf"
       }
     });
   } catch (error) {

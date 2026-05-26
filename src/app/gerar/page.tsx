@@ -1,7 +1,7 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
-import { FileDown, Save, Sparkles, Trash2 } from "lucide-react";
+import { FormEvent, useState } from "react";
+import { FileDown, Sparkles, Trash2 } from "lucide-react";
 import { ProtectedPage } from "@/components/layout/ProtectedPage";
 import { ActivityView } from "@/components/ui/ActivityView";
 import { useAuth } from "@/components/auth/AuthProvider";
@@ -10,7 +10,6 @@ import { activityTypes, environments, methodologies, type ActivityGenerationInpu
 import type { Database } from "@/lib/database.types";
 
 type Activity = Database["public"]["Tables"]["activities"]["Row"];
-type Collection = Database["public"]["Tables"]["collections"]["Row"];
 
 const initialForm: ActivityGenerationInput = {
   age_range: "",
@@ -27,48 +26,10 @@ export default function GenerateActivityPage() {
   const [form, setForm] = useState<ActivityGenerationInput>(initialForm);
   const [generated, setGenerated] = useState<Partial<Activity> | null>(null);
   const [savedActivityId, setSavedActivityId] = useState<string | null>(null);
-  const [savedCollectionId, setSavedCollectionId] = useState<string | null>(null);
-  const [collections, setCollections] = useState<Collection[]>([]);
-  const [collectionId, setCollectionId] = useState("");
   const [customMethodology, setCustomMethodology] = useState("");
   const [customEnvironment, setCustomEnvironment] = useState("");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
-
-  useEffect(() => {
-    apiFetch<{ collections: Collection[] }>(supabase, "/api/collections")
-      .then((collectionData) => {
-        setCollections(collectionData.collections);
-      })
-      .catch(() => undefined);
-  }, [supabase]);
-
-  useEffect(() => {
-    if (!generated || (savedActivityId && savedCollectionId)) return;
-
-    const warning = "Você precisa salvar a atividade em uma coleção ou descartar antes de sair.";
-
-    function handleBeforeUnload(event: BeforeUnloadEvent) {
-      event.preventDefault();
-      event.returnValue = warning;
-    }
-
-    function handleDocumentClick(event: MouseEvent) {
-      const target = event.target instanceof Element ? event.target.closest("a") : null;
-      if (!target) return;
-      if (!window.confirm(warning)) {
-        event.preventDefault();
-      }
-    }
-
-    window.addEventListener("beforeunload", handleBeforeUnload);
-    document.addEventListener("click", handleDocumentClick, true);
-
-    return () => {
-      window.removeEventListener("beforeunload", handleBeforeUnload);
-      document.removeEventListener("click", handleDocumentClick, true);
-    };
-  }, [generated, savedActivityId, savedCollectionId]);
 
   function updateField<K extends keyof ActivityGenerationInput>(key: K, value: ActivityGenerationInput[K]) {
     setForm((current) => ({ ...current, [key]: value }));
@@ -90,55 +51,21 @@ export default function GenerateActivityPage() {
     setBusy(true);
     setMessage(null);
     setSavedActivityId(null);
-    setSavedCollectionId(null);
 
     try {
       const data = await apiFetch<{ activity: Partial<Activity> }>(supabase, "/api/activities/generate", {
         method: "POST",
         body: payload
       });
-      setGenerated(data.activity);
-      setMessage("Atividade gerada. Revise antes de salvar ou exportar.");
+      const saved = await apiFetch<{ activity: Activity }>(supabase, "/api/activities", {
+        method: "POST",
+        body: data.activity
+      });
+      setGenerated(saved.activity);
+      setSavedActivityId(saved.activity.id);
+      setMessage("Atividade gerada e salva automaticamente em Atividades.");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Não foi possível gerar a atividade.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function saveIfNeeded() {
-    if (!generated) throw new Error("Gere uma atividade primeiro.");
-    if (savedActivityId) return savedActivityId;
-
-    const data = await apiFetch<{ activity: Activity }>(supabase, "/api/activities", {
-      method: "POST",
-      body: generated
-    });
-    setSavedActivityId(data.activity.id);
-    setGenerated(data.activity);
-    return data.activity.id;
-  }
-
-  async function handleSave() {
-    if (!collectionId) {
-      setMessage("Escolha uma coleção para salvar a atividade.");
-      return;
-    }
-
-    setBusy(true);
-    setMessage(null);
-    try {
-      const activityId = await saveIfNeeded();
-      if (savedCollectionId !== collectionId) {
-        await apiFetch(supabase, `/api/collections/${collectionId}/activities`, {
-          method: "POST",
-          body: { activity_id: activityId }
-        });
-        setSavedCollectionId(collectionId);
-      }
-      setMessage("Atividade salva na coleção.");
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Não foi possível salvar.");
     } finally {
       setBusy(false);
     }
@@ -166,8 +93,7 @@ export default function GenerateActivityPage() {
   function discardGenerated() {
     setGenerated(null);
     setSavedActivityId(null);
-    setSavedCollectionId(null);
-    setMessage("Atividade descartada.");
+    setMessage("Tela limpa.");
   }
 
   return (
@@ -222,33 +148,14 @@ export default function GenerateActivityPage() {
           {generated ? (
             <>
               <div className="flex flex-wrap gap-2">
-                <button disabled={busy} onClick={handleSave} className="btn-primary">
-                  <Save size={16} />
-                  {savedActivityId && savedCollectionId === collectionId ? "Atividade salva" : "Salvar atividade"}
-                </button>
                 <button disabled={busy} onClick={handlePdf} className="btn-secondary">
                   <FileDown size={16} />
                   Gerar PDF
                 </button>
                 <button disabled={busy} onClick={discardGenerated} className="btn-secondary">
                   <Trash2 size={16} />
-                  {savedActivityId && savedCollectionId ? "Limpar tela" : "Descartar atividade"}
+                  Limpar tela
                 </button>
-              </div>
-
-              <div className="rounded-lg border border-ink/10 bg-white p-4">
-                <div className="space-y-2">
-                  <label className="label block">Coleção para salvar</label>
-                  <select className="field" value={collectionId} onChange={(event) => setCollectionId(event.target.value)}>
-                    <option value="">Selecione uma coleção</option>
-                    {collections.map((collection) => (
-                      <option key={collection.id} value={collection.id}>
-                        {collection.name}
-                      </option>
-                    ))}
-                  </select>
-                  <p className="text-xs font-semibold text-ink/55">Para salvar a atividade, escolha a coleção onde ela ficará organizada.</p>
-                </div>
               </div>
 
               <ActivityView activity={generated} />

@@ -209,10 +209,182 @@ export async function buildActivityPdf(activity: PdfActivity) {
   return writer.save();
 }
 
+export async function buildActivityMaterialPdf(activity: PdfActivity) {
+  const pdf = await PDFDocument.create();
+  const regular = await pdf.embedFont(StandardFonts.Helvetica);
+  const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
+  const text = activityText(activity);
+
+  if (/bandeir|festa junina|junina|arrai/i.test(text)) {
+    drawFlagMaterial(pdf, bold);
+  } else if (/n[uú]mero|numerad|par|[íi]mpar|circul|quadrad/i.test(text)) {
+    drawNumberMaterial(pdf, bold, text);
+  } else {
+    drawGenericMaterial(pdf, regular, bold, activity);
+  }
+
+  return pdf.save();
+}
+
+function drawNumberMaterial(pdf: PDFDocument, bold: PDFFont, text: string) {
+  const numbers = numberSequence(text);
+  const shape = /quadrad/i.test(text) ? "square" : "circle";
+  const oddColor = rgb(0.95, 0.68, 0.3);
+  const evenColor = rgb(0.35, 0.72, 0.83);
+  const startX = 82;
+  const startY = pageHeight - 150;
+  const gapX = 108;
+  const gapY = 118;
+  const size = 74;
+  const perPage = 20;
+
+  numbers.forEach((number, index) => {
+    const pageIndex = Math.floor(index / perPage);
+    const localIndex = index % perPage;
+    const page = localIndex === 0 ? pdf.addPage([pageWidth, pageHeight]) : pdf.getPage(pageIndex);
+
+    if (localIndex === 0) {
+      page.drawText("Material imprimível", {
+        x: margin,
+        y: pageHeight - 58,
+        size: 18,
+        font: bold,
+        color: rgb(0.12, 0.18, 0.15)
+      });
+    }
+
+    const column = localIndex % 4;
+    const row = Math.floor(localIndex / 4);
+    const x = startX + column * gapX;
+    const y = startY - row * gapY;
+    const color = number % 2 === 0 ? evenColor : oddColor;
+
+    if (shape === "square") {
+      page.drawRectangle({ x, y, width: size, height: size, color, borderColor: rgb(0.12, 0.14, 0.13), borderWidth: 1.2 });
+    } else {
+      page.drawCircle({ x: x + size / 2, y: y + size / 2, size: size / 2, color, borderColor: rgb(0.12, 0.14, 0.13), borderWidth: 1.2 });
+    }
+
+    page.drawText(String(number), {
+      x: x + (number >= 10 ? 20 : 27),
+      y: y + 23,
+      size: 28,
+      font: bold,
+      color: rgb(0.12, 0.14, 0.13)
+    });
+  });
+}
+
+function drawFlagMaterial(pdf: PDFDocument, bold: PDFFont) {
+  const colors = [rgb(0.95, 0.32, 0.27), rgb(0.98, 0.74, 0.23), rgb(0.31, 0.68, 0.46), rgb(0.25, 0.58, 0.82)];
+  const page = pdf.addPage([pageWidth, pageHeight]);
+  const flagWidth = 86;
+  const flagHeight = 98;
+  const startX = 58;
+  const startY = pageHeight - 150;
+
+  page.drawText("Bandeirinhas para recortar", {
+    x: margin,
+    y: pageHeight - 58,
+    size: 18,
+    font: bold,
+    color: rgb(0.12, 0.18, 0.15)
+  });
+
+  for (let row = 0; row < 4; row += 1) {
+    for (let column = 0; column < 5; column += 1) {
+      const x = startX + column * 102;
+      const y = startY - row * 145;
+      const color = colors[(row + column) % colors.length];
+      page.drawRectangle({ x, y, width: flagWidth, height: flagHeight, color, borderColor: rgb(0.12, 0.14, 0.13), borderWidth: 1 });
+      page.drawLine({ start: { x, y: y + flagHeight }, end: { x: x + flagWidth, y: y + flagHeight }, thickness: 2, color: rgb(0.12, 0.14, 0.13) });
+      page.drawLine({ start: { x, y }, end: { x: x + flagWidth / 2, y: y - 28 }, thickness: 1, color: rgb(0.12, 0.14, 0.13) });
+      page.drawLine({ start: { x: x + flagWidth, y }, end: { x: x + flagWidth / 2, y: y - 28 }, thickness: 1, color: rgb(0.12, 0.14, 0.13) });
+      page.drawCircle({ x: x + flagWidth / 2, y: y + flagHeight / 2, size: 14, color: rgb(1, 1, 1), borderColor: rgb(0.12, 0.14, 0.13), borderWidth: 0.8 });
+    }
+  }
+}
+
+function drawGenericMaterial(pdf: PDFDocument, regular: PDFFont, bold: PDFFont, activity: PdfActivity) {
+  const page = pdf.addPage([pageWidth, pageHeight]);
+  const cards = materialCardLabels(activity);
+  const cardWidth = 225;
+  const cardHeight = 156;
+  const startX = 60;
+  const startY = pageHeight - 210;
+
+  page.drawText("Cartões ilustrados para impressão", {
+    x: margin,
+    y: pageHeight - 58,
+    size: 18,
+    font: bold,
+    color: rgb(0.12, 0.18, 0.15)
+  });
+
+  cards.forEach((label, index) => {
+    const column = index % 2;
+    const row = Math.floor(index / 2);
+    const x = startX + column * 255;
+    const y = startY - row * 186;
+    const lines = wrapText(label, 22).slice(0, 3);
+    page.drawRectangle({ x, y, width: cardWidth, height: cardHeight, color: rgb(1, 1, 1), borderColor: rgb(0.18, 0.49, 0.35), borderWidth: 1.2 });
+    drawSimpleIllustration(page, x + 24, y + 40, index);
+    lines.forEach((line, lineIndex) => {
+      page.drawText(line, { x: x + 92, y: y + 90 - lineIndex * 13, size: 11, font: regular, color: rgb(0.12, 0.14, 0.13) });
+    });
+  });
+}
+
+function drawSimpleIllustration(page: PDFPage, x: number, y: number, index: number) {
+  const colors = [rgb(0.35, 0.72, 0.83), rgb(0.95, 0.68, 0.3), rgb(0.52, 0.76, 0.54), rgb(0.79, 0.43, 0.62)];
+  const color = colors[index % colors.length];
+
+  page.drawCircle({ x: x + 24, y: y + 50, size: 22, color, borderColor: rgb(0.12, 0.14, 0.13), borderWidth: 0.8 });
+  page.drawRectangle({ x, y, width: 48, height: 38, color: rgb(1, 1, 1), borderColor: color, borderWidth: 2 });
+  page.drawLine({ start: { x: x + 7, y: y + 14 }, end: { x: x + 41, y: y + 28 }, thickness: 1.2, color });
+  page.drawLine({ start: { x: x + 41, y: y + 14 }, end: { x: x + 7, y: y + 28 }, thickness: 1.2, color });
+}
+
+function activityText(activity: PdfActivity) {
+  return [activity.title, activity.description, activity.materials, activity.objective, asLines(activity.steps).join(" "), asLines(activity.variations).join(" ")]
+    .filter(Boolean)
+    .join(" ");
+}
+
+function numberSequence(text: string) {
+  const range = text.match(/(\d+)\s*(?:a|até|-)\s*(\d+)/i);
+  if (range) {
+    const start = Number(range[1]);
+    const end = Number(range[2]);
+    if (start > 0 && end >= start && end - start <= 40) {
+      return Array.from({ length: end - start + 1 }, (_, index) => start + index);
+    }
+  }
+
+  const found = Array.from(new Set((text.match(/\b\d+\b/g) || []).map(Number).filter((number) => number > 0 && number <= 40)));
+  return found.length >= 4 ? found.slice(0, 20) : Array.from({ length: 10 }, (_, index) => index + 1);
+}
+
+function materialCardLabels(activity: PdfActivity) {
+  const source = [activity.title, activity.development_area, activity.objective, ...asLines(activity.steps)].filter(Boolean).map(String);
+  const labels = source
+    .flatMap((item) => clean(item).split(/[,.]/))
+    .map((item) => item.trim())
+    .filter((item) => item.length > 4)
+    .slice(0, 6);
+
+  while (labels.length < 6) {
+    labels.push(["Observar", "Classificar", "Comparar", "Criar", "Contar", "Registrar"][labels.length]);
+  }
+
+  return labels;
+}
+
 export async function buildWeeklyPlanPdf(plan: PdfWeeklyPlan, items: PdfWeeklyPlanItem[]) {
   const pdf = await PDFDocument.create();
   const regular = await pdf.embedFont(StandardFonts.Helvetica);
   const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
+  const title = clean(plan.title) || "Planejamento";
   const landscapeWidth = pageHeight;
   const landscapeHeight = pageWidth;
   const tableMargin = 30;
@@ -232,7 +404,7 @@ export async function buildWeeklyPlanPdf(plan: PdfWeeklyPlan, items: PdfWeeklyPl
       const columnWidth = (landscapeWidth - tableMargin * 2 - timeColumnWidth) / Math.max(dateChunk.length, 1);
       const tableTop = top - 54;
 
-      page.drawText("Planejamento mensal", {
+      page.drawText(title, {
         x: tableMargin,
         y: top,
         size: 18,
@@ -297,7 +469,7 @@ export async function buildWeeklyPlanPdf(plan: PdfWeeklyPlan, items: PdfWeeklyPl
                 .filter(Boolean)
                 .join(" - ");
             })
-            .join("; ");
+            .join("\n");
 
           drawCell(page, x, y, columnWidth, rowHeight, rgb(1, 1, 1));
           drawWrappedCellText(page, text, x + 7, y + rowHeight - 16, columnWidth - 14, regular);
@@ -330,8 +502,10 @@ function drawWrappedCellText(
   font: PDFFont
 ) {
   if (!clean(text)) return;
-  const maxChars = Math.max(14, Math.floor(width / 4.8));
-  const lines = wrapText(text, maxChars).slice(0, 5);
+  const lines = text
+    .split("\n")
+    .flatMap((paragraph) => wrapTextByWidth(paragraph, width, font, 7.8))
+    .slice(0, 5);
 
   lines.forEach((line, index) => {
     page.drawText(line, {
@@ -342,6 +516,51 @@ function drawWrappedCellText(
       color: rgb(0.12, 0.14, 0.13)
     });
   });
+}
+
+function wrapTextByWidth(text: string, maxWidth: number, font: PDFFont, size: number) {
+  const words = clean(text).split(/\s+/).filter(Boolean);
+  const lines: string[] = [];
+  let line = "";
+
+  for (const word of words) {
+    const parts = splitLongWord(word, maxWidth, font, size);
+
+    for (const part of parts) {
+      const next = line ? `${line} ${part}` : part;
+
+      if (font.widthOfTextAtSize(next, size) > maxWidth && line) {
+        lines.push(line);
+        line = part;
+      } else {
+        line = next;
+      }
+    }
+  }
+
+  if (line) lines.push(line);
+  return lines.length ? lines : [""];
+}
+
+function splitLongWord(word: string, maxWidth: number, font: PDFFont, size: number) {
+  if (font.widthOfTextAtSize(word, size) <= maxWidth) return [word];
+
+  const parts: string[] = [];
+  let part = "";
+
+  for (const character of word) {
+    const next = `${part}${character}`;
+
+    if (font.widthOfTextAtSize(next, size) > maxWidth && part) {
+      parts.push(`${part}-`);
+      part = character;
+    } else {
+      part = next;
+    }
+  }
+
+  if (part) parts.push(part);
+  return parts;
 }
 
 function dateRange(startDate?: string | null, endDate?: string | null, items: PdfWeeklyPlanItem[] = []) {

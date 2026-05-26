@@ -3,34 +3,50 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight, FileDown, Plus, X } from "lucide-react";
 import { ProtectedPage } from "@/components/layout/ProtectedPage";
+import { ActivityView } from "@/components/ui/ActivityView";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { apiFetch, downloadPdf } from "@/lib/api/client";
 import type { Database } from "@/lib/database.types";
 
 type MonthlyPlan = Database["public"]["Tables"]["weekly_plans"]["Row"];
 type Activity = Database["public"]["Tables"]["activities"]["Row"];
+type ActivityWithCollections = Activity & {
+  collection_ids?: string[];
+  primary_collection_id?: string | null;
+};
+type Collection = Database["public"]["Tables"]["collections"]["Row"];
 type PlanItem = Database["public"]["Tables"]["weekly_plan_items"]["Row"] & {
   activities?: Activity | null;
 };
 
 const weekdays = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+const defaultColor = "#2f7d58";
 
 export default function MonthlyPlanningPage() {
   const { supabase } = useAuth();
   const [currentMonth, setCurrentMonth] = useState(() => monthStart(new Date()));
   const [monthlyPlan, setMonthlyPlan] = useState<MonthlyPlan | null>(null);
-  const [activities, setActivities] = useState<Activity[]>([]);
+  const [activities, setActivities] = useState<ActivityWithCollections[]>([]);
+  const [collections, setCollections] = useState<Collection[]>([]);
   const [items, setItems] = useState<PlanItem[]>([]);
-  const [pdfStartDate, setPdfStartDate] = useState(formatDate(monthStart(new Date())));
-  const [pdfEndDate, setPdfEndDate] = useState(formatDate(monthEnd(new Date())));
   const [modalDate, setModalDate] = useState<string | null>(null);
   const [activityId, setActivityId] = useState("");
   const [startTime, setStartTime] = useState("");
+  const [manualMode, setManualMode] = useState(false);
+  const [manualTitle, setManualTitle] = useState("");
+  const [manualDescription, setManualDescription] = useState("");
+  const [manualBncc, setManualBncc] = useState("");
+  const [viewActivity, setViewActivity] = useState<Activity | null>(null);
+  const [pdfModalOpen, setPdfModalOpen] = useState(false);
+  const [pdfTitle, setPdfTitle] = useState("Planejamento");
+  const [pdfStartDate, setPdfStartDate] = useState(formatDate(monthStart(new Date())));
+  const [pdfEndDate, setPdfEndDate] = useState(formatDate(monthEnd(new Date())));
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
   const monthStartDate = useMemo(() => formatDate(monthStart(currentMonth)), [currentMonth]);
   const monthEndDate = useMemo(() => formatDate(monthEnd(currentMonth)), [currentMonth]);
+  const calendarDays = useMemo(() => buildCalendarDays(currentMonth), [currentMonth]);
 
   const groupedItems = useMemo(() => {
     return items.reduce<Record<string, PlanItem[]>>((acc, item) => {
@@ -41,17 +57,19 @@ export default function MonthlyPlanningPage() {
     }, {});
   }, [items]);
 
-  const calendarDays = useMemo(() => buildCalendarDays(currentMonth), [currentMonth]);
-
   useEffect(() => {
-    apiFetch<{ activities: Activity[] }>(supabase, "/api/activities")
-      .then((data) => setActivities(data.activities))
+    Promise.all([
+      apiFetch<{ activities: ActivityWithCollections[] }>(supabase, "/api/activities"),
+      apiFetch<{ collections: Collection[] }>(supabase, "/api/collections")
+    ])
+      .then(([activityData, collectionData]) => {
+        setActivities(activityData.activities);
+        setCollections(collectionData.collections);
+      })
       .catch((error) => setMessage(error instanceof Error ? error.message : "Não foi possível carregar atividades."));
   }, [supabase]);
 
   useEffect(() => {
-    setPdfStartDate(monthStartDate);
-    setPdfEndDate(monthEndDate);
     loadMonth().catch((error) => setMessage(error instanceof Error ? error.message : "Não foi possível carregar o planejamento."));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [monthStartDate, monthEndDate, supabase]);
@@ -71,18 +89,15 @@ export default function MonthlyPlanningPage() {
 
   async function ensureMonthlyPlan() {
     const title = hiddenPlanTitle(currentMonth);
+    const legacyTitle = legacyHiddenPlanTitle(currentMonth);
     const plansData = await apiFetch<{ weekly_plans: MonthlyPlan[] }>(supabase, "/api/weekly-plans");
-    const existing = plansData.weekly_plans.find((plan) => plan.title === title);
+    const existing = plansData.weekly_plans.find((plan) => plan.title === title || plan.title === legacyTitle);
 
     if (existing) return existing;
 
     const created = await apiFetch<{ weekly_plan: MonthlyPlan }>(supabase, "/api/weekly-plans", {
       method: "POST",
-      body: {
-        title,
-        start_date: monthStartDate,
-        end_date: monthEndDate
-      }
+      body: { title, start_date: monthStartDate, end_date: monthEndDate }
     });
 
     return created.weekly_plan;
@@ -92,6 +107,10 @@ export default function MonthlyPlanningPage() {
     setModalDate(date);
     setActivityId("");
     setStartTime("");
+    setManualMode(false);
+    setManualTitle("");
+    setManualDescription("");
+    setManualBncc("");
     setMessage(null);
   }
 
@@ -99,22 +118,59 @@ export default function MonthlyPlanningPage() {
     setModalDate(null);
     setActivityId("");
     setStartTime("");
+    setManualMode(false);
+  }
+
+  function openPdfModal() {
+    setPdfTitle("Planejamento");
+    setPdfStartDate(monthStartDate);
+    setPdfEndDate(monthEndDate);
+    setPdfModalOpen(true);
   }
 
   async function addItem(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!monthlyPlan || !modalDate || !activityId || !startTime) {
-      setMessage("Escolha uma atividade e defina o horário de início.");
+    if (!monthlyPlan || !modalDate || !startTime) {
+      setMessage("Defina a data e o horário de início.");
       return;
     }
 
     setBusy(true);
     setMessage(null);
     try {
+      let resolvedActivityId = activityId;
+
+      if (manualMode) {
+        if (!manualTitle.trim()) {
+          setMessage("Informe o nome da nova atividade.");
+          return;
+        }
+
+        const created = await apiFetch<{ activity: Activity }>(supabase, "/api/activities", {
+          method: "POST",
+          body: {
+            title: manualTitle,
+            description: manualDescription || null,
+            bncc_code: manualBncc || null,
+            steps: [],
+            teacher_tips: [],
+            variations: [],
+            raw_ai_response: { manual: true }
+          }
+        });
+        resolvedActivityId = created.activity.id;
+        setActivities((current) => [{ ...created.activity, collection_ids: [], primary_collection_id: null }, ...current]);
+      }
+
+      if (!resolvedActivityId) {
+        setMessage("Escolha uma atividade ou adicione uma nova.");
+        return;
+      }
+
       await apiFetch(supabase, `/api/weekly-plans/${monthlyPlan.id}/items`, {
         method: "POST",
         body: {
-          activity_id: activityId,
+          activity_id: resolvedActivityId,
           date: modalDate,
           start_time: startTime,
           end_time: null,
@@ -147,14 +203,11 @@ export default function MonthlyPlanningPage() {
     }
   }
 
-  async function generatePdf() {
+  async function generatePdf(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
     if (!monthlyPlan) return;
-    if (!pdfStartDate || !pdfEndDate) {
-      setMessage("Escolha a data de início e fim para gerar o PDF.");
-      return;
-    }
-    if (pdfStartDate > pdfEndDate) {
-      setMessage("A data de início precisa ser anterior ou igual à data final.");
+    if (!pdfStartDate || !pdfEndDate || pdfStartDate > pdfEndDate) {
+      setMessage("Informe um intervalo válido para gerar o PDF.");
       return;
     }
 
@@ -167,10 +220,12 @@ export default function MonthlyPlanningPage() {
         {
           weekly_plan_id: monthlyPlan.id,
           start_date: pdfStartDate,
-          end_date: pdfEndDate
+          end_date: pdfEndDate,
+          title: pdfTitle || "Planejamento"
         },
-        `planejamento-mensal-${monthSlug(currentMonth)}.pdf`
+        `${(pdfTitle || "planejamento").replace(/[\\/]/g, "-")}.pdf`
       );
+      setPdfModalOpen(false);
       setMessage("PDF gerado.");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Não foi possível gerar o PDF.");
@@ -179,38 +234,43 @@ export default function MonthlyPlanningPage() {
     }
   }
 
+  function activityColor(activity?: Activity | null) {
+    if (!activity?.id) return defaultColor;
+    const fullActivity = activities.find((item) => item.id === activity.id);
+    const collectionId = fullActivity?.primary_collection_id || fullActivity?.collection_ids?.[0];
+    return collections.find((collection) => collection.id === collectionId)?.color || defaultColor;
+  }
+
   return (
-    <ProtectedPage title="Planejamento mensal" subtitle="Organize as atividades salvas em um calendário mensal com horários de início.">
+    <ProtectedPage title="Planejamento" subtitle="Organize as atividades salvas em um calendário com horários de início.">
       {message ? <p className="mb-4 rounded-lg border border-ink/10 bg-white px-4 py-3 text-sm font-semibold text-ink/70">{message}</p> : null}
 
       <section className="panel mb-5 p-4">
-        <div className="grid gap-3 lg:grid-cols-[1fr_auto] lg:items-end">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <p className="label mb-2">Gerar planejamento em PDF</p>
-            <div className="grid gap-2 sm:grid-cols-[180px_180px_auto]">
-              <input className="field" type="date" min={monthStartDate} max={monthEndDate} value={pdfStartDate} onChange={(event) => setPdfStartDate(event.target.value)} />
-              <input className="field" type="date" min={monthStartDate} max={monthEndDate} value={pdfEndDate} onChange={(event) => setPdfEndDate(event.target.value)} />
-              <button type="button" disabled={busy} onClick={generatePdf} className="btn-primary">
-                <FileDown size={16} />
-                Gerar PDF
-              </button>
-            </div>
+            <p className="label mb-1">Calendário</p>
+            <h2 className="text-xl font-bold capitalize text-ink">{monthLabel(currentMonth)}</h2>
           </div>
 
-          <div className="flex items-center justify-between gap-2 rounded-lg border border-ink/10 bg-white p-2">
-            <button type="button" onClick={() => setCurrentMonth(addMonths(currentMonth, -1))} className="btn-secondary px-3" title="Mês anterior">
-              <ChevronLeft size={17} />
+          <div className="flex flex-wrap items-center gap-2">
+            <button type="button" onClick={openPdfModal} className="btn-primary">
+              <FileDown size={16} />
+              Gerar PDF
             </button>
-            <p className="min-w-48 text-center text-sm font-bold capitalize text-ink">{monthLabel(currentMonth)}</p>
-            <button type="button" onClick={() => setCurrentMonth(addMonths(currentMonth, 1))} className="btn-secondary px-3" title="Próximo mês">
-              <ChevronRight size={17} />
-            </button>
+            <div className="flex items-center gap-2 rounded-lg border border-ink/10 bg-white p-2">
+              <button type="button" onClick={() => setCurrentMonth(addMonths(currentMonth, -1))} className="btn-secondary px-3" title="Mês anterior">
+                <ChevronLeft size={17} />
+              </button>
+              <button type="button" onClick={() => setCurrentMonth(addMonths(currentMonth, 1))} className="btn-secondary px-3" title="Próximo mês">
+                <ChevronRight size={17} />
+              </button>
+            </div>
           </div>
         </div>
       </section>
 
       <section className="panel overflow-x-auto">
-        <div className="min-w-[820px] overflow-hidden rounded-lg">
+        <div className="min-w-[980px] overflow-hidden rounded-lg">
           <div className="grid grid-cols-7 border-b border-ink/10 bg-paper/80">
             {weekdays.map((day) => (
               <div key={day} className="px-3 py-2 text-center text-xs font-bold uppercase text-ink/60">
@@ -223,31 +283,49 @@ export default function MonthlyPlanningPage() {
             {calendarDays.map((day, index) => {
               const dayItems = day ? groupedItems[day] || [] : [];
               return (
-                <div key={day || `empty-${index}`} className="min-h-36 border-b border-r border-ink/10 bg-white p-2 [&:nth-child(7n)]:border-r-0">
+                <div key={day || `empty-${index}`} className="min-h-40 border-b border-r border-ink/10 bg-white p-2 [&:nth-child(7n)]:border-r-0">
                   {day ? (
                     <>
                       <div className="mb-2 flex items-center justify-between gap-2">
-                        <span className="grid h-7 w-7 place-items-center rounded-full bg-mint text-sm font-bold text-leaf">
-                          {Number(day.slice(-2))}
-                        </span>
+                        <span className="text-lg font-bold text-ink/60">{Number(day.slice(-2))}</span>
                         <button type="button" onClick={() => openAddModal(day)} className="grid h-8 w-8 place-items-center rounded-md border border-ink/10 bg-white text-leaf transition hover:border-leaf/40 hover:bg-mint" title="Adicionar atividade">
                           <Plus size={16} />
                         </button>
                       </div>
 
                       <div className="space-y-1.5">
-                        {dayItems.map((item) => (
-                          <div key={item.id} className="rounded-md border border-leaf/15 bg-mint/60 p-2 text-xs">
-                            <div className="mb-1 flex items-center justify-between gap-2">
-                              <span className="font-bold text-leaf">{formatTime(item.start_time)}</span>
-                              <button type="button" disabled={busy} onClick={() => removeItem(item.id)} className="text-ink/45 hover:text-clay" title="Remover">
+                        {dayItems.map((item) => {
+                          const color = activityColor(item.activities);
+                          return (
+                            <div
+                              key={item.id}
+                              role="button"
+                              tabIndex={0}
+                              onClick={() => item.activities && setViewActivity(item.activities)}
+                              onKeyDown={(event) => {
+                                if ((event.key === "Enter" || event.key === " ") && item.activities) {
+                                  setViewActivity(item.activities);
+                                }
+                              }}
+                              className="grid w-full grid-cols-[5px_1fr_auto_auto] items-center gap-2 rounded-md px-1.5 py-1 text-left text-xs transition hover:bg-paper"
+                            >
+                              <span className="h-5 rounded-full" style={{ backgroundColor: color }} />
+                              <span className="truncate font-semibold text-ink">{item.activities?.title || "Atividade removida"}</span>
+                              <span className="font-semibold text-ink/55">{formatTime(item.start_time)}</span>
+                              <button
+                                type="button"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  removeItem(item.id);
+                                }}
+                                className="text-ink/35 hover:text-clay"
+                                title="Remover"
+                              >
                                 <X size={13} />
                               </button>
                             </div>
-                            <p className="line-clamp-2 font-semibold text-ink">{item.activities?.title || "Atividade removida"}</p>
-                            {item.activities?.bncc_code ? <p className="mt-1 font-medium text-ink/55">BNCC {item.activities.bncc_code}</p> : null}
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     </>
                   ) : null}
@@ -272,17 +350,32 @@ export default function MonthlyPlanningPage() {
             </div>
 
             <div className="space-y-4">
-              <label className="block">
-                <span className="label mb-2 block">Atividade</span>
-                <select className="field" value={activityId} onChange={(event) => setActivityId(event.target.value)} required>
-                  <option value="">Selecione uma atividade salva</option>
-                  {activities.map((activity) => (
-                    <option key={activity.id} value={activity.id}>
-                      {activity.title}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              {!manualMode ? (
+                <label className="block">
+                  <span className="label mb-2 block">Atividade</span>
+                  <select className="field" value={activityId} onChange={(event) => setActivityId(event.target.value)} required={!manualMode}>
+                    <option value="">Selecione uma atividade salva</option>
+                    {activities.map((activity) => (
+                      <option key={activity.id} value={activity.id}>
+                        {activity.title}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : null}
+
+              <button type="button" onClick={() => setManualMode((current) => !current)} className="btn-secondary">
+                <Plus size={16} />
+                {manualMode ? "Usar atividade salva" : "Adicionar nova atividade"}
+              </button>
+
+              {manualMode ? (
+                <div className="space-y-3 rounded-lg border border-ink/10 bg-paper/60 p-3">
+                  <input className="field" value={manualTitle} onChange={(event) => setManualTitle(event.target.value)} placeholder="Nome da atividade" required />
+                  <textarea className="field min-h-24" value={manualDescription} onChange={(event) => setManualDescription(event.target.value)} placeholder="Descrição" />
+                  <input className="field" value={manualBncc} onChange={(event) => setManualBncc(event.target.value)} placeholder="Código BNCC" />
+                </div>
+              ) : null}
 
               <label className="block">
                 <span className="label mb-2 block">Horário de início</span>
@@ -302,12 +395,77 @@ export default function MonthlyPlanningPage() {
           </form>
         </div>
       ) : null}
+
+      {pdfModalOpen ? (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-ink/45 px-4 py-6">
+          <form onSubmit={generatePdf} className="w-full max-w-md rounded-lg border border-ink/10 bg-white p-5 shadow-soft">
+            <div className="mb-5 flex items-start justify-between gap-4">
+              <div>
+                <p className="label mb-2">Gerar PDF</p>
+                <h2 className="text-xl font-bold text-ink">Planejamento</h2>
+              </div>
+              <button type="button" onClick={() => setPdfModalOpen(false)} className="grid h-9 w-9 place-items-center rounded-md border border-ink/10 text-ink/55 hover:text-ink" title="Fechar">
+                <X size={17} />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <label className="block">
+                <span className="label mb-2 block">Título</span>
+                <input className="field" value={pdfTitle} onChange={(event) => setPdfTitle(event.target.value)} placeholder="Ex.: Semana da Natureza" />
+              </label>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <label className="block">
+                  <span className="label mb-2 block">Data inicial</span>
+                  <input className="field" type="date" min={monthStartDate} max={monthEndDate} value={pdfStartDate} onChange={(event) => setPdfStartDate(event.target.value)} required />
+                </label>
+                <label className="block">
+                  <span className="label mb-2 block">Data final</span>
+                  <input className="field" type="date" min={monthStartDate} max={monthEndDate} value={pdfEndDate} onChange={(event) => setPdfEndDate(event.target.value)} required />
+                </label>
+              </div>
+            </div>
+
+            <div className="mt-6 flex justify-end gap-2">
+              <button type="button" onClick={() => setPdfModalOpen(false)} disabled={busy} className="btn-secondary">
+                Cancelar
+              </button>
+              <button disabled={busy} className="btn-primary">
+                <FileDown size={16} />
+                Gerar PDF
+              </button>
+            </div>
+          </form>
+        </div>
+      ) : null}
+
+      {viewActivity ? (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-ink/45 px-4 py-6">
+          <div className="mx-auto w-full max-w-4xl">
+            <div className="mb-3 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setViewActivity(null)}
+                className="grid h-10 w-10 place-items-center rounded-md border border-ink/10 bg-white text-ink/60 shadow-soft hover:text-ink"
+                title="Fechar"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <ActivityView activity={viewActivity} />
+          </div>
+        </div>
+      ) : null}
     </ProtectedPage>
   );
 }
 
 function hiddenPlanTitle(date: Date) {
-  return `Planejamento Mensal ${monthSlug(date)}`;
+  return `Planejamento ${monthSlug(date)}`;
+}
+
+function legacyHiddenPlanTitle(date: Date) {
+  return ["Planejamento", "Mensal", monthSlug(date)].join(" ");
 }
 
 function monthSlug(date: Date) {

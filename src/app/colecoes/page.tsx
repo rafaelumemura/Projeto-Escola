@@ -382,10 +382,10 @@ export default function CollectionsPage() {
                         </select>
                         {movingActivityId === activity.id ? (
                           <>
-                            <button type="button" disabled={busy} onClick={cancelMoveActivity} className="btn-secondary px-3" title="Cancelar mudança">
+                            <button type="button" disabled={busy} onClick={cancelMoveActivity} className="grid h-10 w-10 place-items-center rounded-md border border-clay/25 bg-clay/10 text-clay transition hover:bg-clay/15" title="Cancelar mudança">
                               <X size={17} />
                             </button>
-                            <button type="button" disabled={busy} onClick={() => saveMoveActivity(activity.id)} className="btn-secondary px-3" title="Salvar mudança">
+                            <button type="button" disabled={busy} onClick={() => saveMoveActivity(activity.id)} className="grid h-10 w-10 place-items-center rounded-md border border-leaf/25 bg-mint text-leaf transition hover:border-leaf/45 hover:bg-mint/80" title="Salvar mudança">
                               <Check size={17} />
                             </button>
                           </>
