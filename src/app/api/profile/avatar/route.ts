@@ -13,7 +13,7 @@ export async function POST(request: Request) {
     const formData = await request.formData();
     const file = formData.get("avatar");
 
-    if (!(file instanceof File)) {
+    if (!isUploadFile(file)) {
       throw Object.assign(new Error("Envie uma imagem de perfil."), { status: 400 });
     }
 
@@ -76,4 +76,14 @@ function extensionFromType(type: string) {
   if (type === "image/webp") return "webp";
   if (type === "image/gif") return "gif";
   return "jpg";
+}
+
+function isUploadFile(value: FormDataEntryValue | null): value is Blob & { name?: string } {
+  return Boolean(
+    value &&
+      typeof value === "object" &&
+      "arrayBuffer" in value &&
+      "type" in value &&
+      "size" in value
+  );
 }

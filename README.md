@@ -65,6 +65,7 @@ Os planos disponíveis são:
 
 - Básico: 30 atividades por ciclo de 30 dias
 - Completo: 100 atividades por ciclo de 30 dias
+- Pro: 1000 atividades por ciclo de 30 dias, reservado ao admin `rafaelumemura@gmail.com`
 
 Para ativar um ciclo após confirmação de pagamento:
 

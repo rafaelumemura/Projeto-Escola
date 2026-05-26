@@ -8,6 +8,11 @@ export const PLAN_DEFINITIONS = {
     key: "complete",
     name: "Completo",
     activityLimit: 100
+  },
+  pro: {
+    key: "pro",
+    name: "Pro",
+    activityLimit: 1000
   }
 } as const;
 
@@ -31,7 +36,7 @@ export type BillingUsage = {
 };
 
 export function planName(planKey?: string | null) {
-  if (planKey === "basic" || planKey === "complete") {
+  if (planKey === "basic" || planKey === "complete" || planKey === "pro") {
     return PLAN_DEFINITIONS[planKey].name;
   }
 
@@ -39,7 +44,7 @@ export function planName(planKey?: string | null) {
 }
 
 export function planLimit(planKey?: string | null) {
-  if (planKey === "basic" || planKey === "complete") {
+  if (planKey === "basic" || planKey === "complete" || planKey === "pro") {
     return PLAN_DEFINITIONS[planKey].activityLimit;
   }
 

@@ -210,7 +210,7 @@ export type Database = {
         Row: {
           id: string;
           user_id: string;
-          plan_key: "basic" | "complete";
+          plan_key: "basic" | "complete" | "pro";
           status: "active" | "past_due" | "suspended" | "canceled";
           activity_limit: number;
           generated_count: number;
@@ -229,7 +229,7 @@ export type Database = {
         Insert: {
           id?: string;
           user_id: string;
-          plan_key: "basic" | "complete";
+          plan_key: "basic" | "complete" | "pro";
           status?: "active" | "past_due" | "suspended" | "canceled";
           activity_limit: number;
           generated_count?: number;
@@ -246,7 +246,7 @@ export type Database = {
           updated_at?: string;
         };
         Update: {
-          plan_key?: "basic" | "complete";
+          plan_key?: "basic" | "complete" | "pro";
           status?: "active" | "past_due" | "suspended" | "canceled";
           activity_limit?: number;
           generated_count?: number;

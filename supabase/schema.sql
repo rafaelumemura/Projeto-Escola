@@ -357,7 +357,7 @@ set is_admin = lower(coalesce(email, '')) = 'rafaelumemura@gmail.com';
 create table if not exists public.billing_subscriptions (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
-  plan_key text not null check (plan_key in ('basic', 'complete')),
+  plan_key text not null check (plan_key in ('basic', 'complete', 'pro')),
   status text not null default 'active' check (status in ('active', 'past_due', 'suspended', 'canceled')),
   activity_limit integer not null,
   generated_count integer not null default 0,
@@ -374,6 +374,13 @@ create table if not exists public.billing_subscriptions (
   updated_at timestamp with time zone not null default now()
 );
 
+alter table public.billing_subscriptions
+drop constraint if exists billing_subscriptions_plan_key_check;
+
+alter table public.billing_subscriptions
+add constraint billing_subscriptions_plan_key_check
+check (plan_key in ('basic', 'complete', 'pro'));
+
 create index if not exists billing_subscriptions_user_status_idx
 on public.billing_subscriptions(user_id, status, current_period_end desc);
 
@@ -389,6 +396,7 @@ as $$
   select case
     when plan_key = 'basic' then 30
     when plan_key = 'complete' then 100
+    when plan_key = 'pro' then 1000
     else 0
   end;
 $$;
@@ -411,7 +419,7 @@ declare
   updated_subscription public.billing_subscriptions;
   plan_limit integer;
 begin
-  if p_plan_key not in ('basic', 'complete') then
+  if p_plan_key not in ('basic', 'complete', 'pro') then
     raise exception 'Plano inválido.';
   end if;
 
@@ -590,6 +598,72 @@ revoke execute on function public.billing_maintenance() from public, anon, authe
 grant execute on function public.activate_subscription_cycle(uuid, text, text, text, text, timestamp with time zone) to service_role;
 grant execute on function public.upgrade_subscription_to_complete(uuid, text, text, text) to service_role;
 grant execute on function public.billing_maintenance() to service_role;
+
+do $$
+declare
+  admin_id uuid;
+  activity_count integer := 0;
+  subscription_id uuid;
+begin
+  select id into admin_id
+  from auth.users
+  where lower(email) = 'rafaelumemura@gmail.com'
+  limit 1;
+
+  if admin_id is not null then
+    update public.profiles
+    set plan = 'pro',
+        is_admin = true
+    where id = admin_id;
+
+    select count(*) into activity_count
+    from public.activities
+    where user_id = admin_id;
+
+    select id into subscription_id
+    from public.billing_subscriptions
+    where user_id = admin_id
+    order by created_at desc
+    limit 1;
+
+    if subscription_id is null then
+      insert into public.billing_subscriptions (
+        user_id,
+        plan_key,
+        status,
+        activity_limit,
+        generated_count,
+        current_period_start,
+        current_period_end,
+        grace_ends_at
+      )
+      values (
+        admin_id,
+        'pro',
+        'active',
+        1000,
+        activity_count,
+        now(),
+        now() + interval '30 days',
+        now() + interval '31 days'
+      );
+    else
+      update public.billing_subscriptions
+      set plan_key = 'pro',
+          status = 'active',
+          activity_limit = 1000,
+          generated_count = greatest(generated_count, activity_count),
+          current_period_start = case when current_period_end < now() then now() else current_period_start end,
+          current_period_end = case when current_period_end < now() then now() + interval '30 days' else current_period_end end,
+          grace_ends_at = case when current_period_end < now() then now() + interval '31 days' else grace_ends_at end,
+          suspended_at = null,
+          inactive_delete_after = null,
+          canceled_at = null,
+          updated_at = now()
+      where id = subscription_id;
+    end if;
+  end if;
+end $$;
 
 drop trigger if exists set_billing_subscriptions_updated_at on public.billing_subscriptions;
 create trigger set_billing_subscriptions_updated_at
