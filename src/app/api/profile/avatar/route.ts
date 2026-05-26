@@ -7,6 +7,12 @@ const avatarBucket = "avatars";
 const allowedTypes = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
 const maxSize = 5 * 1024 * 1024;
 
+type UploadFile = {
+  type: string;
+  size: number;
+  arrayBuffer: () => Promise<ArrayBuffer>;
+};
+
 export async function POST(request: Request) {
   try {
     const { user } = await getAuthenticatedUser(request);
@@ -78,7 +84,7 @@ function extensionFromType(type: string) {
   return "jpg";
 }
 
-function isUploadFile(value: FormDataEntryValue | null): value is Blob & { name?: string } {
+function isUploadFile(value: FormDataEntryValue | null): value is FormDataEntryValue & UploadFile {
   return Boolean(
     value &&
       typeof value === "object" &&
