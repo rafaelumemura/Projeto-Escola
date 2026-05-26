@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Projeto Escola">
+  <rect width="512" height="512" rx="96" fill="#faf8f2"/>
+  <path d="M116 154c0-22 18-40 40-40h200c22 0 40 18 40 40v230c0 10-8 18-18 18H146c-17 0-30-13-30-30V154Z" fill="#2f7d58"/>
+  <path d="M156 132h200c12 0 22 10 22 22v206H156c-13 0-24 5-32 13V164c0-18 14-32 32-32Z" fill="#dcefe7"/>
+  <path d="M179 190h154M179 240h116M179 290h138" stroke="#1d2320" stroke-width="24" stroke-linecap="round"/>
+  <circle cx="352" cy="354" r="48" fill="#f4c95d"/>
+  <path d="M330 354h44M352 332v44" stroke="#1d2320" stroke-width="18" stroke-linecap="round"/>
+</svg>

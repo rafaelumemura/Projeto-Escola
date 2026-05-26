@@ -1,0 +1,72 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+  background: #faf8f2;
+  color: #1d2320;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  min-height: 100%;
+}
+
+body {
+  min-height: 100%;
+  margin: 0;
+  background:
+    linear-gradient(180deg, rgba(220, 239, 231, 0.5), rgba(250, 248, 242, 0) 320px),
+    #faf8f2;
+  color: #1d2320;
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+}
+
+@layer components {
+  .field {
+    @apply w-full rounded-md border border-ink/15 bg-white px-3 py-2 text-sm text-ink outline-none transition focus:border-leaf focus:ring-2 focus:ring-leaf/20;
+  }
+
+  .label {
+    @apply text-xs font-semibold uppercase tracking-wide text-ink/60;
+  }
+
+  .panel {
+    @apply rounded-lg border border-ink/10 bg-white/85 shadow-soft;
+  }
+
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-md bg-leaf px-4 py-2 text-sm font-semibold text-white transition hover:bg-leaf/90 disabled:bg-ink/25;
+  }
+
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 rounded-md border border-ink/15 bg-white px-4 py-2 text-sm font-semibold text-ink transition hover:border-leaf/50 hover:bg-mint/40 disabled:text-ink/40;
+  }
+
+  .btn-danger {
+    @apply inline-flex items-center justify-center gap-2 rounded-md border border-clay/25 bg-clay/10 px-3 py-2 text-sm font-semibold text-clay transition hover:bg-clay/15;
+  }
+
+  .badge {
+    @apply inline-flex items-center rounded-full border border-ink/10 bg-mint/70 px-2.5 py-1 text-xs font-medium text-ink/75;
+  }
+}
