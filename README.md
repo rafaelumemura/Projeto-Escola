@@ -30,6 +30,7 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=
 SUPABASE_SERVICE_ROLE_KEY=
 ANTHROPIC_API_KEY=
 ANTHROPIC_MODEL=claude-sonnet-4-5-20250929
+BILLING_MAINTENANCE_SECRET=
 ```
 
 3. No Supabase, rode o SQL em `supabase/schema.sql`.
@@ -50,8 +51,32 @@ O arquivo `supabase/schema.sql` cria:
 - `collection_activities`
 - `weekly_plans`
 - `weekly_plan_items`
+- `billing_subscriptions`
+- bucket `avatars` no Supabase Storage
 
 Ele também ativa RLS em todas as tabelas e cria policies para que cada usuário acesse apenas seus próprios dados.
+
+### Planos
+
+Os planos disponíveis são:
+
+- Básico: 30 atividades por ciclo de 30 dias
+- Completo: 100 atividades por ciclo de 30 dias
+
+Para ativar um ciclo após confirmação de pagamento:
+
+```sql
+select public.activate_subscription_cycle('USER_ID_AQUI', 'basic');
+select public.activate_subscription_cycle('USER_ID_AQUI', 'complete');
+```
+
+Para upgrade do Básico para o Completo no ciclo atual:
+
+```sql
+select public.upgrade_subscription_to_complete('USER_ID_AQUI');
+```
+
+A função `public.billing_maintenance()` suspende planos vencidos após 1 dia de carência e exclui usuários suspensos há mais de 30 dias. Ela também está exposta em `POST /api/billing/maintenance` usando o header `x-maintenance-secret`.
 
 ## APIs internas
 
@@ -76,7 +101,11 @@ Ele também ativa RLS em todas as tabelas e cria policies para que cada usuário
 - `POST /api/weekly-plans/:id/items`
 - `PUT /api/weekly-plans/:id/items/:itemId`
 - `DELETE /api/weekly-plans/:id/items/:itemId`
+- `GET /api/billing/usage`
+- `POST /api/billing/checkout`
+- `POST /api/billing/maintenance`
 - `POST /api/pdf/activity`
+- `POST /api/pdf/activity-material`
 - `POST /api/pdf/weekly-plan`
 
 As rotas usam `Authorization: Bearer <supabase_access_token>` e executam queries com cliente Supabase autenticado, respeitando RLS.

@@ -1,0 +1,65 @@
+export const PLAN_DEFINITIONS = {
+  basic: {
+    key: "basic",
+    name: "Básico",
+    activityLimit: 30
+  },
+  complete: {
+    key: "complete",
+    name: "Completo",
+    activityLimit: 100
+  }
+} as const;
+
+export type PaidPlanKey = keyof typeof PLAN_DEFINITIONS;
+export type SubscriptionStatus = "active" | "past_due" | "suspended" | "canceled";
+
+export type BillingUsage = {
+  plan_key: PaidPlanKey | null;
+  plan_name: string;
+  status: SubscriptionStatus | "inactive";
+  generated_count: number;
+  activity_limit: number;
+  remaining: number;
+  current_period_start: string | null;
+  current_period_end: string | null;
+  grace_ends_at: string | null;
+  inactive_delete_after: string | null;
+  can_generate: boolean;
+  can_upgrade: boolean;
+  message: string | null;
+};
+
+export function planName(planKey?: string | null) {
+  if (planKey === "basic" || planKey === "complete") {
+    return PLAN_DEFINITIONS[planKey].name;
+  }
+
+  return "Sem plano";
+}
+
+export function planLimit(planKey?: string | null) {
+  if (planKey === "basic" || planKey === "complete") {
+    return PLAN_DEFINITIONS[planKey].activityLimit;
+  }
+
+  return 0;
+}
+
+export function emptyBillingUsage(message = "Nenhum plano ativo."): BillingUsage {
+  return {
+    plan_key: null,
+    plan_name: "Sem plano",
+    status: "inactive",
+    generated_count: 0,
+    activity_limit: 0,
+    remaining: 0,
+    current_period_start: null,
+    current_period_end: null,
+    grace_ends_at: null,
+    inactive_delete_after: null,
+    can_generate: false,
+    can_upgrade: false,
+    message
+  };
+}

@@ -309,12 +309,12 @@ export default function CollectionsPage() {
           {selected ? (
             <>
               <div className="panel p-5">
-                <div className="mb-4 flex items-center justify-between gap-3">
+                <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div className="flex items-center gap-2 font-bold">
                     <Eye size={18} className="text-leaf" />
                     Atividades da coleção: {selected.name}
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <span className="badge">{collectionActivities.length} itens</span>
                     <button
                       type="button"
@@ -334,7 +334,7 @@ export default function CollectionsPage() {
                   </div>
                 </div>
 
-                <div className="mb-4 flex gap-2">
+                <div className="mb-4 grid grid-cols-[1fr_auto] gap-2">
                   <select className="field" value={activityId} onChange={(event) => setActivityId(event.target.value)}>
                     <option value="">Adicionar atividade salva</option>
                     {activities.map((activity) => (
@@ -364,7 +364,7 @@ export default function CollectionsPage() {
                         <h3 className="font-bold">{activity.title}</h3>
                         <p className="mt-1 text-sm text-ink/60">{activity.age_range || "Faixa etária"} • {activity.development_area || "Área"}</p>
                       </div>
-                      <div className="flex gap-2" onClick={(event) => event.stopPropagation()}>
+                      <div className="grid grid-cols-[1fr_auto_auto] gap-2" onClick={(event) => event.stopPropagation()}>
                         <select
                           className="field"
                           value={movingActivityId === activity.id ? moveTargetCollectionId : selected.id}
@@ -493,7 +493,7 @@ function CollectionModal({
   }, [color]);
 
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-ink/45 px-4 py-6">
+    <div className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-ink/45 px-4 py-6">
       <form onSubmit={onSubmit} className="w-full max-w-lg rounded-lg border border-ink/10 bg-white p-5 shadow-soft">
         <div className="mb-5 flex items-start justify-between gap-4">
           <div>

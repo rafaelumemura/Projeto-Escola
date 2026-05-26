@@ -83,6 +83,7 @@ export type Database = {
           id: string;
           name: string | null;
           email: string | null;
+          avatar_url: string | null;
           plan: string;
           created_at: string;
         };
@@ -90,12 +91,14 @@ export type Database = {
           id: string;
           name?: string | null;
           email?: string | null;
+          avatar_url?: string | null;
           plan?: string;
           created_at?: string;
         };
         Update: {
           name?: string | null;
           email?: string | null;
+          avatar_url?: string | null;
           plan?: string;
         };
       };
@@ -198,6 +201,62 @@ export type Database = {
           start_time?: string | null;
           end_time?: string | null;
           notes?: string | null;
+        };
+      };
+      billing_subscriptions: {
+        Row: {
+          id: string;
+          user_id: string;
+          plan_key: "basic" | "complete";
+          status: "active" | "past_due" | "suspended" | "canceled";
+          activity_limit: number;
+          generated_count: number;
+          current_period_start: string;
+          current_period_end: string;
+          grace_ends_at: string | null;
+          suspended_at: string | null;
+          inactive_delete_after: string | null;
+          canceled_at: string | null;
+          provider: string | null;
+          provider_customer_id: string | null;
+          provider_subscription_id: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          plan_key: "basic" | "complete";
+          status?: "active" | "past_due" | "suspended" | "canceled";
+          activity_limit: number;
+          generated_count?: number;
+          current_period_start?: string;
+          current_period_end: string;
+          grace_ends_at?: string | null;
+          suspended_at?: string | null;
+          inactive_delete_after?: string | null;
+          canceled_at?: string | null;
+          provider?: string | null;
+          provider_customer_id?: string | null;
+          provider_subscription_id?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          plan_key?: "basic" | "complete";
+          status?: "active" | "past_due" | "suspended" | "canceled";
+          activity_limit?: number;
+          generated_count?: number;
+          current_period_start?: string;
+          current_period_end?: string;
+          grace_ends_at?: string | null;
+          suspended_at?: string | null;
+          inactive_delete_after?: string | null;
+          canceled_at?: string | null;
+          provider?: string | null;
+          provider_customer_id?: string | null;
+          provider_subscription_id?: string | null;
+          updated_at?: string;
         };
       };
     };

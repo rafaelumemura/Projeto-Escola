@@ -14,11 +14,13 @@
 
 html {
   min-height: 100%;
+  -webkit-text-size-adjust: 100%;
 }
 
 body {
   min-height: 100%;
   margin: 0;
+  overflow-x: hidden;
   background:
     linear-gradient(180deg, rgba(220, 239, 231, 0.5), rgba(250, 248, 242, 0) 320px),
     #faf8f2;
@@ -43,7 +45,7 @@ button:disabled {
 
 @layer components {
   .field {
-    @apply w-full rounded-md border border-ink/15 bg-white px-3 py-2 text-sm text-ink outline-none transition focus:border-leaf focus:ring-2 focus:ring-leaf/20;
+    @apply w-full rounded-md border border-ink/15 bg-white px-3 py-2.5 text-base text-ink outline-none transition focus:border-leaf focus:ring-2 focus:ring-leaf/20 sm:py-2 sm:text-sm;
   }
 
   .label {

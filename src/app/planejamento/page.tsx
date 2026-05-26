@@ -269,7 +269,63 @@ export default function MonthlyPlanningPage() {
         </div>
       </section>
 
-      <section className="panel overflow-x-auto">
+      <section className="space-y-3 lg:hidden">
+        {calendarDays.filter((day): day is string => Boolean(day)).map((day) => {
+          const dayItems = groupedItems[day] || [];
+          return (
+            <div key={day} className="rounded-lg border border-ink/10 bg-white p-4">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <div>
+                  <p className="label mb-1">{weekdayLabel(day)}</p>
+                  <h3 className="text-lg font-bold text-ink">{formatDisplayDate(day)}</h3>
+                </div>
+                <button type="button" onClick={() => openAddModal(day)} className="grid h-9 w-9 place-items-center rounded-md border border-ink/10 bg-white text-leaf transition hover:border-leaf/40 hover:bg-mint" title="Adicionar atividade">
+                  <Plus size={16} />
+                </button>
+              </div>
+
+              <div className="space-y-2">
+                {dayItems.map((item) => {
+                  const color = activityColor(item.activities);
+                  return (
+                    <div
+                      key={item.id}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => item.activities && setViewActivity(item.activities)}
+                      onKeyDown={(event) => {
+                        if ((event.key === "Enter" || event.key === " ") && item.activities) {
+                          setViewActivity(item.activities);
+                        }
+                      }}
+                      className="grid grid-cols-[5px_1fr_auto_auto] items-center gap-2 rounded-md bg-paper/70 px-2 py-2 text-sm"
+                    >
+                      <span className="h-6 rounded-full" style={{ backgroundColor: color }} />
+                      <span className="min-w-0 truncate font-semibold text-ink">{item.activities?.title || "Atividade removida"}</span>
+                      <span className="font-semibold text-ink/55">{formatTime(item.start_time)}</span>
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          removeItem(item.id);
+                        }}
+                        className="text-ink/35 hover:text-clay"
+                        title="Remover"
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
+                  );
+                })}
+
+                {!dayItems.length ? <p className="rounded-md border border-dashed border-ink/15 p-3 text-sm font-semibold text-ink/50">Sem atividades.</p> : null}
+              </div>
+            </div>
+          );
+        })}
+      </section>
+
+      <section className="panel hidden overflow-x-auto lg:block">
         <div className="min-w-[980px] overflow-hidden rounded-lg">
           <div className="grid grid-cols-7 border-b border-ink/10 bg-paper/80">
             {weekdays.map((day) => (
@@ -337,7 +393,7 @@ export default function MonthlyPlanningPage() {
       </section>
 
       {modalDate ? (
-        <div className="fixed inset-0 z-50 grid place-items-center bg-ink/45 px-4 py-6">
+        <div className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-ink/45 px-4 py-6">
           <form onSubmit={addItem} className="w-full max-w-md rounded-lg border border-ink/10 bg-white p-5 shadow-soft">
             <div className="mb-5 flex items-start justify-between gap-4">
               <div>
@@ -397,7 +453,7 @@ export default function MonthlyPlanningPage() {
       ) : null}
 
       {pdfModalOpen ? (
-        <div className="fixed inset-0 z-50 grid place-items-center bg-ink/45 px-4 py-6">
+        <div className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-ink/45 px-4 py-6">
           <form onSubmit={generatePdf} className="w-full max-w-md rounded-lg border border-ink/10 bg-white p-5 shadow-soft">
             <div className="mb-5 flex items-start justify-between gap-4">
               <div>
@@ -515,6 +571,11 @@ function formatDate(date: Date) {
 function formatDisplayDate(value: string) {
   const [year, month, day] = value.split("-").map(Number);
   return new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "long", year: "numeric" }).format(new Date(year, month - 1, day));
+}
+
+function weekdayLabel(value: string) {
+  const [year, month, day] = value.split("-").map(Number);
+  return new Intl.DateTimeFormat("pt-BR", { weekday: "long" }).format(new Date(year, month - 1, day));
 }
 
 function formatTime(value?: string | null) {

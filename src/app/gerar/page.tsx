@@ -63,6 +63,7 @@ export default function GenerateActivityPage() {
       });
       setGenerated(saved.activity);
       setSavedActivityId(saved.activity.id);
+      window.dispatchEvent(new Event("billing-usage-changed"));
       setMessage("Atividade gerada e salva automaticamente em Atividades.");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Não foi possível gerar a atividade.");

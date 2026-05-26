@@ -234,7 +234,7 @@ export default function ActivitiesPage() {
         <section className="space-y-4">
           {selected ? (
             <>
-              <div className="flex flex-wrap gap-2">
+              <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
                 <button onClick={() => startEdit(selected)} className="btn-secondary">
                   <Pencil size={16} />
                   Editar
@@ -243,7 +243,7 @@ export default function ActivitiesPage() {
                   <FileDown size={16} />
                   PDF
                 </button>
-                <button onClick={() => downloadPdf(supabase, "/api/pdf/activity-material", { activity_id: selected.id }, materialPdfFileName(selected.title))} className="btn-secondary">
+                <button onClick={() => downloadPdf(supabase, "/api/pdf/activity-material", { activity_id: selected.id }, materialPdfFileName(selected.title))} className="btn-secondary col-span-2 sm:col-span-1">
                   <Printer size={16} />
                   Material imprimível
                 </button>
@@ -264,7 +264,7 @@ export default function ActivitiesPage() {
               </div>
 
               <div className="rounded-lg border border-ink/10 bg-white p-4">
-                <div className="flex gap-2">
+                <div className="grid grid-cols-[1fr_auto_auto] gap-2">
                   <select className="field" value={actionCollectionId} onChange={(event) => setActionCollectionId(event.target.value)}>
                     <option value="">Coleção</option>
                     {collections.map((collection) => <option key={collection.id} value={collection.id}>{collection.name}</option>)}
