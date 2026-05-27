@@ -181,6 +181,19 @@ function extractPlanKey(payload: HotmartPayload): PaidPlanKey {
     ["product", "ucode"],
     ["product", "code"]
   ]);
+  const offerCode = extractFirstString(payload, [
+    ["data", "purchase", "offer", "code"],
+    ["data", "offer", "code"],
+    ["data", "subscription", "plan", "id"],
+    ["data", "subscription", "plan", "code"],
+    ["purchase", "offer", "code"],
+    ["offer", "code"],
+    ["plan", "id"],
+    ["plan", "code"]
+  ]);
+
+  const planByOfferCode = planFromOfferCode(offerCode);
+  if (planByOfferCode) return planByOfferCode;
 
   const planByProductId = planFromProductId(productId);
   if (planByProductId) return planByProductId;
@@ -188,8 +201,11 @@ function extractPlanKey(payload: HotmartPayload): PaidPlanKey {
   const productName =
     extractFirstString(payload, [
       ["data", "product", "name"],
+      ["data", "purchase", "offer", "name"],
+      ["data", "offer", "name"],
       ["data", "subscription", "plan", "name"],
       ["product", "name"],
+      ["offer", "name"],
       ["plan", "name"]
     ]) || JSON.stringify(payload);
 
@@ -199,6 +215,18 @@ function extractPlanKey(payload: HotmartPayload): PaidPlanKey {
   if (normalizedName.includes("pro")) return "pro";
 
   throw Object.assign(new Error("Nao foi possivel identificar o plano comprado na Hotmart."), { status: 422 });
+}
+
+function planFromOfferCode(offerCode?: string | null): PaidPlanKey | null {
+  if (!offerCode) return null;
+
+  const offerMap: Array<[PaidPlanKey, string | undefined]> = [
+    ["basic", process.env.HOTMART_BASIC_OFFER_CODE],
+    ["complete", process.env.HOTMART_COMPLETE_OFFER_CODE],
+    ["pro", process.env.HOTMART_PRO_OFFER_CODE]
+  ];
+
+  return offerMap.find(([, expected]) => expected && expected === offerCode)?.[0] || null;
 }
 
 function planFromProductId(productId?: string | null): PaidPlanKey | null {

@@ -36,6 +36,9 @@ HOTMART_TEMP_PASSWORD=acesso123
 HOTMART_BASIC_PRODUCT_ID=
 HOTMART_COMPLETE_PRODUCT_ID=
 HOTMART_PRO_PRODUCT_ID=
+HOTMART_BASIC_OFFER_CODE=
+HOTMART_COMPLETE_OFFER_CODE=
+HOTMART_PRO_OFFER_CODE=
 HOTMART_BASIC_URL=
 HOTMART_COMPLETE_URL=
 HOTMART_UPGRADE_URL=
@@ -97,7 +100,7 @@ A rota `POST /api/hotmart/webhook` recebe a confirmação de compra, cria o usu�
 
 Se `HOTMART_WEBHOOK_SECRET` estiver configurado, envie o mesmo valor em um destes lugares: header `x-hotmart-hottok`, header `hottok`, header `x-webhook-token`, header `Authorization: Bearer <token>` ou query string `?token=<token>`.
 
-Para identificação mais confiável do plano, configure `HOTMART_BASIC_PRODUCT_ID`, `HOTMART_COMPLETE_PRODUCT_ID` e `HOTMART_PRO_PRODUCT_ID` com os IDs/códigos dos produtos na Hotmart. Se esses valores não existirem, o backend tenta inferir pelo nome do produto.
+Para identificação mais confiável do plano, configure `HOTMART_BASIC_OFFER_CODE`, `HOTMART_COMPLETE_OFFER_CODE` e `HOTMART_PRO_OFFER_CODE` com os códigos das ofertas/planos da Hotmart. Se você tiver produtos separados por plano, também pode usar `HOTMART_BASIC_PRODUCT_ID`, `HOTMART_COMPLETE_PRODUCT_ID` e `HOTMART_PRO_PRODUCT_ID`. Se esses valores não existirem, o backend tenta inferir pelo nome da oferta/produto.
 
 ## APIs internas
 
