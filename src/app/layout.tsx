@@ -5,7 +5,7 @@ import { ServiceWorkerRegister } from "@/components/ServiceWorkerRegister";
 
 export const metadata: Metadata = {
   title: "Projeto Escola",
-  description: "PWA SaaS para gerar atividades pedagógicas personalizadas com IA.",
+  description: "App para gerar atividades pedagógicas personalizadas com IA.",
   manifest: "/manifest.webmanifest",
   icons: {
     icon: "/icon.svg",
