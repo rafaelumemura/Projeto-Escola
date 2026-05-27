@@ -7,6 +7,7 @@ create table if not exists public.profiles (
   avatar_url text,
   is_admin boolean not null default false,
   plan text not null default 'free',
+  password_must_change boolean not null default false,
   created_at timestamp with time zone not null default now()
 );
 
@@ -113,12 +114,13 @@ security definer
 set search_path = public
 as $$
 begin
-  insert into public.profiles (id, name, email, is_admin)
+  insert into public.profiles (id, name, email, is_admin, password_must_change)
   values (
     new.id,
     coalesce(new.raw_user_meta_data->>'name', split_part(new.email, '@', 1)),
     new.email,
-    lower(coalesce(new.email, '')) = 'rafaelumemura@gmail.com'
+    lower(coalesce(new.email, '')) = 'rafaelumemura@gmail.com',
+    false
   )
   on conflict (id) do nothing;
   return new;
@@ -326,6 +328,9 @@ add column if not exists avatar_url text;
 
 alter table public.profiles
 add column if not exists is_admin boolean not null default false;
+
+alter table public.profiles
+add column if not exists password_must_change boolean not null default false;
 
 create or replace function public.sync_profile_admin_flag()
 returns trigger

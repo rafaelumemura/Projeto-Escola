@@ -21,7 +21,7 @@ export function ProtectedPage({
 }) {
   const router = useRouter();
   const pathname = usePathname();
-  const { loading, user, supabase } = useAuth();
+  const { loading, profile, user, supabase } = useAuth();
   const [usage, setUsage] = useState<BillingUsage | null>(null);
 
   useEffect(() => {
@@ -57,6 +57,22 @@ export function ProtectedPage({
           <p className="mt-3 text-sm leading-6 text-ink/65">{usage.message || "Regularize seu plano para continuar usando o app."}</p>
           <Link href="/planos" className="mt-5 inline-flex btn-primary">
             Ver planos
+          </Link>
+        </div>
+      </AppShell>
+    );
+  }
+
+  if (profile?.password_must_change && pathname !== "/perfil") {
+    return (
+      <AppShell>
+        <div className="mx-auto max-w-xl rounded-lg border border-sun/30 bg-white p-6 text-center shadow-soft">
+          <h1 className="text-2xl font-bold text-ink">Altere sua senha</h1>
+          <p className="mt-3 text-sm leading-6 text-ink/65">
+            Sua conta foi criada com uma senha provisória. Para continuar usando o Projeto Escola, defina uma senha pessoal.
+          </p>
+          <Link href="/perfil" className="mt-5 inline-flex btn-primary">
+            Alterar senha
           </Link>
         </div>
       </AppShell>

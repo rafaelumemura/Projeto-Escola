@@ -110,6 +110,13 @@ export default function ProfilePage() {
     try {
       const { error } = await supabase.auth.updateUser({ password: newPassword });
       if (error) throw error;
+
+      if (user) {
+        const { error: profileError } = await supabase.from("profiles").update({ password_must_change: false }).eq("id", user.id);
+        if (profileError) throw profileError;
+        await refreshProfile();
+      }
+
       setNewPassword("");
       setConfirmPassword("");
       setPasswordMessage("Senha atualizada.");
@@ -186,6 +193,11 @@ export default function ProfilePage() {
             <div>
               <p className="label mb-2">Segurança</p>
               <h2 className="text-lg font-bold text-ink">Alterar senha</h2>
+              {profile?.password_must_change ? (
+                <p className="mt-3 rounded-lg border border-sun/30 bg-sun/10 px-4 py-3 text-sm leading-6 text-ink/75">
+                  Sua conta foi criada com a senha provisória. Defina uma nova senha para continuar usando o app com segurança.
+                </p>
+              ) : null}
             </div>
             <div>
               <label className="label mb-2 block">Nova senha</label>

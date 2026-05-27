@@ -86,6 +86,7 @@ export type Database = {
           avatar_url: string | null;
           is_admin: boolean;
           plan: "free" | "basic" | "complete" | "pro";
+          password_must_change: boolean;
           created_at: string;
         };
         Insert: {
@@ -95,6 +96,7 @@ export type Database = {
           avatar_url?: string | null;
           is_admin?: boolean;
           plan?: "free" | "basic" | "complete" | "pro";
+          password_must_change?: boolean;
           created_at?: string;
         };
         Update: {
@@ -103,6 +105,7 @@ export type Database = {
           avatar_url?: string | null;
           is_admin?: boolean;
           plan?: "free" | "basic" | "complete" | "pro";
+          password_must_change?: boolean;
         };
       };
       activities: {

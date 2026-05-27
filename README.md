@@ -1,6 +1,6 @@
 # Projeto Escola
 
-PWA SaaS em Next.js para professores da educação infantil e fundamental 1 gerarem, salvarem e organizarem atividades pedagógicas personalizadas com IA.
+App em Next.js para professores da educação infantil e fundamental 1 gerarem, salvarem e organizarem atividades pedagógicas personalizadas com IA.
 
 ## Stack
 
@@ -31,6 +31,11 @@ SUPABASE_SERVICE_ROLE_KEY=
 ANTHROPIC_API_KEY=
 ANTHROPIC_MODEL=claude-sonnet-4-5-20250929
 BILLING_MAINTENANCE_SECRET=
+HOTMART_WEBHOOK_SECRET=
+HOTMART_TEMP_PASSWORD=acesso123
+HOTMART_BASIC_PRODUCT_ID=
+HOTMART_COMPLETE_PRODUCT_ID=
+HOTMART_PRO_PRODUCT_ID=
 HOTMART_BASIC_URL=
 HOTMART_COMPLETE_URL=
 HOTMART_UPGRADE_URL=
@@ -86,6 +91,14 @@ A função `public.billing_maintenance()` suspende planos vencidos após 1 dia d
 
 O checkout redireciona para os links configurados em `HOTMART_BASIC_URL`, `HOTMART_COMPLETE_URL` e, para upgrade, `HOTMART_UPGRADE_URL`.
 
+### Webhook Hotmart
+
+A rota `POST /api/hotmart/webhook` recebe a confirmação de compra, cria o usuário no Supabase Auth com a senha provisória `HOTMART_TEMP_PASSWORD` ou `acesso123`, ativa o plano contratado e marca o perfil para troca obrigatória de senha no primeiro acesso.
+
+Se `HOTMART_WEBHOOK_SECRET` estiver configurado, envie o mesmo valor em um destes lugares: header `x-hotmart-hottok`, header `hottok`, header `x-webhook-token`, header `Authorization: Bearer <token>` ou query string `?token=<token>`.
+
+Para identificação mais confiável do plano, configure `HOTMART_BASIC_PRODUCT_ID`, `HOTMART_COMPLETE_PRODUCT_ID` e `HOTMART_PRO_PRODUCT_ID` com os IDs/códigos dos produtos na Hotmart. Se esses valores não existirem, o backend tenta inferir pelo nome do produto.
+
 ## APIs internas
 
 - `POST /api/activities/generate`
@@ -112,6 +125,7 @@ O checkout redireciona para os links configurados em `HOTMART_BASIC_URL`, `HOTMA
 - `GET /api/billing/usage`
 - `POST /api/billing/checkout`
 - `POST /api/billing/maintenance`
+- `POST /api/hotmart/webhook`
 - `POST /api/pdf/activity`
 - `POST /api/pdf/activity-material`
 - `POST /api/pdf/weekly-plan`
