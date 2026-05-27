@@ -166,18 +166,25 @@ function UsageMeter({ usage, compact = false }: { usage: BillingUsage | null; co
 
   return (
     <div className="rounded-lg border border-ink/10 bg-paper p-3">
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="truncate text-xs font-bold text-ink">{usage?.plan_name || "Sem plano"}</p>
-          <p className="mt-0.5 text-xs text-ink/60">
-            {generated}/{limit} atividades
-          </p>
         </div>
         <Crown size={17} className="shrink-0 text-sun" />
       </div>
-      <div className="mt-3 h-2 overflow-hidden rounded-full bg-white">
-        <span className="block h-full rounded-full bg-leaf transition-all" style={{ width: `${percent}%` }} />
+
+      <div className="mt-2">
+        <div className="flex items-center justify-between gap-3 text-xs text-ink/60">
+          <span>
+            {generated}/{limit} atividades
+          </span>
+          <span className="font-semibold text-ink/70">{percent}%</span>
+        </div>
+        <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-white" role="progressbar" aria-valuenow={percent} aria-valuemin={0} aria-valuemax={100}>
+          <span className="block h-full rounded-full bg-leaf transition-all" style={{ width: `${percent}%` }} />
+        </div>
       </div>
+
       {usage?.message && !compact ? <p className="mt-2 text-xs leading-5 text-ink/60">{usage.message}</p> : null}
       {shouldShowUpgrade ? (
         <Link href="/planos" className={`mt-3 w-full ${compact ? "hidden" : "btn-primary"}`}>
