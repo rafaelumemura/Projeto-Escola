@@ -6,6 +6,7 @@ import { ProtectedPage } from "@/components/layout/ProtectedPage";
 import { ActivityView } from "@/components/ui/ActivityView";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { apiFetch, downloadPdf } from "@/lib/api/client";
+import { environments, methodologies } from "@/lib/activities/types";
 import type { Database } from "@/lib/database.types";
 
 type MonthlyPlan = Database["public"]["Tables"]["weekly_plans"]["Row"];
@@ -21,6 +22,39 @@ type PlanItem = Database["public"]["Tables"]["weekly_plan_items"]["Row"] & {
 
 const weekdays = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 const defaultColor = "#2f7d58";
+const manualActivityTypes = ["Individual", "Dupla", "Trio", "Sala Toda"] as const;
+
+type ManualActivityForm = {
+  title: string;
+  bncc_code: string;
+  age_range: string;
+  methodology: string;
+  custom_methodology: string;
+  development_area: string;
+  activity_type: string;
+  environment: string;
+  custom_environment: string;
+  materials: string;
+  objective: string;
+  steps_text: string;
+  notes: string;
+};
+
+const initialManualActivityForm: ManualActivityForm = {
+  title: "",
+  bncc_code: "",
+  age_range: "",
+  methodology: "Construtivista",
+  custom_methodology: "",
+  development_area: "",
+  activity_type: "Sala Toda",
+  environment: "Sala de aula",
+  custom_environment: "",
+  materials: "",
+  objective: "",
+  steps_text: "",
+  notes: ""
+};
 
 export default function MonthlyPlanningPage() {
   const { supabase } = useAuth();
@@ -33,9 +67,7 @@ export default function MonthlyPlanningPage() {
   const [activityId, setActivityId] = useState("");
   const [startTime, setStartTime] = useState("");
   const [manualMode, setManualMode] = useState(false);
-  const [manualTitle, setManualTitle] = useState("");
-  const [manualDescription, setManualDescription] = useState("");
-  const [manualBncc, setManualBncc] = useState("");
+  const [manualForm, setManualForm] = useState<ManualActivityForm>(initialManualActivityForm);
   const [viewActivity, setViewActivity] = useState<Activity | null>(null);
   const [pdfModalOpen, setPdfModalOpen] = useState(false);
   const [pdfTitle, setPdfTitle] = useState("Planejamento");
@@ -108,9 +140,7 @@ export default function MonthlyPlanningPage() {
     setActivityId("");
     setStartTime("");
     setManualMode(false);
-    setManualTitle("");
-    setManualDescription("");
-    setManualBncc("");
+    setManualForm(initialManualActivityForm);
     setMessage(null);
   }
 
@@ -119,6 +149,7 @@ export default function MonthlyPlanningPage() {
     setActivityId("");
     setStartTime("");
     setManualMode(false);
+    setManualForm(initialManualActivityForm);
   }
 
   function openPdfModal() {
@@ -139,26 +170,51 @@ export default function MonthlyPlanningPage() {
     setMessage(null);
     try {
       let resolvedActivityId = activityId;
+      let notes = null;
 
       if (manualMode) {
-        if (!manualTitle.trim()) {
-          setMessage("Informe o nome da nova atividade.");
+        const methodology = manualForm.methodology === "Outra" ? manualForm.custom_methodology.trim() : manualForm.methodology;
+        const environment = manualForm.environment === "Outro" ? manualForm.custom_environment.trim() : manualForm.environment;
+        const steps = textArray(manualForm.steps_text);
+
+        if (
+          !manualForm.title.trim() ||
+          !manualForm.age_range.trim() ||
+          !methodology ||
+          !manualForm.development_area.trim() ||
+          !manualForm.activity_type ||
+          !environment ||
+          !manualForm.materials.trim() ||
+          !manualForm.objective.trim() ||
+          !steps.length
+        ) {
+          setMessage("Preencha os campos da nova atividade antes de inserir.");
           return;
         }
 
         const created = await apiFetch<{ activity: Activity }>(supabase, "/api/activities", {
           method: "POST",
           body: {
-            title: manualTitle,
-            description: manualDescription || null,
-            bncc_code: manualBncc || null,
-            steps: [],
+            title: manualForm.title.trim(),
+            age_range: manualForm.age_range.trim(),
+            methodology,
+            development_area: manualForm.development_area.trim(),
+            activity_type: manualForm.activity_type,
+            environment,
+            materials: manualForm.materials.trim(),
+            objective: manualForm.objective.trim(),
+            bncc_code: manualForm.bncc_code.trim() || null,
+            description: null,
+            steps,
             teacher_tips: [],
             variations: [],
+            safety_notes: null,
+            evaluation: null,
             raw_ai_response: { manual: true }
           }
         });
         resolvedActivityId = created.activity.id;
+        notes = manualForm.notes.trim() || null;
         setActivities((current) => [{ ...created.activity, collection_ids: [], primary_collection_id: null }, ...current]);
       }
 
@@ -174,7 +230,7 @@ export default function MonthlyPlanningPage() {
           date: modalDate,
           start_time: startTime,
           end_time: null,
-          notes: null
+          notes
         }
       });
       closeAddModal();
@@ -239,6 +295,10 @@ export default function MonthlyPlanningPage() {
     const fullActivity = activities.find((item) => item.id === activity.id);
     const collectionId = fullActivity?.primary_collection_id || fullActivity?.collection_ids?.[0];
     return collections.find((collection) => collection.id === collectionId)?.color || defaultColor;
+  }
+
+  function updateManualField<K extends keyof ManualActivityForm>(key: K, value: ManualActivityForm[K]) {
+    setManualForm((current) => ({ ...current, [key]: value }));
   }
 
   return (
@@ -394,7 +454,7 @@ export default function MonthlyPlanningPage() {
 
       {modalDate ? (
         <div className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-ink/45 px-4 py-6">
-          <form onSubmit={addItem} className="w-full max-w-md rounded-lg border border-ink/10 bg-white p-5 shadow-soft">
+          <form onSubmit={addItem} className="w-full max-w-2xl rounded-lg border border-ink/10 bg-white p-5 shadow-soft">
             <div className="mb-5 flex items-start justify-between gap-4">
               <div>
                 <p className="label mb-2">Adicionar atividade</p>
@@ -406,6 +466,11 @@ export default function MonthlyPlanningPage() {
             </div>
 
             <div className="space-y-4">
+              <label className="block">
+                <span className="label mb-2 block">Horário de início</span>
+                <input className="field" type="time" value={startTime} onChange={(event) => setStartTime(event.target.value)} required />
+              </label>
+
               {!manualMode ? (
                 <label className="block">
                   <span className="label mb-2 block">Atividade</span>
@@ -420,23 +485,42 @@ export default function MonthlyPlanningPage() {
                 </label>
               ) : null}
 
-              <button type="button" onClick={() => setManualMode((current) => !current)} className="btn-secondary">
+              <button
+                type="button"
+                onClick={() => {
+                  setManualMode((current) => !current);
+                  setActivityId("");
+                  setManualForm(initialManualActivityForm);
+                }}
+                className="btn-secondary"
+              >
                 <Plus size={16} />
                 {manualMode ? "Usar atividade salva" : "Adicionar nova atividade"}
               </button>
 
               {manualMode ? (
-                <div className="space-y-3 rounded-lg border border-ink/10 bg-paper/60 p-3">
-                  <input className="field" value={manualTitle} onChange={(event) => setManualTitle(event.target.value)} placeholder="Nome da atividade" required />
-                  <textarea className="field min-h-24" value={manualDescription} onChange={(event) => setManualDescription(event.target.value)} placeholder="Descrição" />
-                  <input className="field" value={manualBncc} onChange={(event) => setManualBncc(event.target.value)} placeholder="Código BNCC" />
+                <div className="space-y-4 rounded-lg border border-ink/10 bg-paper/60 p-3">
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <ManualInput label="Nome da Atividade" value={manualForm.title} onChange={(value) => updateManualField("title", value)} required />
+                    <ManualInput label="Código BNCC" value={manualForm.bncc_code} onChange={(value) => updateManualField("bncc_code", value)} />
+                    <ManualInput label="Idade ou Faixa Etária" value={manualForm.age_range} onChange={(value) => updateManualField("age_range", value)} required />
+                    <ManualSelect label="Metodologia" value={manualForm.methodology} options={methodologies} onChange={(value) => updateManualField("methodology", value)} />
+                    {manualForm.methodology === "Outra" ? (
+                      <ManualInput label="Qual metodologia?" value={manualForm.custom_methodology} onChange={(value) => updateManualField("custom_methodology", value)} required />
+                    ) : null}
+                    <ManualInput label="Área de Desenvolvimento" value={manualForm.development_area} onChange={(value) => updateManualField("development_area", value)} required />
+                    <ManualSelect label="Tipo de Atividade" value={manualForm.activity_type} options={manualActivityTypes} onChange={(value) => updateManualField("activity_type", value)} />
+                    <ManualSelect label="Ambiente" value={manualForm.environment} options={environments} onChange={(value) => updateManualField("environment", value)} />
+                    {manualForm.environment === "Outro" ? (
+                      <ManualInput label="Qual ambiente?" value={manualForm.custom_environment} onChange={(value) => updateManualField("custom_environment", value)} required />
+                    ) : null}
+                  </div>
+                  <ManualArea label="Materiais Disponíveis" value={manualForm.materials} onChange={(value) => updateManualField("materials", value)} required />
+                  <ManualArea label="Objetivo da Atividade" value={manualForm.objective} onChange={(value) => updateManualField("objective", value)} required />
+                  <ManualArea label="Passo a passo" value={manualForm.steps_text} onChange={(value) => updateManualField("steps_text", value)} placeholder="Uma etapa por linha" required />
+                  <ManualArea label="Anotações" value={manualForm.notes} onChange={(value) => updateManualField("notes", value)} placeholder="Espaço livre para observações do professor" />
                 </div>
               ) : null}
-
-              <label className="block">
-                <span className="label mb-2 block">Horário de início</span>
-                <input className="field" type="time" value={startTime} onChange={(event) => setStartTime(event.target.value)} required />
-              </label>
             </div>
 
             <div className="mt-6 flex justify-end gap-2">
@@ -514,6 +598,78 @@ export default function MonthlyPlanningPage() {
       ) : null}
     </ProtectedPage>
   );
+}
+
+function ManualInput({
+  label,
+  value,
+  onChange,
+  required = false
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  required?: boolean;
+}) {
+  return (
+    <label className="block">
+      <span className="label mb-2 block">{label}</span>
+      <input className="field" value={value} onChange={(event) => onChange(event.target.value)} required={required} />
+    </label>
+  );
+}
+
+function ManualSelect({
+  label,
+  value,
+  options,
+  onChange
+}: {
+  label: string;
+  value: string;
+  options: readonly string[];
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label className="block">
+      <span className="label mb-2 block">{label}</span>
+      <select className="field" value={value} onChange={(event) => onChange(event.target.value)} required>
+        {options.map((option) => (
+          <option key={option} value={option}>
+            {option}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+function ManualArea({
+  label,
+  value,
+  onChange,
+  placeholder,
+  required = false
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+  required?: boolean;
+}) {
+  return (
+    <label className="block">
+      <span className="label mb-2 block">{label}</span>
+      <textarea className="field min-h-24" value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} required={required} />
+    </label>
+  );
+}
+
+function textArray(value: string) {
+  return value
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
 }
 
 function hiddenPlanTitle(date: Date) {

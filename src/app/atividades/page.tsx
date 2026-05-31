@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { Eye, FileDown, Filter, FolderMinus, FolderPlus, Pencil, Printer, Save, Trash2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Eye, FileDown, Filter, FolderMinus, FolderPlus, Pencil, Printer, Save, Trash2 } from "lucide-react";
 import { ProtectedPage } from "@/components/layout/ProtectedPage";
 import { ActivityView } from "@/components/ui/ActivityView";
 import { useAuth } from "@/components/auth/AuthProvider";
@@ -28,6 +28,8 @@ type EditState = Partial<Activity> & {
   variations_text?: string;
 };
 
+const pageSize = 10;
+
 function arrayText(value: Json | null | undefined) {
   return Array.isArray(value) ? value.map(String).join("\n") : typeof value === "string" ? value : "";
 }
@@ -49,6 +51,7 @@ export default function ActivitiesPage() {
   const [busy, setBusy] = useState(false);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [materialByActivityId, setMaterialByActivityId] = useState<Record<string, MaterialState>>({});
+  const [page, setPage] = useState(1);
   const [filters, setFilters] = useState({
     age_range: "",
     development_area: "",
@@ -65,6 +68,13 @@ export default function ActivitiesPage() {
     });
     return params.toString() ? `/api/activities?${params.toString()}` : "/api/activities";
   }, [filters]);
+
+  const totalPages = Math.max(1, Math.ceil(activities.length / pageSize));
+  const visibleActivities = useMemo(() => {
+    const safePage = Math.min(page, totalPages);
+    const start = (safePage - 1) * pageSize;
+    return activities.slice(start, start + pageSize);
+  }, [activities, page, totalPages]);
 
   async function loadActivities() {
     const data = await apiFetch<{ activities: ActivityWithCollections[] }>(supabase, query);
@@ -86,6 +96,28 @@ export default function ActivitiesPage() {
       .catch((error) => setMessage(error instanceof Error ? error.message : "Não foi possível carregar dados."));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query, supabase]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [query]);
+
+  useEffect(() => {
+    if (page > totalPages) {
+      setPage(totalPages);
+    }
+  }, [page, totalPages]);
+
+  useEffect(() => {
+    if (!visibleActivities.length) {
+      if (selected) setSelected(null);
+      return;
+    }
+
+    if (!selected || !visibleActivities.some((activity) => activity.id === selected.id)) {
+      setSelected(visibleActivities[0]);
+      setEdit(null);
+    }
+  }, [selected, visibleActivities]);
 
   useEffect(() => {
     setActionCollectionId(selected?.primary_collection_id || selected?.collection_ids?.[0] || "");
@@ -270,7 +302,7 @@ export default function ActivitiesPage() {
 
       <div className="grid gap-5 lg:grid-cols-[360px_1fr]">
         <aside className="space-y-3">
-          {activities.map((activity) => (
+          {visibleActivities.map((activity) => (
             <button
               key={activity.id}
               onClick={() => {
@@ -286,6 +318,31 @@ export default function ActivitiesPage() {
             </button>
           ))}
           {!activities.length ? <div className="panel p-5 text-sm font-semibold text-ink/60">Nenhuma atividade encontrada.</div> : null}
+          {activities.length > pageSize ? (
+            <div className="flex items-center justify-between gap-2 rounded-lg border border-ink/10 bg-white p-2">
+              <button
+                type="button"
+                onClick={() => setPage((current) => Math.max(1, current - 1))}
+                disabled={page === 1}
+                className="btn-secondary px-3 disabled:cursor-not-allowed disabled:opacity-50"
+                title="Página anterior"
+              >
+                <ChevronLeft size={16} />
+              </button>
+              <span className="text-xs font-bold text-ink/60">
+                Página {page} de {totalPages}
+              </span>
+              <button
+                type="button"
+                onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
+                disabled={page === totalPages}
+                className="btn-secondary px-3 disabled:cursor-not-allowed disabled:opacity-50"
+                title="Próxima página"
+              >
+                <ChevronRight size={16} />
+              </button>
+            </div>
+          ) : null}
         </aside>
 
         <section className="space-y-4">

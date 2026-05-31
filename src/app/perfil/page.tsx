@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
-import { Camera, LogOut, Save, UserRound } from "lucide-react";
+import { Camera, LogOut, Mail, Save, UserRound } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { ProtectedPage } from "@/components/layout/ProtectedPage";
 import { useAuth } from "@/components/auth/AuthProvider";
@@ -265,6 +265,24 @@ export default function ProfilePage() {
               </div>
             ) : null}
           </form>
+
+          <section className="panel h-fit space-y-4 p-5">
+            <div>
+              <p className="label mb-2">Canal de contato</p>
+              <h2 className="flex items-center gap-2 text-lg font-bold text-ink">
+                <Mail size={18} className="text-leaf" />
+                Suporte
+              </h2>
+            </div>
+            <a href="mailto:benmaprojetos@gmail.com" className="inline-flex text-sm font-bold text-leaf underline underline-offset-4">
+              benmaprojetos@gmail.com
+            </a>
+            <p className="rounded-lg border border-ink/10 bg-white px-4 py-3 text-sm leading-6 text-ink/70">
+              Para um atendimento mais efetivo, nos envie um e-mail para benmaprojetos@gmail.com com o seu e-mail de cadastro no assunto.
+              <br />
+              Nosso prazo de retorno é de até 48h úteis.
+            </p>
+          </section>
         </section>
       </div>
     </ProtectedPage>
