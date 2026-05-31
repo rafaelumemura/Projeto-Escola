@@ -11,6 +11,7 @@ import {
 } from "react";
 import type { Session, SupabaseClient, User } from "@supabase/supabase-js";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import type { BillingUsage } from "@/lib/billing/plans";
 import type { Database } from "@/lib/database.types";
 
 type Profile = Database["public"]["Tables"]["profiles"]["Row"];
@@ -20,8 +21,10 @@ type AuthContextValue = {
   session: Session | null;
   user: User | null;
   profile: Profile | null;
+  usage: BillingUsage | null;
   loading: boolean;
   refreshProfile: () => Promise<void>;
+  refreshUsage: () => Promise<void>;
   signOut: () => Promise<void>;
 };
 
@@ -31,6 +34,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const supabase = useMemo(() => getSupabaseBrowserClient(), []);
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [usage, setUsage] = useState<BillingUsage | null>(null);
   const [loading, setLoading] = useState(true);
 
   const refreshProfile = useCallback(async () => {
@@ -47,6 +51,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setProfile(data || null);
   }, [supabase]);
 
+  const refreshUsage = useCallback(async () => {
+    const {
+      data: { session: currentSession }
+    } = await supabase.auth.getSession();
+
+    if (!currentSession) {
+      setUsage(null);
+      return;
+    }
+
+    const response = await fetch("/api/billing/usage", {
+      headers: {
+        "content-type": "application/json",
+        Authorization: `Bearer ${currentSession.access_token}`
+      }
+    });
+
+    if (!response.ok) {
+      setUsage(null);
+      return;
+    }
+
+    const data = (await response.json()) as { usage: BillingUsage };
+    setUsage(data.usage);
+  }, [supabase]);
+
   useEffect(() => {
     let mounted = true;
 
@@ -54,6 +84,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!mounted) return;
       setSession(data.session);
       await refreshProfile();
+      await refreshUsage();
       setLoading(false);
     });
 
@@ -62,13 +93,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } = supabase.auth.onAuthStateChange((_event, nextSession) => {
       setSession(nextSession);
       refreshProfile().catch(() => setProfile(null));
+      if (nextSession) {
+        refreshUsage().catch(() => setUsage(null));
+      } else {
+        setUsage(null);
+      }
     });
+
+    window.addEventListener("billing-usage-changed", refreshUsage);
 
     return () => {
       mounted = false;
+      window.removeEventListener("billing-usage-changed", refreshUsage);
       subscription.unsubscribe();
     };
-  }, [refreshProfile, supabase]);
+  }, [refreshProfile, refreshUsage, supabase]);
 
   const value = useMemo<AuthContextValue>(
     () => ({
@@ -76,15 +115,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       session,
       user: session?.user || null,
       profile,
+      usage,
       loading,
       refreshProfile,
+      refreshUsage,
       signOut: async () => {
         await supabase.auth.signOut();
         setSession(null);
         setProfile(null);
+        setUsage(null);
       }
     }),
-    [loading, profile, refreshProfile, session, supabase]
+    [loading, profile, refreshProfile, refreshUsage, session, supabase, usage]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

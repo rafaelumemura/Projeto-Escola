@@ -2,11 +2,9 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { AppShell } from "@/components/layout/AppShell";
 import { useAuth } from "@/components/auth/AuthProvider";
-import { apiFetch } from "@/lib/api/client";
-import type { BillingUsage } from "@/lib/billing/plans";
 
 export function ProtectedPage({
   title,
@@ -21,21 +19,13 @@ export function ProtectedPage({
 }) {
   const router = useRouter();
   const pathname = usePathname();
-  const { loading, profile, user, supabase } = useAuth();
-  const [usage, setUsage] = useState<BillingUsage | null>(null);
+  const { loading, profile, usage, user } = useAuth();
 
   useEffect(() => {
     if (!loading && !user) {
       router.replace("/login");
     }
   }, [loading, router, user]);
-
-  useEffect(() => {
-    if (!user) return;
-    apiFetch<{ usage: BillingUsage }>(supabase, "/api/billing/usage")
-      .then((data) => setUsage(data.usage))
-      .catch(() => setUsage(null));
-  }, [supabase, user]);
 
   if (loading) {
     return (

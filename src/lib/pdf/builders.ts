@@ -1,5 +1,6 @@
 import { PDFDocument, PDFFont, PDFPage, RGB, StandardFonts, rgb } from "pdf-lib";
 import type { PrintableMaterialItem, PrintableMaterialPlan } from "@/lib/activities/printable-material";
+import { normalizePlanningPdfSkill, type PlanningPdfSkillKey } from "@/lib/planning/pdf-skills";
 
 type PdfActivity = {
   title?: string | null;
@@ -377,7 +378,16 @@ function hexToRgb(hex: string, fallback: RGB) {
   return rgb(red, green, blue);
 }
 
-export async function buildWeeklyPlanPdf(plan: PdfWeeklyPlan, items: PdfWeeklyPlanItem[]) {
+export async function buildWeeklyPlanPdf(plan: PdfWeeklyPlan, items: PdfWeeklyPlanItem[], skill?: PlanningPdfSkillKey) {
+  const selectedSkill = normalizePlanningPdfSkill(skill);
+
+  if (selectedSkill === "roteiro") return buildDailyScriptWeeklyPlanPdf(plan, items);
+  if (selectedSkill === "lista") return buildCompactListWeeklyPlanPdf(plan, items);
+
+  return buildGridWeeklyPlanPdf(plan, items);
+}
+
+async function buildGridWeeklyPlanPdf(plan: PdfWeeklyPlan, items: PdfWeeklyPlanItem[]) {
   const pdf = await PDFDocument.create();
   const regular = await pdf.embedFont(StandardFonts.Helvetica);
   const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
@@ -478,6 +488,165 @@ export async function buildWeeklyPlanPdf(plan: PdfWeeklyPlan, items: PdfWeeklyPl
   return pdf.save();
 }
 
+async function buildDailyScriptWeeklyPlanPdf(plan: PdfWeeklyPlan, items: PdfWeeklyPlanItem[]) {
+  const pdf = await PDFDocument.create();
+  const regular = await pdf.embedFont(StandardFonts.Helvetica);
+  const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
+  const title = clean(plan.title) || "Planejamento";
+  const dates = dateRange(plan.start_date, plan.end_date, items);
+  let page = pdf.addPage([pageWidth, pageHeight]);
+  let y = pageHeight - 54;
+
+  const newPage = () => {
+    page = pdf.addPage([pageWidth, pageHeight]);
+    y = pageHeight - 54;
+  };
+
+  page.drawText(title, { x: margin, y, size: 20, font: bold, color: rgb(0.12, 0.18, 0.15) });
+  y -= 24;
+  page.drawText(`Periodo: ${formatDateLabel(plan.start_date)} a ${formatDateLabel(plan.end_date)}`, {
+    x: margin,
+    y,
+    size: 10,
+    font: regular,
+    color: rgb(0.28, 0.31, 0.29)
+  });
+  y -= 30;
+
+  for (const date of dates) {
+    const dayItems = itemsForDate(items, date);
+    if (y < 150) newPage();
+
+    drawScriptDayHeader(page, date, y, bold);
+    y -= 28;
+
+    if (!dayItems.length) {
+      page.drawText("Sem atividades planejadas.", { x: margin + 12, y, size: 9, font: regular, color: rgb(0.42, 0.45, 0.43) });
+      y -= 28;
+      continue;
+    }
+
+    for (const item of dayItems) {
+      if (y < 130) newPage();
+      const activity = item.activities || item.activity;
+      const lines = [
+        `${formatTime(item.start_time)} - ${clean(activity?.title || "Atividade sem titulo")}`,
+        activity?.bncc_code ? `BNCC: ${clean(activity.bncc_code)}` : "",
+        activity?.objective ? `Objetivo: ${clean(activity.objective)}` : "",
+        item.notes ? `Anotacoes: ${clean(item.notes)}` : ""
+      ].filter(Boolean);
+
+      page.drawRectangle({
+        x: margin,
+        y: y - 58,
+        width: pageWidth - margin * 2,
+        height: 72,
+        color: rgb(1, 1, 1),
+        borderColor: rgb(0.86, 0.88, 0.86),
+        borderWidth: 0.8
+      });
+
+      lines.slice(0, 5).forEach((line, lineIndex) => {
+        page.drawText(line, {
+          x: margin + 12,
+          y: y - lineIndex * 12,
+          size: lineIndex === 0 ? 10 : 8.5,
+          font: lineIndex === 0 ? bold : regular,
+          color: lineIndex === 0 ? rgb(0.12, 0.18, 0.15) : rgb(0.28, 0.31, 0.29)
+        });
+      });
+      y -= 88;
+    }
+
+    y -= 8;
+  }
+
+  return pdf.save();
+}
+
+async function buildCompactListWeeklyPlanPdf(plan: PdfWeeklyPlan, items: PdfWeeklyPlanItem[]) {
+  const pdf = await PDFDocument.create();
+  const regular = await pdf.embedFont(StandardFonts.Helvetica);
+  const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
+  const title = clean(plan.title) || "Planejamento";
+  const sortedItems = [...items].sort((a, b) => `${a.date || ""}${a.start_time || ""}`.localeCompare(`${b.date || ""}${b.start_time || ""}`));
+  let page = pdf.addPage([pageWidth, pageHeight]);
+  let y = pageHeight - 54;
+
+  const drawHeader = () => {
+    page.drawText(title, { x: margin, y, size: 20, font: bold, color: rgb(0.12, 0.18, 0.15) });
+    y -= 24;
+    page.drawText(`Periodo: ${formatDateLabel(plan.start_date)} a ${formatDateLabel(plan.end_date)}`, {
+      x: margin,
+      y,
+      size: 10,
+      font: regular,
+      color: rgb(0.28, 0.31, 0.29)
+    });
+    y -= 34;
+    drawCompactListHeader(page, y, bold);
+    y -= 24;
+  };
+
+  const newPage = () => {
+    page = pdf.addPage([pageWidth, pageHeight]);
+    y = pageHeight - 54;
+    drawHeader();
+  };
+
+  drawHeader();
+
+  for (const item of sortedItems) {
+    if (y < 82) newPage();
+    const activity = item.activities || item.activity;
+    const rowText = [
+      formatDateLabel(item.date),
+      formatTime(item.start_time),
+      clean(activity?.title || "Atividade sem titulo"),
+      activity?.bncc_code ? clean(activity.bncc_code) : "-"
+    ];
+    const widths = [84, 58, 280, 88];
+    let x = margin;
+
+    rowText.forEach((text, index) => {
+      drawCell(page, x, y - 24, widths[index], 34, rgb(1, 1, 1));
+      drawWrappedCellText(page, text, x + 5, y + 2, widths[index] - 10, regular, 2);
+      x += widths[index];
+    });
+    y -= 34;
+  }
+
+  if (!sortedItems.length) {
+    page.drawText("Nenhuma atividade planejada no periodo.", { x: margin, y, size: 10, font: regular, color: rgb(0.42, 0.45, 0.43) });
+  }
+
+  return pdf.save();
+}
+
+function drawScriptDayHeader(page: PDFPage, date: string, y: number, bold: PDFFont) {
+  const [day, weekday] = dateHeader(date);
+  page.drawRectangle({ x: margin, y: y - 6, width: pageWidth - margin * 2, height: 24, color: rgb(0.9, 0.96, 0.92) });
+  page.drawText(`${weekday} - ${day}`, {
+    x: margin + 10,
+    y,
+    size: 11,
+    font: bold,
+    color: rgb(0.12, 0.18, 0.15)
+  });
+}
+
+function drawCompactListHeader(page: PDFPage, y: number, bold: PDFFont) {
+  const headers = ["Data", "Horario", "Atividade", "BNCC"];
+  const widths = [84, 58, 280, 88];
+  let x = margin;
+
+  headers.forEach((header, index) => {
+    drawCell(page, x, y - 15, widths[index], 24, rgb(0.9, 0.96, 0.92));
+    page.drawText(header, { x: x + 5, y: y + 1, size: 8, font: bold, color: rgb(0.12, 0.18, 0.15) });
+    x += widths[index];
+  });
+}
+
 function drawCell(page: PDFPage, x: number, y: number, width: number, height: number, color: RGB) {
   page.drawRectangle({
     x,
@@ -496,13 +665,14 @@ function drawWrappedCellText(
   x: number,
   y: number,
   width: number,
-  font: PDFFont
+  font: PDFFont,
+  maxLines = 5
 ) {
   if (!clean(text)) return;
   const lines = text
     .split("\n")
     .flatMap((paragraph) => wrapTextByWidth(paragraph, width, font, 7.8))
-    .slice(0, 5);
+    .slice(0, maxLines);
 
   lines.forEach((line, index) => {
     page.drawText(line, {
@@ -585,6 +755,12 @@ function uniqueTimes(items: PdfWeeklyPlanItem[]) {
 
 function itemsForCell(items: PdfWeeklyPlanItem[], date: string, time: string) {
   return items.filter((item) => item.date === date && formatTime(item.start_time) === time);
+}
+
+function itemsForDate(items: PdfWeeklyPlanItem[], date: string) {
+  return items
+    .filter((item) => item.date === date)
+    .sort((a, b) => formatTime(a.start_time).localeCompare(formatTime(b.start_time)));
 }
 
 function chunk<T>(items: T[], size: number) {

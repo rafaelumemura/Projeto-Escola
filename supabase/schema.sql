@@ -7,9 +7,20 @@ create table if not exists public.profiles (
   avatar_url text,
   is_admin boolean not null default false,
   plan text not null default 'free',
+  planning_pdf_skill text not null default 'grade',
   password_must_change boolean not null default false,
   created_at timestamp with time zone not null default now()
 );
+
+alter table public.profiles
+add column if not exists planning_pdf_skill text not null default 'grade';
+
+alter table public.profiles
+drop constraint if exists profiles_planning_pdf_skill_check;
+
+alter table public.profiles
+add constraint profiles_planning_pdf_skill_check
+check (planning_pdf_skill in ('grade', 'roteiro', 'lista'));
 
 create table if not exists public.activities (
   id uuid primary key default gen_random_uuid(),

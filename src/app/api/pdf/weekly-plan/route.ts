@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { fail, readJson } from "@/lib/api/http";
 import { buildWeeklyPlanPdf } from "@/lib/pdf/builders";
+import { normalizePlanningPdfSkill } from "@/lib/planning/pdf-skills";
 import { getAuthenticatedUser } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -11,7 +12,8 @@ const payloadSchema = z.object({
   items: z.array(z.record(z.unknown())).optional(),
   start_date: z.string().optional(),
   end_date: z.string().optional(),
-  title: z.string().optional()
+  title: z.string().optional(),
+  skill: z.string().optional()
 });
 
 export async function POST(request: Request) {
@@ -58,9 +60,17 @@ export async function POST(request: Request) {
       throw Object.assign(new Error("Informe weekly_plan_id ou weekly_plan."), { status: 400 });
     }
 
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("*")
+      .eq("id", user.id)
+      .single();
+    const skill = normalizePlanningPdfSkill(payload.skill || profile?.planning_pdf_skill);
+
     const bytes = await buildWeeklyPlanPdf(
       weeklyPlan as Parameters<typeof buildWeeklyPlanPdf>[0],
-      items as Parameters<typeof buildWeeklyPlanPdf>[1]
+      items as Parameters<typeof buildWeeklyPlanPdf>[1],
+      skill
     );
 
     return new Response(Buffer.from(bytes), {

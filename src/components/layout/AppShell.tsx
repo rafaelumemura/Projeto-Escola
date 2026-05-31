@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
 import {
   BookOpen,
   CalendarDays,
@@ -15,7 +14,6 @@ import {
   UserRound
 } from "lucide-react";
 import { useAuth } from "@/components/auth/AuthProvider";
-import { apiFetch } from "@/lib/api/client";
 import type { BillingUsage } from "@/lib/billing/plans";
 
 const nav = [
@@ -37,24 +35,7 @@ const mobileNav = [
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { profile, signOut, supabase } = useAuth();
-  const [usage, setUsage] = useState<BillingUsage | null>(null);
-
-  const loadUsage = useCallback(async () => {
-    try {
-      const data = await apiFetch<{ usage: BillingUsage }>(supabase, "/api/billing/usage");
-      setUsage(data.usage);
-    } catch {
-      setUsage(null);
-    }
-  }, [supabase]);
-
-  useEffect(() => {
-    loadUsage();
-    window.addEventListener("billing-usage-changed", loadUsage);
-
-    return () => window.removeEventListener("billing-usage-changed", loadUsage);
-  }, [loadUsage]);
+  const { profile, signOut, usage } = useAuth();
 
   async function handleSignOut() {
     await signOut();

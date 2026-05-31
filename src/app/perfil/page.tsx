@@ -5,16 +5,16 @@ import { Camera, LogOut, Mail, Save, UserRound } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { ProtectedPage } from "@/components/layout/ProtectedPage";
 import { useAuth } from "@/components/auth/AuthProvider";
-import { apiFetch } from "@/lib/api/client";
-import { planName, type BillingUsage } from "@/lib/billing/plans";
+import { planName } from "@/lib/billing/plans";
+import { normalizePlanningPdfSkill, planningPdfSkills, type PlanningPdfSkillKey } from "@/lib/planning/pdf-skills";
 
 export default function ProfilePage() {
   const router = useRouter();
-  const { supabase, profile, user, refreshProfile, signOut } = useAuth();
+  const { supabase, profile, usage, user, refreshProfile, signOut } = useAuth();
   const [name, setName] = useState("");
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
-  const [usage, setUsage] = useState<BillingUsage | null>(null);
+  const [planningSkill, setPlanningSkill] = useState<PlanningPdfSkillKey>("grade");
   const [message, setMessage] = useState<string | null>(null);
   const [passwordMessage, setPasswordMessage] = useState<string | null>(null);
   const [passwordFormOpen, setPasswordFormOpen] = useState(false);
@@ -27,13 +27,8 @@ export default function ProfilePage() {
   useEffect(() => {
     setName(profile?.name || "");
     setAvatarPreview(profile?.avatar_url || null);
-  }, [profile?.avatar_url, profile?.name]);
-
-  useEffect(() => {
-    apiFetch<{ usage: BillingUsage }>(supabase, "/api/billing/usage")
-      .then((data) => setUsage(data.usage))
-      .catch(() => setUsage(null));
-  }, [supabase]);
+    setPlanningSkill(normalizePlanningPdfSkill(profile?.planning_pdf_skill));
+  }, [profile?.avatar_url, profile?.name, profile?.planning_pdf_skill]);
 
   async function saveProfile(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -150,6 +145,21 @@ export default function ProfilePage() {
   async function handleSignOut() {
     await signOut();
     router.replace("/login");
+  }
+
+  async function selectPlanningSkill(skill: PlanningPdfSkillKey) {
+    if (!user) return;
+    setPlanningSkill(skill);
+    setMessage(null);
+    const { error } = await supabase.from("profiles").update({ planning_pdf_skill: skill }).eq("id", user.id);
+
+    if (error) {
+      setMessage(error.message);
+      return;
+    }
+
+    await refreshProfile();
+    setMessage("Skill do planejamento atualizada.");
   }
 
   return (
@@ -282,6 +292,35 @@ export default function ProfilePage() {
               <br />
               Nosso prazo de retorno é de até 48h úteis.
             </p>
+          </section>
+
+          <section className="panel h-fit space-y-4 p-5">
+            <div>
+              <p className="label mb-2">Skills do planejamento</p>
+              <h2 className="text-lg font-bold text-ink">Modelo do PDF</h2>
+              <p className="mt-2 text-sm leading-6 text-ink/60">
+                Escolha como as informações serão posicionadas quando baixar o PDF do planejamento.
+              </p>
+            </div>
+
+            <div className="grid gap-3">
+              {planningPdfSkills.map((skill) => {
+                const active = planningSkill === skill.key;
+                return (
+                  <button
+                    key={skill.key}
+                    type="button"
+                    onClick={() => selectPlanningSkill(skill.key)}
+                    className={`rounded-lg border bg-white p-4 text-left transition ${
+                      active ? "border-leaf ring-2 ring-leaf/15" : "border-ink/10 hover:border-leaf/40"
+                    }`}
+                  >
+                    <span className="text-sm font-bold text-ink">{skill.name}</span>
+                    <span className="mt-1 block text-sm leading-6 text-ink/60">{skill.description}</span>
+                  </button>
+                );
+              })}
+            </div>
           </section>
         </section>
       </div>

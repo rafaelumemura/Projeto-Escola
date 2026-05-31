@@ -213,7 +213,17 @@ export default function ActivitiesPage() {
     setBusy(true);
     setMessage(null);
     try {
-      await apiFetch(supabase, `/api/activities/${activity.id}`, { method: "DELETE" });
+      const planningStatus = await apiFetch<{ planned: boolean; count: number }>(supabase, `/api/activities/${activity.id}/planning-status`);
+
+      if (planningStatus.planned) {
+        const confirmed = window.confirm("Essa atividade está planejada, se você excluir, ela sairá do planejamento, deseja excluir?");
+        if (!confirmed) {
+          setPendingDeleteId(null);
+          return;
+        }
+      }
+
+      await apiFetch(supabase, `/api/activities/${activity.id}${planningStatus.planned ? "?remove_planned=true" : ""}`, { method: "DELETE" });
       setSelected(null);
       setEdit(null);
       await loadActivities();
