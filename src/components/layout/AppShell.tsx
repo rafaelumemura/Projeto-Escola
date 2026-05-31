@@ -176,7 +176,7 @@ function UsageMeter({ usage, compact = false }: { usage: BillingUsage | null; co
       <div className="mt-2">
         <div className="flex items-center justify-between gap-3 text-xs text-ink/60">
           <span>
-            {generated}/{limit} atividades
+            {generated}/{limit} atividades geradas
           </span>
           <span className="font-semibold text-ink/70">{percent}%</span>
         </div>

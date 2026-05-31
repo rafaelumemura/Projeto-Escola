@@ -93,14 +93,6 @@ async function createUsageFromProfilePlan(userId: string) {
 async function ensureAdminProUsage(userId: string) {
   const supabase = createSupabaseAdminClient();
   const now = new Date();
-  const { count: activitiesCount, error: countError } = await supabase
-    .from("activities")
-    .select("id", { count: "exact", head: true })
-    .eq("user_id", userId);
-
-  if (countError) throw countError;
-
-  const generatedCount = activitiesCount || 0;
   const { data: current, error: currentError } = await supabase
     .from("billing_subscriptions")
     .select("*")
@@ -117,7 +109,7 @@ async function ensureAdminProUsage(userId: string) {
     plan_key: "pro" as const,
     status: "active" as const,
     activity_limit: planLimit("pro"),
-    generated_count: shouldResetCycle ? generatedCount : Math.max(current?.generated_count || 0, generatedCount),
+    generated_count: shouldResetCycle ? 0 : current?.generated_count || 0,
     current_period_start: shouldResetCycle ? now.toISOString() : current?.current_period_start || now.toISOString(),
     current_period_end: shouldResetCycle ? new Date(now.getTime() + 30 * dayMs).toISOString() : current?.current_period_end || new Date(now.getTime() + 30 * dayMs).toISOString(),
     grace_ends_at: shouldResetCycle ? new Date(now.getTime() + 31 * dayMs).toISOString() : current?.grace_ends_at || new Date(now.getTime() + 31 * dayMs).toISOString(),

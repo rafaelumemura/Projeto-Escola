@@ -1,5 +1,6 @@
 import { created, fail, ok, readJson } from "@/lib/api/http";
 import { activityFilterSchema, activitySaveSchema } from "@/lib/activities/types";
+import { assertCanGenerateActivity, incrementActivityGeneration } from "@/lib/billing/usage";
 import { getAuthenticatedUser } from "@/lib/supabase/server";
 
 export async function GET(request: Request) {
@@ -74,6 +75,12 @@ export async function POST(request: Request) {
     const { user, supabase } = await getAuthenticatedUser(request);
     const body = await readJson<unknown>(request);
     const payload = activitySaveSchema.parse(body);
+    const manualActivity = isManualActivity(payload.raw_ai_response);
+
+    if (!manualActivity) {
+      await assertCanGenerateActivity(user.id);
+    }
+
     const { data, error } = await supabase
       .from("activities")
       .insert({
@@ -86,8 +93,19 @@ export async function POST(request: Request) {
 
     if (error) throw error;
 
-    return created({ activity: data });
+    const usage = manualActivity ? null : await incrementActivityGeneration(user.id);
+
+    return created({ activity: data, usage });
   } catch (error) {
     return fail(error);
   }
+}
+
+function isManualActivity(rawAiResponse: unknown) {
+  return Boolean(
+    rawAiResponse &&
+      typeof rawAiResponse === "object" &&
+      "manual" in rawAiResponse &&
+      (rawAiResponse as { manual?: unknown }).manual === true
+  );
 }

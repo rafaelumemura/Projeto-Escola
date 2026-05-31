@@ -17,6 +17,8 @@ export default function ProfilePage() {
   const [usage, setUsage] = useState<BillingUsage | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [passwordMessage, setPasswordMessage] = useState<string | null>(null);
+  const [passwordFormOpen, setPasswordFormOpen] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [busy, setBusy] = useState(false);
@@ -95,6 +97,11 @@ export default function ProfilePage() {
   async function updatePassword(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
+    if (!currentPassword) {
+      setPasswordMessage("Informe sua senha atual.");
+      return;
+    }
+
     if (newPassword.length < 6) {
       setPasswordMessage("A nova senha precisa ter pelo menos 6 caracteres.");
       return;
@@ -108,6 +115,17 @@ export default function ProfilePage() {
     setPasswordBusy(true);
     setPasswordMessage(null);
     try {
+      const email = profile?.email || user?.email;
+      if (!email) {
+        throw new Error("E-mail da conta não encontrado.");
+      }
+
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email,
+        password: currentPassword
+      });
+      if (signInError) throw signInError;
+
       const { error } = await supabase.auth.updateUser({ password: newPassword });
       if (error) throw error;
 
@@ -117,9 +135,11 @@ export default function ProfilePage() {
         await refreshProfile();
       }
 
+      setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
       setPasswordMessage("Senha atualizada.");
+      setPasswordFormOpen(false);
     } catch (error) {
       setPasswordMessage(error instanceof Error ? error.message : "Não foi possível atualizar a senha.");
     } finally {
@@ -147,7 +167,7 @@ export default function ProfilePage() {
           <div className="grid gap-3">
             <Info label="E-mail" value={profile?.email || user?.email || "-"} />
             <Info label="Plano atual" value={usage?.plan_name || planName(profile?.plan)} />
-            <Info label="Uso do ciclo" value={`${usage?.generated_count || 0}/${usage?.activity_limit || 0} atividades`} />
+            <Info label="Uso do ciclo" value={`${usage?.generated_count || 0}/${usage?.activity_limit || 0} atividades geradas`} />
             <Info label="Vencimento" value={usage?.current_period_end ? new Date(usage.current_period_end).toLocaleDateString("pt-BR") : "-"} />
             <Info label="Acesso" value={profile?.is_admin ? "Admin" : "Usuário"} />
             <Info label="Data de cadastro" value={profile?.created_at ? new Date(profile.created_at).toLocaleDateString("pt-BR") : "-"} />
@@ -199,21 +219,51 @@ export default function ProfilePage() {
                 </p>
               ) : null}
             </div>
-            <div>
-              <label className="label mb-2 block">Nova senha</label>
-              <input className="field" type="password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} minLength={6} required />
-            </div>
-            <div>
-              <label className="label mb-2 block">Confirmar nova senha</label>
-              <input className="field" type="password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} minLength={6} required />
-            </div>
+
+            {!passwordFormOpen ? (
+              <button type="button" onClick={() => setPasswordFormOpen(true)} className="text-sm font-bold text-leaf underline underline-offset-4">
+                Alterar senha
+              </button>
+            ) : (
+              <>
+                <div>
+                  <label className="label mb-2 block">Senha atual</label>
+                  <input className="field" type="password" value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} minLength={6} required />
+                </div>
+                <div>
+                  <label className="label mb-2 block">Nova senha</label>
+                  <input className="field" type="password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} minLength={6} required />
+                </div>
+                <div>
+                  <label className="label mb-2 block">Confirmar nova senha</label>
+                  <input className="field" type="password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} minLength={6} required />
+                </div>
+              </>
+            )}
 
             {passwordMessage ? <p className="rounded-md bg-mint px-3 py-2 text-sm text-ink/75">{passwordMessage}</p> : null}
 
-            <button disabled={passwordBusy} className="btn-primary">
-              <Save size={16} />
-              Salvar senha
-            </button>
+            {passwordFormOpen ? (
+              <div className="flex flex-wrap gap-2">
+                <button disabled={passwordBusy} className="btn-primary">
+                  <Save size={16} />
+                  Salvar senha
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPasswordFormOpen(false);
+                    setCurrentPassword("");
+                    setNewPassword("");
+                    setConfirmPassword("");
+                    setPasswordMessage(null);
+                  }}
+                  className="btn-secondary"
+                >
+                  Cancelar
+                </button>
+              </div>
+            ) : null}
           </form>
         </section>
       </div>

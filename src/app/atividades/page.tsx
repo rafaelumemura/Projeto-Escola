@@ -8,6 +8,7 @@ import { useAuth } from "@/components/auth/AuthProvider";
 import { apiFetch, downloadPdf } from "@/lib/api/client";
 import { activityTypes, methodologies } from "@/lib/activities/types";
 import type { Database, Json } from "@/lib/database.types";
+import type { PrintableMaterialPlan } from "@/lib/activities/printable-material";
 
 type Activity = Database["public"]["Tables"]["activities"]["Row"];
 type ActivityWithCollections = Activity & {
@@ -15,6 +16,11 @@ type ActivityWithCollections = Activity & {
   primary_collection_id?: string | null;
 };
 type Collection = Database["public"]["Tables"]["collections"]["Row"];
+type MaterialState = {
+  loading: boolean;
+  material?: PrintableMaterialPlan | null;
+  error?: string | null;
+};
 
 type EditState = Partial<Activity> & {
   steps_text?: string;
@@ -42,6 +48,7 @@ export default function ActivitiesPage() {
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+  const [materialByActivityId, setMaterialByActivityId] = useState<Record<string, MaterialState>>({});
   const [filters, setFilters] = useState({
     age_range: "",
     development_area: "",
@@ -84,6 +91,41 @@ export default function ActivitiesPage() {
     setActionCollectionId(selected?.primary_collection_id || selected?.collection_ids?.[0] || "");
     setPendingDeleteId(null);
   }, [selected?.id, selected?.primary_collection_id, selected?.collection_ids]);
+
+  useEffect(() => {
+    if (!selected?.id || materialByActivityId[selected.id]) return;
+
+    let cancelled = false;
+    const activityId = selected.id;
+    setMaterialByActivityId((current) => ({
+      ...current,
+      [activityId]: { loading: true }
+    }));
+
+    apiFetch<{ material: PrintableMaterialPlan }>(supabase, `/api/activities/${activityId}/printable-material`, { method: "POST" })
+      .then((data) => {
+        if (cancelled) return;
+        setMaterialByActivityId((current) => ({
+          ...current,
+          [activityId]: { loading: false, material: data.material }
+        }));
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        setMaterialByActivityId((current) => ({
+          ...current,
+          [activityId]: {
+            loading: false,
+            material: null,
+            error: error instanceof Error ? error.message : "Não foi possível analisar o material imprimível."
+          }
+        }));
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [materialByActivityId, selected?.id, supabase]);
 
   function startEdit(activity: ActivityWithCollections) {
     setSelected(activity);
@@ -184,6 +226,21 @@ export default function ActivitiesPage() {
     }
   }
 
+  async function downloadPrintableMaterial(activity: ActivityWithCollections) {
+    const materialState = materialByActivityId[activity.id];
+    if (!materialState?.material?.has_material) {
+      setMessage(materialState?.material?.reason || materialState?.error || "Esta atividade não precisa de material imprimível.");
+      return;
+    }
+
+    await downloadPdf(
+      supabase,
+      "/api/pdf/activity-material",
+      { activity_id: activity.id, material_plan: materialState.material },
+      materialPdfFileName(activity.title)
+    );
+  }
+
   return (
     <ProtectedPage title="Atividades" subtitle="Consulte, filtre, edite e reutilize atividades salvas.">
       <section className="panel mb-5 p-4">
@@ -234,6 +291,12 @@ export default function ActivitiesPage() {
         <section className="space-y-4">
           {selected ? (
             <>
+              {(() => {
+                const materialState = materialByActivityId[selected.id];
+                const materialReady = Boolean(materialState?.material?.has_material);
+                const materialReason = materialState?.material?.reason || materialState?.error || "";
+
+                return (
               <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
                 <button onClick={() => startEdit(selected)} className="btn-secondary">
                   <Pencil size={16} />
@@ -243,9 +306,14 @@ export default function ActivitiesPage() {
                   <FileDown size={16} />
                   PDF
                 </button>
-                <button onClick={() => downloadPdf(supabase, "/api/pdf/activity-material", { activity_id: selected.id }, materialPdfFileName(selected.title))} className="btn-secondary col-span-2 sm:col-span-1">
+                <button
+                  disabled={busy || materialState?.loading || !materialReady}
+                  onClick={() => downloadPrintableMaterial(selected)}
+                  className="btn-secondary col-span-2 sm:col-span-1 disabled:cursor-not-allowed disabled:opacity-50"
+                  title={materialState?.loading ? "A IA está analisando se esta atividade precisa de material imprimível." : materialReason}
+                >
                   <Printer size={16} />
-                  Material imprimível
+                  {materialState?.loading ? "Analisando material..." : "Material imprimível"}
                 </button>
                 <button
                   disabled={busy}
@@ -262,6 +330,20 @@ export default function ActivitiesPage() {
                   {pendingDeleteId === selected.id ? "Confirmar exclusão" : "Excluir"}
                 </button>
               </div>
+                );
+              })()}
+
+              {selected && !materialByActivityId[selected.id]?.loading && materialByActivityId[selected.id]?.material?.has_material === false ? (
+                <p className="rounded-lg border border-ink/10 bg-white px-4 py-3 text-sm text-ink/65">
+                  {materialByActivityId[selected.id]?.material?.reason || "A IA avaliou que esta atividade não precisa de material imprimível."}
+                </p>
+              ) : null}
+
+              {selected && !materialByActivityId[selected.id]?.loading && materialByActivityId[selected.id]?.error ? (
+                <p className="rounded-lg border border-sun/30 bg-sun/10 px-4 py-3 text-sm text-ink/70">
+                  {materialByActivityId[selected.id]?.error}
+                </p>
+              ) : null}
 
               <div className="rounded-lg border border-ink/10 bg-white p-4">
                 <div className="grid grid-cols-[1fr_auto_auto] gap-2">

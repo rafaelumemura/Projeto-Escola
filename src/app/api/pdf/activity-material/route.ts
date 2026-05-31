@@ -1,12 +1,14 @@
 import { z } from "zod";
 import { fail, readJson } from "@/lib/api/http";
+import { analyzePrintableMaterialWithClaude, printableMaterialPlanSchema } from "@/lib/activities/printable-material";
 import { buildActivityMaterialPdf } from "@/lib/pdf/builders";
 import { getAuthenticatedUser } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 
 const payloadSchema = z.object({
-  activity_id: z.string().uuid()
+  activity_id: z.string().uuid(),
+  material_plan: printableMaterialPlanSchema.optional()
 });
 
 export async function POST(request: Request) {
@@ -22,7 +24,13 @@ export async function POST(request: Request) {
 
     if (error) throw error;
 
-    const bytes = await buildActivityMaterialPdf(activity as Parameters<typeof buildActivityMaterialPdf>[0]);
+    const materialPlan = payload.material_plan || (await analyzePrintableMaterialWithClaude(activity));
+
+    if (!materialPlan.has_material) {
+      throw Object.assign(new Error(materialPlan.reason || "Esta atividade nao possui material imprimivel necessario."), { status: 422 });
+    }
+
+    const bytes = await buildActivityMaterialPdf(activity as Parameters<typeof buildActivityMaterialPdf>[0], materialPlan);
     const title = typeof activity.title === "string" && activity.title.trim() ? activity.title.trim() : "atividade";
     const filename = `${title.replace(/[\\/]/g, "-")}-material.pdf`;
     const fallbackFilename =
