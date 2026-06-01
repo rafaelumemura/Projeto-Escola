@@ -6,6 +6,7 @@ import { ProtectedPage } from "@/components/layout/ProtectedPage";
 import { ActivityView } from "@/components/ui/ActivityView";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { apiFetch } from "@/lib/api/client";
+import { collectionLimit } from "@/lib/billing/plans";
 import type { Database } from "@/lib/database.types";
 
 type Collection = Database["public"]["Tables"]["collections"]["Row"];
@@ -16,7 +17,7 @@ type ModalMode = "create" | "edit" | null;
 const defaultCollectionColor = "#2f7d58";
 
 export default function CollectionsPage() {
-  const { supabase } = useAuth();
+  const { supabase, usage } = useAuth();
   const [collections, setCollections] = useState<CollectionCard[]>([]);
   const [activities, setActivities] = useState<Activity[]>([]);
   const [selected, setSelected] = useState<CollectionCard | null>(null);
@@ -38,6 +39,18 @@ export default function CollectionsPage() {
   const pageColors = Array.from(
     new Set(collections.map((collection) => collection.color).filter((item): item is string => Boolean(item)))
   );
+  const limit = collectionLimit(usage?.plan_key);
+  const hasCollectionLimit = typeof limit === "number";
+  const canCreateCollection = !usage || !hasCollectionLimit || collections.length < limit;
+  const collectionLimitLabel = usage
+    ? hasCollectionLimit
+      ? `${collections.length}/${limit} coleções`
+      : `${collections.length} coleções`
+    : `${collections.length} coleções`;
+  const collectionLimitMessage =
+    usage && hasCollectionLimit
+      ? `Seu plano ${usage.plan_name} permite até ${limit} ${limit === 1 ? "coleção" : "coleções"}.`
+      : null;
 
   async function loadCollections() {
     const data = await apiFetch<{ collections: CollectionCard[] }>(supabase, "/api/collections");
@@ -79,6 +92,11 @@ export default function CollectionsPage() {
   }, [selected?.id]);
 
   function openCreateModal() {
+    if (!canCreateCollection) {
+      setMessage(`${collectionLimitMessage} Para criar mais coleções, faça upgrade do plano.`);
+      return;
+    }
+
     setName("");
     setDescription("");
     setColor(defaultCollectionColor);
@@ -236,7 +254,7 @@ export default function CollectionsPage() {
       title="Coleções"
       subtitle="Crie grupos temáticos para reaproveitar atividades em projetos, datas e objetivos pedagógicos."
       actions={
-        <button type="button" onClick={openCreateModal} className="btn-primary">
+        <button type="button" onClick={openCreateModal} disabled={!canCreateCollection} className="btn-primary disabled:cursor-not-allowed disabled:opacity-55" title={!canCreateCollection ? collectionLimitMessage || "Limite de coleções atingido." : "Criar coleção"}>
           <Plus size={17} />
           Criar Coleção
         </button>
@@ -251,8 +269,13 @@ export default function CollectionsPage() {
               <FolderKanban size={18} className="text-leaf" />
               Coleções salvas
             </div>
-            <span className="badge">{collections.length} coleções</span>
+            <span className="badge">{collectionLimitLabel}</span>
           </div>
+          {collectionLimitMessage ? (
+            <p className="mb-4 rounded-lg border border-ink/10 bg-white px-4 py-3 text-sm font-semibold text-ink/65">
+              {collectionLimitMessage}
+            </p>
+          ) : null}
 
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {collections.map((collection) => (

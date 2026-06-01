@@ -1,6 +1,8 @@
 import { z } from "zod";
 import { fail, readJson } from "@/lib/api/http";
 import { getSavedPrintableMaterialPlan, printableMaterialPlanSchema } from "@/lib/activities/printable-material";
+import { canUsePrintableMaterial } from "@/lib/billing/plans";
+import { getBillingUsage } from "@/lib/billing/usage";
 import { buildActivityMaterialPdf } from "@/lib/pdf/builders";
 import { getAuthenticatedUser } from "@/lib/supabase/server";
 
@@ -14,6 +16,12 @@ const payloadSchema = z.object({
 export async function POST(request: Request) {
   try {
     const { user, supabase } = await getAuthenticatedUser(request);
+    const usage = await getBillingUsage(user.id);
+
+    if (!canUsePrintableMaterial(usage.plan_key)) {
+      throw Object.assign(new Error("Material imprimível disponível apenas no plano Completo."), { status: 403 });
+    }
+
     const payload = payloadSchema.parse(await readJson<unknown>(request));
     const { data: activity, error } = await supabase
       .from("activities")

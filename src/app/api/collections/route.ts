@@ -1,5 +1,7 @@
 import { collectionCreateSchema } from "@/lib/api/schemas";
 import { created, fail, ok, readJson } from "@/lib/api/http";
+import { collectionLimit } from "@/lib/billing/plans";
+import { getBillingUsage } from "@/lib/billing/usage";
 import { getAuthenticatedUser } from "@/lib/supabase/server";
 
 export async function GET(request: Request) {
@@ -44,6 +46,25 @@ export async function POST(request: Request) {
   try {
     const { user, supabase } = await getAuthenticatedUser(request);
     const payload = collectionCreateSchema.parse(await readJson<unknown>(request));
+    const usage = await getBillingUsage(user.id);
+    const limit = collectionLimit(usage.plan_key);
+
+    if (typeof limit === "number") {
+      const { count, error: countError } = await supabase
+        .from("collections")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", user.id);
+
+      if (countError) throw countError;
+
+      if ((count || 0) >= limit) {
+        throw Object.assign(
+          new Error(`Seu plano ${usage.plan_name} permite até ${limit} ${limit === 1 ? "coleção" : "coleções"}. Faça upgrade do plano para criar mais.`),
+          { status: 403 }
+        );
+      }
+    }
+
     const { data, error } = await supabase
       .from("collections")
       .insert({ ...payload, user_id: user.id })

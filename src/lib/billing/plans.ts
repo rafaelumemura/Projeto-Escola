@@ -60,6 +60,18 @@ export function planPeriodDays(planKey?: string | null) {
   return isPlanKey(planKey) ? PLAN_DEFINITIONS[planKey].periodDays : 30;
 }
 
+export function collectionLimit(planKey?: string | null) {
+  if (planKey === "free") return 1;
+  if (planKey === "basic") return 5;
+  if (planKey === "complete") return 15;
+  if (planKey === "pro") return null;
+  return 0;
+}
+
+export function canUsePrintableMaterial(planKey?: string | null) {
+  return planKey === "complete" || planKey === "pro";
+}
+
 export function emptyBillingUsage(message = "Nenhum plano ativo."): BillingUsage {
   return {
     plan_key: null,

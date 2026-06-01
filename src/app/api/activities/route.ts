@@ -1,6 +1,7 @@
 import { created, fail, ok, readJson } from "@/lib/api/http";
 import { analyzePrintableMaterialWithClaude, attachPrintableMaterialPlan, type PrintableMaterialPlan } from "@/lib/activities/printable-material";
 import { activityFilterSchema, activitySaveSchema } from "@/lib/activities/types";
+import { canUsePrintableMaterial, type BillingUsage } from "@/lib/billing/plans";
 import { assertCanGenerateActivity, incrementActivityGeneration } from "@/lib/billing/usage";
 import type { Json } from "@/lib/database.types";
 import { getAuthenticatedUser } from "@/lib/supabase/server";
@@ -80,12 +81,16 @@ export async function POST(request: Request) {
     const body = await readJson<unknown>(request);
     const payload = activitySaveSchema.parse(body);
     const manualActivity = isManualActivity(payload.raw_ai_response);
+    let generationUsage: BillingUsage | null = null;
 
     if (!manualActivity) {
-      await assertCanGenerateActivity(user.id);
+      generationUsage = await assertCanGenerateActivity(user.id);
     }
 
-    const printableMaterial = manualActivity ? null : await analyzePrintableMaterialForSave(payload);
+    const printableMaterial =
+      !manualActivity && canUsePrintableMaterial(generationUsage?.plan_key)
+        ? await analyzePrintableMaterialForSave(payload)
+        : null;
     const rawAiResponse = printableMaterial
       ? attachPrintableMaterialPlan(payload.raw_ai_response ?? payload, printableMaterial)
       : payload.raw_ai_response ?? payload;

@@ -190,8 +190,9 @@ export default function ProfilePage() {
           <div className="grid gap-3">
             <Info label="E-mail" value={profile?.email || user?.email || "-"} />
             <Info label="Plano atual" value={usage?.plan_name || planName(profile?.plan)} />
-            <Link href="/planos" className="inline-flex w-fit text-sm font-bold text-leaf underline underline-offset-4">
-              Upgrade
+            <Link href="/planos" className="rounded-lg border border-ink/10 bg-white p-4 transition hover:border-leaf/40">
+              <p className="label">Upgrade</p>
+              <p className="mt-1 text-sm font-bold text-leaf">Fazer upgrade do plano</p>
             </Link>
             <Info label="Uso do ciclo" value={`${usage?.generated_count || 0}/${usage?.activity_limit || 0} atividades geradas`} />
             <Info label="Vencimento" value={usage?.current_period_end ? new Date(usage.current_period_end).toLocaleDateString("pt-BR") : "-"} />

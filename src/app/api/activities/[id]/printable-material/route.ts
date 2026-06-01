@@ -1,5 +1,7 @@
 import { fail, ok } from "@/lib/api/http";
 import { getSavedPrintableMaterialPlan } from "@/lib/activities/printable-material";
+import { canUsePrintableMaterial } from "@/lib/billing/plans";
+import { getBillingUsage } from "@/lib/billing/usage";
 import { getAuthenticatedUser } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -7,6 +9,12 @@ export const runtime = "nodejs";
 export async function POST(request: Request, { params }: { params: { id: string } }) {
   try {
     const { user, supabase } = await getAuthenticatedUser(request);
+    const usage = await getBillingUsage(user.id);
+
+    if (!canUsePrintableMaterial(usage.plan_key)) {
+      throw Object.assign(new Error("Material imprimível disponível apenas no plano Completo."), { status: 403 });
+    }
+
     const { data: activity, error } = await supabase
       .from("activities")
       .select("*")

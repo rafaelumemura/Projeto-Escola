@@ -5,7 +5,7 @@ import { Check, Crown } from "lucide-react";
 import { ProtectedPage } from "@/components/layout/ProtectedPage";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { apiFetch } from "@/lib/api/client";
-import { PLAN_DEFINITIONS, type BillingUsage, type PaidPlanKey } from "@/lib/billing/plans";
+import { collectionLimit, PLAN_DEFINITIONS, type BillingUsage, type PaidPlanKey } from "@/lib/billing/plans";
 
 const plans = [PLAN_DEFINITIONS.basic, PLAN_DEFINITIONS.complete];
 
@@ -65,9 +65,10 @@ export default function PlansPage() {
 
               <div className="mt-5 space-y-2 text-sm text-ink/70">
                 <PlanFeature text="Geração de atividades com Claude API" />
-                <PlanFeature text="PDF da atividade e material imprimível" />
-                <PlanFeature text="Coleções e planejamento mensal" />
-                {plan.key === "complete" ? <PlanFeature text="Maior volume para rotina recorrente" /> : null}
+                <PlanFeature text="PDF descritivo da atividade" />
+                <PlanFeature text={`${collectionLimit(plan.key)} coleções`} />
+                <PlanFeature text="Planejamento mensal" />
+                {plan.key === "complete" ? <PlanFeature text="Material imprimível personalizado" /> : null}
               </div>
 
               <button

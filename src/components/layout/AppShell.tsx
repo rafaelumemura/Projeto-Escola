@@ -121,8 +121,6 @@ function UsageMeter({ usage, compact = false }: { usage: BillingUsage | null; co
   const limit = usage?.activity_limit || 0;
   const generated = usage?.generated_count || 0;
   const percent = limit > 0 ? Math.min(100, Math.round((generated / limit) * 100)) : 0;
-  const shouldShowUpgrade = Boolean(usage && (usage.can_upgrade || !usage.can_generate));
-  const actionLabel = usage?.can_upgrade ? "Fazer upgrade" : "Ver planos";
 
   if (compact) {
     return (
@@ -165,11 +163,6 @@ function UsageMeter({ usage, compact = false }: { usage: BillingUsage | null; co
       </div>
 
       {usage?.message && !compact ? <p className="mt-2 text-xs leading-5 text-ink/60">{usage.message}</p> : null}
-      {shouldShowUpgrade ? (
-        <Link href="/planos" className={`mt-3 w-full ${compact ? "hidden" : "btn-primary"}`}>
-          {actionLabel}
-        </Link>
-      ) : null}
     </div>
   );
 }

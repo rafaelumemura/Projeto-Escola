@@ -7,6 +7,7 @@ import { ActivityView } from "@/components/ui/ActivityView";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { apiFetch, downloadPdf } from "@/lib/api/client";
 import { activityTypes, methodologies } from "@/lib/activities/types";
+import { canUsePrintableMaterial } from "@/lib/billing/plans";
 import type { Database, Json } from "@/lib/database.types";
 import type { PrintableMaterialPlan } from "@/lib/activities/printable-material";
 
@@ -46,7 +47,7 @@ function getSavedPrintableMaterialPlan(rawAiResponse: Json | null): PrintableMat
 }
 
 export default function ActivitiesPage() {
-  const { supabase } = useAuth();
+  const { supabase, usage } = useAuth();
   const [activities, setActivities] = useState<ActivityWithCollections[]>([]);
   const [collections, setCollections] = useState<Collection[]>([]);
   const [selected, setSelected] = useState<ActivityWithCollections | null>(null);
@@ -258,6 +259,11 @@ export default function ActivitiesPage() {
   }
 
   async function downloadPrintableMaterial(activity: ActivityWithCollections) {
+    if (!canUsePrintableMaterial(usage?.plan_key)) {
+      setMessage("Material imprimível disponível apenas no plano Completo.");
+      return;
+    }
+
     const material = getSavedPrintableMaterialPlan(activity.raw_ai_response);
     if (!material?.has_material) {
       setMessage(material?.reason || "Esta atividade ainda não possui material imprimível salvo.");
@@ -377,7 +383,11 @@ export default function ActivitiesPage() {
               {(() => {
                 const material = getSavedPrintableMaterialPlan(selected.raw_ai_response);
                 const materialReady = Boolean(material?.has_material);
-                const materialReason = material?.reason || "Esta atividade ainda não possui análise de material imprimível salva.";
+                const materialAllowed = canUsePrintableMaterial(usage?.plan_key);
+                const materialReason = !materialAllowed
+                  ? "Material imprimível disponível apenas no plano Completo."
+                  : material?.reason || "Esta atividade ainda não possui análise de material imprimível salva.";
+                const canDownloadMaterial = materialAllowed && materialReady;
 
                 return (
               <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
@@ -390,10 +400,10 @@ export default function ActivitiesPage() {
                   PDF
                 </button>
                 <button
-                  disabled={busy || !materialReady}
+                  disabled={busy || !canDownloadMaterial}
                   onClick={() => downloadPrintableMaterial(selected)}
                   className="btn-secondary col-span-2 sm:col-span-1 disabled:cursor-not-allowed disabled:opacity-50"
-                  title={materialReady ? "Baixar material imprimível desta atividade." : materialReason}
+                  title={canDownloadMaterial ? "Baixar material imprimível desta atividade." : materialReason}
                 >
                   <Printer size={16} />
                   Material imprimível
@@ -412,13 +422,19 @@ export default function ActivitiesPage() {
                 );
               })()}
 
-              {selected && getSavedPrintableMaterialPlan(selected.raw_ai_response)?.has_material === false ? (
+              {selected && usage && !canUsePrintableMaterial(usage.plan_key) ? (
+                <p className="rounded-lg border border-ink/10 bg-white px-4 py-3 text-sm text-ink/65">
+                  Material imprimível disponível apenas no plano Completo.
+                </p>
+              ) : null}
+
+              {selected && canUsePrintableMaterial(usage?.plan_key) && getSavedPrintableMaterialPlan(selected.raw_ai_response)?.has_material === false ? (
                 <p className="rounded-lg border border-ink/10 bg-white px-4 py-3 text-sm text-ink/65">
                   {getSavedPrintableMaterialPlan(selected.raw_ai_response)?.reason || "A IA avaliou que esta atividade não precisa de material imprimível."}
                 </p>
               ) : null}
 
-              {selected && !getSavedPrintableMaterialPlan(selected.raw_ai_response) ? (
+              {selected && canUsePrintableMaterial(usage?.plan_key) && !getSavedPrintableMaterialPlan(selected.raw_ai_response) ? (
                 <p className="rounded-lg border border-ink/10 bg-white px-4 py-3 text-sm text-ink/65">
                   Esta atividade foi criada antes da análise automática de material imprimível. As novas atividades já salvam essa análise no momento da geração.
                 </p>
