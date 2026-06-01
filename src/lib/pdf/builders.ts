@@ -405,7 +405,7 @@ async function buildGridWeeklyPlanPdf(plan: PdfWeeklyPlan, items: PdfWeeklyPlanI
       });
 
       drawCell(page, tableMargin, tableTop, timeColumnWidth, headerHeight, rgb(0.9, 0.96, 0.92));
-      drawCenteredText(page, "Horario", tableMargin, tableTop, timeColumnWidth, headerHeight, bold, 10, rgb(0.12, 0.18, 0.15));
+      drawCenteredText(page, "HORÁRIO", tableMargin, tableTop, timeColumnWidth, headerHeight, bold, 10, rgb(0.12, 0.18, 0.15));
 
       dateChunk.forEach((date, index) => {
         const x = tableMargin + timeColumnWidth + index * columnWidth;
@@ -484,7 +484,7 @@ async function buildFramedWeeklyPlanPdf(plan: PdfWeeklyPlan, items: PdfWeeklyPla
       });
 
       drawCell(page, tableX, tableTop, timeColumnWidth, headerHeight, rgb(0.9, 0.96, 0.92));
-      drawCenteredText(page, "Horario", tableX, tableTop, timeColumnWidth, headerHeight, bold, 9.5, rgb(0.12, 0.18, 0.15));
+      drawCenteredText(page, "HORÁRIO", tableX, tableTop, timeColumnWidth, headerHeight, bold, 9.5, rgb(0.12, 0.18, 0.15));
 
       const columnWidth = (tableWidth - timeColumnWidth) / Math.max(dateChunk.length, 1);
       dateChunk.forEach((date, index) => {
@@ -669,7 +669,7 @@ function drawScriptDayHeader(page: PDFPage, date: string, y: number, bold: PDFFo
 }
 
 function drawCompactListHeader(page: PDFPage, y: number, bold: PDFFont) {
-  const headers = ["Data", "Horario", "Atividade", "BNCC"];
+  const headers = ["Data", "Horário", "Atividade", "BNCC"];
   const widths = [84, 58, 280, 88];
   let x = margin;
 
@@ -707,7 +707,7 @@ function drawCenteredText(
   const textWidth = font.widthOfTextAtSize(value, size);
   page.drawText(value, {
     x: x + Math.max((width - textWidth) / 2, 2),
-    y: y + (height - size) / 2 + 1,
+    y: y + height / 2 - size * 0.32,
     size,
     font,
     color

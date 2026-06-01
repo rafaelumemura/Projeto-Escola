@@ -21,7 +21,7 @@ type PlanItem = Database["public"]["Tables"]["weekly_plan_items"]["Row"] & {
 };
 
 const weekdays = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
-const monthNames = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+const calendarMonthNames = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
 const defaultColor = "#2f7d58";
 const manualActivityTypes = ["Individual", "Dupla", "Trio", "Sala Toda"] as const;
 
@@ -577,8 +577,8 @@ export default function MonthlyPlanningPage() {
                 <input className="field" value={pdfTitle} onChange={(event) => setPdfTitle(event.target.value)} placeholder="Ex.: Semana da Natureza" />
               </label>
               <div className="grid gap-2 sm:grid-cols-2">
-                <DateSelectField label="Data inicial" value={pdfStartDate} onChange={setPdfStartDate} />
-                <DateSelectField label="Data final" value={pdfEndDate} onChange={setPdfEndDate} />
+                <CalendarDateField label="Data inicial" value={pdfStartDate} onChange={setPdfStartDate} />
+                <CalendarDateField label="Data final" value={pdfEndDate} onChange={setPdfEndDate} align="right" />
               </div>
             </div>
 
@@ -650,14 +650,16 @@ function ManualInput({
   );
 }
 
-function DateSelectField({
+function CalendarDateField({
   label,
   value,
-  onChange
+  onChange,
+  align = "left"
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
+  align?: "left" | "right";
 }) {
   const currentYear = new Date().getFullYear();
   const parts = parseDateParts(value) || {
@@ -665,43 +667,106 @@ function DateSelectField({
     month: new Date().getMonth() + 1,
     day: new Date().getDate()
   };
-  const years = Array.from({ length: 10 }, (_, index) => currentYear - 2 + index);
-  const daysInSelectedMonth = daysInMonth(parts.year, parts.month);
+  const selectedDate = new Date(parts.year, parts.month - 1, parts.day);
+  const [open, setOpen] = useState(false);
+  const [viewDate, setViewDate] = useState(() => monthStart(selectedDate));
+  const years = Array.from({ length: 15 }, (_, index) => viewDate.getFullYear() - 7 + index);
+  const viewDays = buildCalendarDays(viewDate);
+  const selectedValue = formatDate(selectedDate);
+  const todayValue = formatDate(new Date());
 
-  function update(next: Partial<typeof parts>) {
-    const nextYear = next.year ?? parts.year;
-    const nextMonth = next.month ?? parts.month;
-    const nextDay = Math.min(next.day ?? parts.day, daysInMonth(nextYear, nextMonth));
-    onChange(`${nextYear}-${pad(nextMonth)}-${pad(nextDay)}`);
+  useEffect(() => {
+    const nextParts = parseDateParts(selectedValue);
+    if (!open && nextParts) {
+      setViewDate(monthStart(new Date(nextParts.year, nextParts.month - 1, nextParts.day)));
+    }
+  }, [open, selectedValue]);
+
+  function selectDate(nextValue: string) {
+    onChange(nextValue);
+    setOpen(false);
+  }
+
+  function updateMonth(monthIndex: number) {
+    setViewDate(new Date(viewDate.getFullYear(), monthIndex, 1));
+  }
+
+  function updateYear(year: number) {
+    setViewDate(new Date(year, viewDate.getMonth(), 1));
   }
 
   return (
-    <label className="block">
+    <div className="relative block">
       <span className="label mb-2 block">{label}</span>
-      <div className="grid grid-cols-[0.75fr_1.2fr_0.95fr] gap-2">
-        <select className="field px-2" value={parts.day} onChange={(event) => update({ day: Number(event.target.value) })} required aria-label={`${label}: dia`}>
-          {Array.from({ length: daysInSelectedMonth }, (_, index) => index + 1).map((day) => (
-            <option key={day} value={day}>
-              {pad(day)}
-            </option>
-          ))}
-        </select>
-        <select className="field px-2" value={parts.month} onChange={(event) => update({ month: Number(event.target.value) })} required aria-label={`${label}: mês`}>
-          {monthNames.map((month, index) => (
-            <option key={month} value={index + 1}>
-              {month}
-            </option>
-          ))}
-        </select>
-        <select className="field px-2" value={parts.year} onChange={(event) => update({ year: Number(event.target.value) })} required aria-label={`${label}: ano`}>
-          {years.map((year) => (
-            <option key={year} value={year}>
-              {year}
-            </option>
-          ))}
-        </select>
-      </div>
-    </label>
+      <button type="button" onClick={() => setOpen((current) => !current)} className="field flex w-full items-center justify-between text-left" aria-expanded={open}>
+        <span>{formatDatePickerValue(value)}</span>
+        <ChevronRight size={16} className={`text-ink/45 transition ${open ? "rotate-90" : ""}`} />
+      </button>
+
+      {open ? (
+        <div className={`absolute top-full z-[70] mt-2 w-[min(20rem,calc(100vw-3rem))] rounded-lg border border-ink/10 bg-white p-3 shadow-soft ${align === "right" ? "right-0" : "left-0"}`}>
+          <div className="mb-3 flex items-center gap-2">
+            <button type="button" onClick={() => setViewDate(addMonths(viewDate, -1))} className="grid h-9 w-9 shrink-0 place-items-center rounded-md border border-ink/10 text-ink/65 hover:border-leaf/40 hover:text-leaf" title="Mês anterior">
+              <ChevronLeft size={16} />
+            </button>
+            <select className="field h-9 px-2 py-0 text-sm" value={viewDate.getMonth()} onChange={(event) => updateMonth(Number(event.target.value))} aria-label={`${label}: mês`}>
+              {calendarMonthNames.map((month, index) => (
+                <option key={month} value={index}>
+                  {month}
+                </option>
+              ))}
+            </select>
+            <select className="field h-9 w-24 px-2 py-0 text-sm" value={viewDate.getFullYear()} onChange={(event) => updateYear(Number(event.target.value))} aria-label={`${label}: ano`}>
+              {years.map((year) => (
+                <option key={year} value={year}>
+                  {year}
+                </option>
+              ))}
+            </select>
+            <button type="button" onClick={() => setViewDate(addMonths(viewDate, 1))} className="grid h-9 w-9 shrink-0 place-items-center rounded-md border border-ink/10 text-ink/65 hover:border-leaf/40 hover:text-leaf" title="Próximo mês">
+              <ChevronRight size={16} />
+            </button>
+          </div>
+
+          <div className="grid grid-cols-7 gap-1 text-center">
+            {weekdays.map((day) => (
+              <span key={day} className="py-1 text-[0.68rem] font-bold uppercase text-ink/45">
+                {day}
+              </span>
+            ))}
+            {viewDays.map((day, index) =>
+              day ? (
+                <button
+                  key={day}
+                  type="button"
+                  onClick={() => selectDate(day)}
+                  className={`grid h-9 place-items-center rounded-md text-sm font-bold transition ${
+                    day === selectedValue
+                      ? "bg-leaf text-white"
+                      : day === todayValue
+                        ? "bg-mint text-leaf hover:bg-leaf hover:text-white"
+                        : "text-ink/75 hover:bg-mint hover:text-leaf"
+                  }`}
+                >
+                  {Number(day.slice(8, 10))}
+                </button>
+              ) : (
+                <span key={`empty-${index}`} className="h-9" />
+              )
+            )}
+          </div>
+
+          <div className="mt-3 flex justify-between gap-2 border-t border-ink/10 pt-3">
+            <button type="button" onClick={() => selectDate(formatDate(new Date()))} className="text-sm font-bold text-leaf underline underline-offset-4">
+              Hoje
+            </button>
+            <button type="button" onClick={() => setOpen(false)} className="text-sm font-bold text-ink/55 hover:text-ink">
+              Fechar
+            </button>
+          </div>
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -788,10 +853,6 @@ function monthEnd(date: Date) {
   return new Date(date.getFullYear(), date.getMonth() + 1, 0);
 }
 
-function daysInMonth(year: number, month: number) {
-  return new Date(year, month, 0).getDate();
-}
-
 function addMonths(date: Date, amount: number) {
   return new Date(date.getFullYear(), date.getMonth() + amount, 1);
 }
@@ -823,6 +884,12 @@ function formatDate(date: Date) {
 function formatDisplayDate(value: string) {
   const [year, month, day] = value.split("-").map(Number);
   return new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "long", year: "numeric" }).format(new Date(year, month - 1, day));
+}
+
+function formatDatePickerValue(value: string) {
+  const [year, month, day] = value.split("-").map(Number);
+  if (!year || !month || !day) return "Selecionar data";
+  return new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "short", year: "numeric" }).format(new Date(year, month - 1, day));
 }
 
 function weekdayLabel(value: string) {

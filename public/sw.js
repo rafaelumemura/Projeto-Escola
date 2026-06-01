@@ -1,5 +1,5 @@
-const CACHE_NAME = "projeto-escola-v1";
-const STATIC_ASSETS = ["/", "/dashboard", "/manifest.webmanifest", "/icon.svg"];
+const CACHE_NAME = "projeto-escola-v2";
+const STATIC_ASSETS = ["/", "/dashboard", "/manifest.webmanifest", "/favicon.png"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(

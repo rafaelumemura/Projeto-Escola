@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import { Camera, LogOut, Mail, Save, UserRound } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ProtectedPage } from "@/components/layout/ProtectedPage";
 import { useAuth } from "@/components/auth/AuthProvider";
@@ -189,6 +190,9 @@ export default function ProfilePage() {
           <div className="grid gap-3">
             <Info label="E-mail" value={profile?.email || user?.email || "-"} />
             <Info label="Plano atual" value={usage?.plan_name || planName(profile?.plan)} />
+            <Link href="/planos" className="inline-flex w-fit text-sm font-bold text-leaf underline underline-offset-4">
+              Upgrade
+            </Link>
             <Info label="Uso do ciclo" value={`${usage?.generated_count || 0}/${usage?.activity_limit || 0} atividades geradas`} />
             <Info label="Vencimento" value={usage?.current_period_end ? new Date(usage.current_period_end).toLocaleDateString("pt-BR") : "-"} />
             <Info label="Acesso" value={profile?.is_admin ? "Admin" : "Usuário"} />
