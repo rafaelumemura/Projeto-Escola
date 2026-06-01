@@ -60,6 +60,33 @@ function normalizeGeneratedActivity(raw: unknown, input: ActivityGenerationInput
   });
 }
 
+function isPrincipleBasedEducation(methodology: string) {
+  return methodology
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .includes("educacao por principios");
+}
+
+function principleBasedEducationRules(methodology: string) {
+  if (!isPrincipleBasedEducation(methodology)) return "";
+
+  return `
+Regras obrigatorias para Educacao por principios:
+- Siga estritamente estes 7 principios. Nao invente outros principios e nao divague fora deles.
+- Soberania: Deus e a autoridade maxima sobre toda a criacao. Na atividade, desenvolva respeito a autoridade, ordem, proposito e responsabilidade diante de Deus.
+- Individualidade: cada pessoa foi criada de forma unica. Valorize talentos, dons, ritmos de aprendizagem e o potencial especifico de cada crianca.
+- Carater: o conhecimento deve produzir transformacao interior. Inclua honestidade, perseveranca, responsabilidade, integridade ou autocontrole quando fizer sentido.
+- Mordomia (Administracao): a crianca deve aprender a administrar bem tempo, recursos naturais, talentos, conhecimento e aquilo que recebeu.
+- Semeadura e Colheita: toda acao gera consequencias. Mostre causa e efeito, responsabilidade pelas escolhas e disciplina.
+- Autogoverno: desenvolva disciplina pessoal, controle emocional, organizacao e tomada de decisoes sem depender de controle externo constante.
+- Alianca (Uniao): valorize familia, comunidade, cooperacao, trabalho em equipe, servico ao proximo e relacionamentos saudaveis.
+- A atividade deve mencionar explicitamente quais desses principios serao trabalhados.
+- O objetivo pedagogico, a descricao, o passo a passo, as dicas e a avaliacao devem estar alinhados aos principios escolhidos.
+- Mantenha linguagem pratica, respeitosa e aplicavel para professores da educacao infantil e fundamental 1.
+`;
+}
+
 function buildPrompt(input: ActivityGenerationInput) {
   return `
 Crie uma atividade pedagogica para educacao infantil ou fundamental 1.
@@ -78,6 +105,7 @@ Regras:
 - escreva em portugues do Brasil.
 - seja pratico, ludico, seguro e adequado para criancas de 0 a 10 anos.
 - inclua BNCC quando aplicavel; se nao houver codigo claro, use null.
+${principleBasedEducationRules(input.methodology)}
 - o JSON deve usar exatamente estas chaves:
 {
   "title": "string",

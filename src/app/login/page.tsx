@@ -2,7 +2,7 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { GraduationCap, KeyRound, LogIn, Mail } from "lucide-react";
+import { KeyRound, LogIn, Mail } from "lucide-react";
 import { useAuth } from "@/components/auth/AuthProvider";
 
 export default function LoginPage() {
@@ -39,14 +39,7 @@ export default function LoginPage() {
     <main className="grid min-h-screen bg-paper px-4 py-8 lg:grid-cols-[1fr_460px]">
       <section className="hidden items-center justify-center border-r border-ink/10 px-10 lg:flex">
         <div className="max-w-2xl">
-          <div className="mb-6 flex items-center gap-3">
-            <span className="grid h-12 w-12 place-items-center rounded-lg bg-leaf text-white">
-              <GraduationCap size={26} />
-            </span>
-            <div>
-              <h1 className="text-3xl font-bold">Projeto Escola</h1>
-            </div>
-          </div>
+          <img src="/logo-horizontal.png" alt="Projeto Escola" className="mb-8 h-28 max-w-full object-contain object-left" />
           <p className="text-lg leading-8 text-ink/70">
             Gere, salve e organize atividades pedagógicas com IA para educação infantil e fundamental 1.
           </p>
@@ -63,10 +56,7 @@ export default function LoginPage() {
       <section className="flex items-center justify-center">
         <div className="panel w-full max-w-md p-6">
           <div className="mb-6 lg:hidden">
-            <div className="mb-3 flex items-center gap-3">
-              <GraduationCap className="text-leaf" size={28} />
-              <h1 className="text-2xl font-bold">Projeto Escola</h1>
-            </div>
+            <img src="/logo-horizontal.png" alt="Projeto Escola" className="mb-4 h-16 max-w-full object-contain object-left" />
             <p className="text-sm text-ink/65">Entre para criar atividades pedagógicas com IA.</p>
           </div>
 

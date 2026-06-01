@@ -7,7 +7,6 @@ import {
   CalendarDays,
   Crown,
   FolderKanban,
-  GraduationCap,
   LayoutDashboard,
   LogOut,
   Sparkles,
@@ -45,14 +44,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen">
       <aside className="fixed inset-y-0 left-0 hidden w-64 flex-col border-r border-ink/10 bg-white/90 px-4 py-5 lg:flex">
-        <Link href="/dashboard" className="flex items-center gap-3 px-2">
-          <span className="grid h-10 w-10 place-items-center rounded-lg bg-leaf text-white">
-            <GraduationCap size={22} />
-          </span>
-          <span>
-            <span className="block text-sm font-bold text-ink">Projeto Escola</span>
-            <span className="block text-xs text-ink/55">Atividades com IA</span>
-          </span>
+        <Link href="/dashboard" className="flex items-center px-2">
+          <img src="/logo-horizontal.png" alt="Projeto Escola" className="h-14 max-w-[205px] object-contain" />
         </Link>
 
         <nav className="mt-8 space-y-1">
@@ -94,9 +87,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <div className="lg:pl-64">
         <header className="sticky top-0 z-20 border-b border-ink/10 bg-paper/95 px-4 py-3 backdrop-blur lg:hidden">
           <div className="flex items-center justify-between">
-            <Link href="/dashboard" className="flex items-center gap-2 font-bold">
-              <GraduationCap size={22} className="text-leaf" />
-              Projeto Escola
+            <Link href="/dashboard" className="flex min-w-0 items-center">
+              <img src="/logo-horizontal.png" alt="Projeto Escola" className="h-10 max-w-[190px] object-contain" />
             </Link>
             <div className="flex items-center gap-2">
               <Link href="/perfil" className="grid h-10 w-10 place-items-center overflow-hidden rounded-full border border-ink/10 bg-white">

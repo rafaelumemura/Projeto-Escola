@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const methodologies = ["Tradicional", "Construtivista", "Montessori", "Waldorf", "Outra"] as const;
+export const methodologies = ["Tradicional", "Construtivista", "Montessori", "Waldorf", "Educação por princípios", "Outra"] as const;
 export const activityTypes = ["Individual", "Duplas", "Trios", "Sala toda"] as const;
 export const environments = ["Sala de aula", "Pátio", "Área externa", "Casa", "Outro"] as const;
 
