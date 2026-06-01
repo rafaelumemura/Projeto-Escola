@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { fail, readJson } from "@/lib/api/http";
-import { analyzePrintableMaterialWithClaude, printableMaterialPlanSchema } from "@/lib/activities/printable-material";
+import { getSavedPrintableMaterialPlan, printableMaterialPlanSchema } from "@/lib/activities/printable-material";
 import { buildActivityMaterialPdf } from "@/lib/pdf/builders";
 import { getAuthenticatedUser } from "@/lib/supabase/server";
 
@@ -24,7 +24,11 @@ export async function POST(request: Request) {
 
     if (error) throw error;
 
-    const materialPlan = payload.material_plan || (await analyzePrintableMaterialWithClaude(activity));
+    const materialPlan = payload.material_plan || getSavedPrintableMaterialPlan(activity.raw_ai_response);
+
+    if (!materialPlan) {
+      throw Object.assign(new Error("Esta atividade ainda não possui material imprimível salvo."), { status: 422 });
+    }
 
     if (!materialPlan.has_material) {
       throw Object.assign(new Error(materialPlan.reason || "Esta atividade nao possui material imprimivel necessario."), { status: 422 });

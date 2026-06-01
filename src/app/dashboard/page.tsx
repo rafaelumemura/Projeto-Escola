@@ -29,8 +29,9 @@ export default function DashboardPage() {
       apiFetch<{ weekly_plans: WeeklyPlan[] }>(supabase, "/api/weekly-plans")
     ])
       .then(async ([activityData, collectionData, planData]) => {
-        setActivityCount(activityData.activities.length);
-        setActivities(activityData.activities.slice(0, 4));
+        const generatedActivities = activityData.activities.filter(isGeneratedActivity);
+        setActivityCount(generatedActivities.length);
+        setActivities(generatedActivities.slice(0, 4));
         setCollections(collectionData.collections);
         const details = await Promise.all(
           planData.weekly_plans.map((plan) =>
@@ -53,8 +54,8 @@ export default function DashboardPage() {
         </Link>
       }
     >
-      <div className="grid gap-4 md:grid-cols-2">
-        <SummaryCard icon={<BookOpen size={22} />} label="Atividades salvas" value={activityCount} href="/atividades" />
+      <div className="grid grid-cols-2 gap-3 sm:gap-4">
+        <SummaryCard icon={<BookOpen size={22} />} label="Atividades geradas" value={activityCount} href="/atividades" />
         <SummaryCard icon={<FolderKanban size={22} />} label="Coleções" value={collections.length} href="/colecoes" />
       </div>
 
@@ -137,10 +138,12 @@ function SummaryCard({
   href: string;
 }) {
   return (
-    <Link href={href} className="panel block p-5 transition hover:-translate-y-0.5 hover:border-leaf/40">
-      <span className="grid h-11 w-11 place-items-center rounded-lg bg-mint text-leaf">{icon}</span>
-      <p className="mt-5 text-3xl font-bold">{value}</p>
-      <p className="mt-1 text-sm font-semibold text-ink/60">{label}</p>
+    <Link href={href} className="panel block p-4 text-center transition hover:-translate-y-0.5 hover:border-leaf/40 sm:p-5">
+      <span className="mx-auto inline-flex items-center justify-center gap-2 rounded-lg bg-mint px-3 py-2 text-leaf">
+        {icon}
+        <span className="text-3xl font-bold leading-none text-ink">{value}</span>
+      </span>
+      <p className="mt-3 text-center text-sm font-semibold text-ink/60">{label}</p>
     </Link>
   );
 }
@@ -175,4 +178,10 @@ function formatPlannedDateTime(item: PlannedItem) {
     hour: "2-digit",
     minute: "2-digit"
   }).format(date);
+}
+
+function isGeneratedActivity(activity: Activity) {
+  const raw = activity.raw_ai_response;
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return true;
+  return (raw as { manual?: unknown }).manual !== true;
 }

@@ -1,3 +1,5 @@
+import { readFile } from "fs/promises";
+import { join } from "path";
 import { PDFDocument, PDFFont, PDFPage, RGB, StandardFonts, rgb } from "pdf-lib";
 import type { PrintableMaterialItem, PrintableMaterialPlan } from "@/lib/activities/printable-material";
 import { normalizePlanningPdfSkill, type PlanningPdfSkillKey } from "@/lib/planning/pdf-skills";
@@ -381,6 +383,7 @@ function hexToRgb(hex: string, fallback: RGB) {
 export async function buildWeeklyPlanPdf(plan: PdfWeeklyPlan, items: PdfWeeklyPlanItem[], skill?: PlanningPdfSkillKey) {
   const selectedSkill = normalizePlanningPdfSkill(skill);
 
+  if (selectedSkill === "layout_fundo_1") return buildFramedWeeklyPlanPdf(plan, items);
   if (selectedSkill === "roteiro") return buildDailyScriptWeeklyPlanPdf(plan, items);
   if (selectedSkill === "lista") return buildCompactListWeeklyPlanPdf(plan, items);
 
@@ -480,6 +483,111 @@ async function buildGridWeeklyPlanPdf(plan: PdfWeeklyPlan, items: PdfWeeklyPlanI
 
           drawCell(page, x, y, columnWidth, rowHeight, rgb(1, 1, 1));
           drawWrappedCellText(page, text, x + 7, y + rowHeight - 16, columnWidth - 14, regular);
+        });
+      });
+    }
+  }
+
+  return pdf.save();
+}
+
+async function buildFramedWeeklyPlanPdf(plan: PdfWeeklyPlan, items: PdfWeeklyPlanItem[]) {
+  const pdf = await PDFDocument.create();
+  const regular = await pdf.embedFont(StandardFonts.Helvetica);
+  const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
+  const background = await embedPlanningSkinImage(pdf);
+  const title = clean(plan.title) || "Planejamento";
+  const skinWidth = 960;
+  const skinHeight = 720;
+  const tableX = 108;
+  const tableTop = 536;
+  const tableWidth = 744;
+  const timeColumnWidth = 78;
+  const headerHeight = 34;
+  const rowHeight = 54;
+  const rowsPerPage = 6;
+  const dates = dateRange(plan.start_date, plan.end_date, items);
+  const times = uniqueTimes(items);
+  const dateChunks = chunk(dates, 7);
+  const timeChunks = chunk(times, rowsPerPage);
+
+  for (const dateChunk of dateChunks.length ? dateChunks : [[]]) {
+    for (const timeChunk of timeChunks.length ? timeChunks : [["--:--"]]) {
+      const page = pdf.addPage([skinWidth, skinHeight]);
+      if (background) {
+        page.drawImage(background, { x: 0, y: 0, width: skinWidth, height: skinHeight });
+      }
+
+      page.drawText(title, {
+        x: tableX,
+        y: 616,
+        size: 22,
+        font: bold,
+        color: rgb(0.12, 0.18, 0.15)
+      });
+      page.drawText(`Periodo: ${formatDateLabel(plan.start_date)} a ${formatDateLabel(plan.end_date)}`, {
+        x: tableX,
+        y: 592,
+        size: 11,
+        font: regular,
+        color: rgb(0.28, 0.31, 0.29)
+      });
+
+      drawCell(page, tableX, tableTop, timeColumnWidth, headerHeight, rgb(0.9, 0.96, 0.92));
+      page.drawText("Horario", {
+        x: tableX + 10,
+        y: tableTop + 13,
+        size: 9.5,
+        font: bold,
+        color: rgb(0.12, 0.18, 0.15)
+      });
+
+      const columnWidth = (tableWidth - timeColumnWidth) / Math.max(dateChunk.length, 1);
+      dateChunk.forEach((date, index) => {
+        const x = tableX + timeColumnWidth + index * columnWidth;
+        drawCell(page, x, tableTop, columnWidth, headerHeight, rgb(0.9, 0.96, 0.92));
+        const [day, weekday] = dateHeader(date);
+        page.drawText(day, {
+          x: x + 7,
+          y: tableTop + 19,
+          size: 8.5,
+          font: bold,
+          color: rgb(0.12, 0.18, 0.15)
+        });
+        page.drawText(weekday, {
+          x: x + 7,
+          y: tableTop + 7,
+          size: 7.5,
+          font: regular,
+          color: rgb(0.28, 0.31, 0.29)
+        });
+      });
+
+      timeChunk.forEach((time, rowIndex) => {
+        const y = tableTop - headerHeight - rowIndex * rowHeight;
+        drawCell(page, tableX, y, timeColumnWidth, rowHeight, rgb(1, 1, 1));
+        page.drawText(time, {
+          x: tableX + 10,
+          y: y + rowHeight - 21,
+          size: 8.5,
+          font: bold,
+          color: rgb(0.18, 0.49, 0.35)
+        });
+
+        dateChunk.forEach((date, dateIndex) => {
+          const x = tableX + timeColumnWidth + dateIndex * columnWidth;
+          const dayItems = itemsForCell(items, date, time);
+          const text = dayItems
+            .map((item) => {
+              const activity = item.activities || item.activity;
+              return [activity?.title || "Atividade sem titulo", activity?.bncc_code ? `BNCC ${activity.bncc_code}` : ""]
+                .filter(Boolean)
+                .join(" - ");
+            })
+            .join("\n");
+
+          drawCell(page, x, y, columnWidth, rowHeight, rgb(1, 1, 1));
+          drawWrappedCellText(page, text, x + 5, y + rowHeight - 14, columnWidth - 10, regular, 4);
         });
       });
     }
@@ -803,4 +911,13 @@ function dateHeader(value: string) {
 
 function formatTime(value?: string | null) {
   return value ? value.slice(0, 5) : "--:--";
+}
+
+async function embedPlanningSkinImage(pdf: PDFDocument) {
+  try {
+    const bytes = await readFile(join(process.cwd(), "public", "planning-skin-layout-fundo-1.png"));
+    return await pdf.embedPng(bytes);
+  } catch {
+    return null;
+  }
 }

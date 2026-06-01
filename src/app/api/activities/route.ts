@@ -1,7 +1,11 @@
 import { created, fail, ok, readJson } from "@/lib/api/http";
+import { analyzePrintableMaterialWithClaude, attachPrintableMaterialPlan, type PrintableMaterialPlan } from "@/lib/activities/printable-material";
 import { activityFilterSchema, activitySaveSchema } from "@/lib/activities/types";
 import { assertCanGenerateActivity, incrementActivityGeneration } from "@/lib/billing/usage";
+import type { Json } from "@/lib/database.types";
 import { getAuthenticatedUser } from "@/lib/supabase/server";
+
+export const runtime = "nodejs";
 
 export async function GET(request: Request) {
   try {
@@ -81,12 +85,17 @@ export async function POST(request: Request) {
       await assertCanGenerateActivity(user.id);
     }
 
+    const printableMaterial = manualActivity ? null : await analyzePrintableMaterialForSave(payload);
+    const rawAiResponse = printableMaterial
+      ? attachPrintableMaterialPlan(payload.raw_ai_response ?? payload, printableMaterial)
+      : payload.raw_ai_response ?? payload;
+
     const { data, error } = await supabase
       .from("activities")
       .insert({
         ...payload,
         user_id: user.id,
-        raw_ai_response: payload.raw_ai_response ?? payload
+        raw_ai_response: rawAiResponse as Json
       })
       .select("*")
       .single();
@@ -108,4 +117,19 @@ function isManualActivity(rawAiResponse: unknown) {
       "manual" in rawAiResponse &&
       (rawAiResponse as { manual?: unknown }).manual === true
   );
+}
+
+async function analyzePrintableMaterialForSave(activity: Parameters<typeof analyzePrintableMaterialWithClaude>[0]): Promise<PrintableMaterialPlan> {
+  try {
+    return await analyzePrintableMaterialWithClaude(activity);
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : "Não foi possível analisar o material imprimível.";
+    return {
+      has_material: false,
+      reason,
+      title: null,
+      teacher_note: null,
+      pages: []
+    };
+  }
 }

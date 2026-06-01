@@ -86,7 +86,7 @@ export type Database = {
           avatar_url: string | null;
           is_admin: boolean;
           plan: "free" | "basic" | "complete" | "pro";
-          planning_pdf_skill: "grade" | "roteiro" | "lista";
+          planning_pdf_skill: "layout_fundo_1" | "grade" | "roteiro" | "lista";
           password_must_change: boolean;
           created_at: string;
         };
@@ -97,7 +97,7 @@ export type Database = {
           avatar_url?: string | null;
           is_admin?: boolean;
           plan?: "free" | "basic" | "complete" | "pro";
-          planning_pdf_skill?: "grade" | "roteiro" | "lista";
+          planning_pdf_skill?: "layout_fundo_1" | "grade" | "roteiro" | "lista";
           password_must_change?: boolean;
           created_at?: string;
         };
@@ -107,7 +107,7 @@ export type Database = {
           avatar_url?: string | null;
           is_admin?: boolean;
           plan?: "free" | "basic" | "complete" | "pro";
-          planning_pdf_skill?: "grade" | "roteiro" | "lista";
+          planning_pdf_skill?: "layout_fundo_1" | "grade" | "roteiro" | "lista";
           password_must_change?: boolean;
         };
       };

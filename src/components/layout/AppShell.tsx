@@ -23,11 +23,11 @@ const nav = [
 ];
 
 const mobileNav = [
+  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/gerar", label: "Gerar", icon: Sparkles },
   { href: "/atividades", label: "Atividades", icon: BookOpen },
   { href: "/colecoes", label: "Coleções", icon: FolderKanban },
-  { href: "/planejamento", label: "Planejar", icon: CalendarDays },
-  { href: "/perfil", label: "Perfil", icon: UserRound }
+  { href: "/planejamento", label: "Planejar", icon: CalendarDays }
 ];
 
 export function AppShell({ children }: { children: React.ReactNode }) {

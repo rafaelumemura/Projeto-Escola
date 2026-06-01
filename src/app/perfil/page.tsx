@@ -304,7 +304,7 @@ export default function ProfilePage() {
               </p>
             </div>
 
-            <div className="grid gap-3">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
               {planningPdfSkills.map((skill) => {
                 const active = planningSkill === skill.key;
                 return (
@@ -312,15 +312,19 @@ export default function ProfilePage() {
                     key={skill.key}
                     type="button"
                     onClick={() => selectPlanningSkill(skill.key)}
-                    className={`rounded-lg border bg-white p-4 text-left transition ${
+                    className={`overflow-hidden rounded-lg border bg-white p-2 text-left transition ${
                       active ? "border-leaf ring-2 ring-leaf/15" : "border-ink/10 hover:border-leaf/40"
                     }`}
+                    title={skill.name}
+                    aria-label={`Selecionar skin ${skill.name}`}
                   >
-                    <span className="mb-3 grid h-16 w-full place-items-center rounded-md border border-ink/10 bg-paper text-xs font-bold uppercase tracking-wide text-ink/45">
-                      Prévia
-                    </span>
-                    <span className="text-sm font-bold text-ink">{skill.name}</span>
-                    <span className="mt-1 block text-sm leading-6 text-ink/60">{skill.description}</span>
+                    {skill.previewImage ? (
+                      <img src={skill.previewImage} alt={skill.name} className="aspect-[4/3] w-full rounded-md object-cover" />
+                    ) : (
+                      <span className="grid aspect-[4/3] w-full place-items-center rounded-md border border-ink/10 bg-paper">
+                        <span className="h-14 w-20 rounded border border-leaf/30 bg-white shadow-inner" />
+                      </span>
+                    )}
                   </button>
                 );
               })}

@@ -16,12 +16,6 @@ type ActivityWithCollections = Activity & {
   primary_collection_id?: string | null;
 };
 type Collection = Database["public"]["Tables"]["collections"]["Row"];
-type MaterialState = {
-  loading: boolean;
-  material?: PrintableMaterialPlan | null;
-  error?: string | null;
-};
-
 type EditState = Partial<Activity> & {
   steps_text?: string;
   teacher_tips_text?: string;
@@ -41,6 +35,16 @@ function textArray(value: string | undefined) {
     .filter(Boolean);
 }
 
+function getSavedPrintableMaterialPlan(rawAiResponse: Json | null): PrintableMaterialPlan | null {
+  if (!rawAiResponse || typeof rawAiResponse !== "object" || Array.isArray(rawAiResponse)) return null;
+  const material = (rawAiResponse as { printable_material?: unknown }).printable_material;
+
+  if (!material || typeof material !== "object" || Array.isArray(material)) return null;
+  if (typeof (material as { has_material?: unknown }).has_material !== "boolean") return null;
+
+  return material as PrintableMaterialPlan;
+}
+
 export default function ActivitiesPage() {
   const { supabase } = useAuth();
   const [activities, setActivities] = useState<ActivityWithCollections[]>([]);
@@ -50,7 +54,6 @@ export default function ActivitiesPage() {
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
-  const [materialByActivityId, setMaterialByActivityId] = useState<Record<string, MaterialState>>({});
   const [page, setPage] = useState(1);
   const [filters, setFilters] = useState({
     age_range: "",
@@ -123,41 +126,6 @@ export default function ActivitiesPage() {
     setActionCollectionId(selected?.primary_collection_id || selected?.collection_ids?.[0] || "");
     setPendingDeleteId(null);
   }, [selected?.id, selected?.primary_collection_id, selected?.collection_ids]);
-
-  useEffect(() => {
-    if (!selected?.id || materialByActivityId[selected.id]) return;
-
-    let cancelled = false;
-    const activityId = selected.id;
-    setMaterialByActivityId((current) => ({
-      ...current,
-      [activityId]: { loading: true }
-    }));
-
-    apiFetch<{ material: PrintableMaterialPlan }>(supabase, `/api/activities/${activityId}/printable-material`, { method: "POST" })
-      .then((data) => {
-        if (cancelled) return;
-        setMaterialByActivityId((current) => ({
-          ...current,
-          [activityId]: { loading: false, material: data.material }
-        }));
-      })
-      .catch((error) => {
-        if (cancelled) return;
-        setMaterialByActivityId((current) => ({
-          ...current,
-          [activityId]: {
-            loading: false,
-            material: null,
-            error: error instanceof Error ? error.message : "Não foi possível analisar o material imprimível."
-          }
-        }));
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [materialByActivityId, selected?.id, supabase]);
 
   function startEdit(activity: ActivityWithCollections) {
     setSelected(activity);
@@ -272,16 +240,16 @@ export default function ActivitiesPage() {
   }
 
   async function downloadPrintableMaterial(activity: ActivityWithCollections) {
-    const materialState = materialByActivityId[activity.id];
-    if (!materialState?.material?.has_material) {
-      setMessage(materialState?.material?.reason || materialState?.error || "Esta atividade não precisa de material imprimível.");
+    const material = getSavedPrintableMaterialPlan(activity.raw_ai_response);
+    if (!material?.has_material) {
+      setMessage(material?.reason || "Esta atividade ainda não possui material imprimível salvo.");
       return;
     }
 
     await downloadPdf(
       supabase,
       "/api/pdf/activity-material",
-      { activity_id: activity.id, material_plan: materialState.material },
+      { activity_id: activity.id, material_plan: material },
       materialPdfFileName(activity.title)
     );
   }
@@ -362,9 +330,9 @@ export default function ActivitiesPage() {
           {selected ? (
             <>
               {(() => {
-                const materialState = materialByActivityId[selected.id];
-                const materialReady = Boolean(materialState?.material?.has_material);
-                const materialReason = materialState?.material?.reason || materialState?.error || "";
+                const material = getSavedPrintableMaterialPlan(selected.raw_ai_response);
+                const materialReady = Boolean(material?.has_material);
+                const materialReason = material?.reason || "Esta atividade ainda não possui análise de material imprimível salva.";
 
                 return (
               <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
@@ -377,13 +345,13 @@ export default function ActivitiesPage() {
                   PDF
                 </button>
                 <button
-                  disabled={busy || materialState?.loading || !materialReady}
+                  disabled={busy || !materialReady}
                   onClick={() => downloadPrintableMaterial(selected)}
                   className="btn-secondary col-span-2 sm:col-span-1 disabled:cursor-not-allowed disabled:opacity-50"
-                  title={materialState?.loading ? "A IA está analisando se esta atividade precisa de material imprimível." : materialReason}
+                  title={materialReady ? "Baixar material imprimível desta atividade." : materialReason}
                 >
                   <Printer size={16} />
-                  {materialState?.loading ? "Analisando material..." : "Material imprimível"}
+                  Material imprimível
                 </button>
                 <button
                   disabled={busy}
@@ -399,15 +367,15 @@ export default function ActivitiesPage() {
                 );
               })()}
 
-              {selected && !materialByActivityId[selected.id]?.loading && materialByActivityId[selected.id]?.material?.has_material === false ? (
+              {selected && getSavedPrintableMaterialPlan(selected.raw_ai_response)?.has_material === false ? (
                 <p className="rounded-lg border border-ink/10 bg-white px-4 py-3 text-sm text-ink/65">
-                  {materialByActivityId[selected.id]?.material?.reason || "A IA avaliou que esta atividade não precisa de material imprimível."}
+                  {getSavedPrintableMaterialPlan(selected.raw_ai_response)?.reason || "A IA avaliou que esta atividade não precisa de material imprimível."}
                 </p>
               ) : null}
 
-              {selected && !materialByActivityId[selected.id]?.loading && materialByActivityId[selected.id]?.error ? (
-                <p className="rounded-lg border border-sun/30 bg-sun/10 px-4 py-3 text-sm text-ink/70">
-                  {materialByActivityId[selected.id]?.error}
+              {selected && !getSavedPrintableMaterialPlan(selected.raw_ai_response) ? (
+                <p className="rounded-lg border border-ink/10 bg-white px-4 py-3 text-sm text-ink/65">
+                  Esta atividade foi criada antes da análise automática de material imprimível. As novas atividades já salvam essa análise no momento da geração.
                 </p>
               ) : null}
 

@@ -1,5 +1,4 @@
 import { z } from "zod";
-import { getAnthropicModel, requireServerEnv } from "@/lib/env";
 
 type AnthropicTextBlock = {
   type: "text";
@@ -143,7 +142,30 @@ Se nao houver material:
 `;
 }
 
+export function getSavedPrintableMaterialPlan(rawAiResponse: unknown): PrintableMaterialPlan | null {
+  if (!rawAiResponse || typeof rawAiResponse !== "object" || Array.isArray(rawAiResponse)) return null;
+
+  const material = (rawAiResponse as { printable_material?: unknown }).printable_material;
+  const parsed = printableMaterialPlanSchema.safeParse(material);
+  return parsed.success ? parsed.data : null;
+}
+
+export function attachPrintableMaterialPlan(rawAiResponse: unknown, material: PrintableMaterialPlan) {
+  if (rawAiResponse && typeof rawAiResponse === "object" && !Array.isArray(rawAiResponse)) {
+    return {
+      ...rawAiResponse,
+      printable_material: material
+    };
+  }
+
+  return {
+    original_response: rawAiResponse ?? null,
+    printable_material: material
+  };
+}
+
 export async function analyzePrintableMaterialWithClaude(activity: ActivityForMaterial) {
+  const { getAnthropicModel, requireServerEnv } = await import("@/lib/env");
   const response = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
