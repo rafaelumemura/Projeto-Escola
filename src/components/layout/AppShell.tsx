@@ -1,14 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import {
   BookOpen,
   CalendarDays,
   Crown,
   FolderKanban,
   LayoutDashboard,
-  LogOut,
   Sparkles,
   UserRound
 } from "lucide-react";
@@ -33,22 +32,16 @@ const mobileNav = [
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const router = useRouter();
-  const { profile, signOut, usage } = useAuth();
-
-  async function handleSignOut() {
-    await signOut();
-    router.replace("/login");
-  }
+  const { profile, usage } = useAuth();
 
   return (
     <div className="min-h-screen">
       <aside className="fixed inset-y-0 left-0 hidden w-64 flex-col border-r border-ink/10 bg-white/90 px-4 py-5 lg:flex">
         <Link href="/dashboard" className="flex items-center px-2">
-          <img src="/logo-horizontal.png" alt="Projeto Escola" className="h-14 max-w-[205px] object-contain" />
+          <img src="/logo-horizontal.png" alt="Projeto Escola" className="h-24 max-w-[232px] object-contain" />
         </Link>
 
-        <nav className="mt-8 space-y-1">
+        <nav className="mt-6 space-y-1">
           {nav.map((item) => {
             const Icon = item.icon;
             const active = pathname === item.href;
@@ -77,10 +70,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <span className="block truncate text-xs text-ink/55">{profile?.email}</span>
             </span>
           </Link>
-          <button onClick={handleSignOut} className="mt-3 w-full btn-secondary">
-            <LogOut size={16} />
-            Sair
-          </button>
         </div>
       </aside>
 
@@ -88,23 +77,21 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <header className="sticky top-0 z-20 border-b border-ink/10 bg-paper/95 px-4 py-3 backdrop-blur lg:hidden">
           <div className="flex items-center justify-between">
             <Link href="/dashboard" className="flex min-w-0 items-center">
-              <img src="/logo-horizontal.png" alt="Projeto Escola" className="h-10 max-w-[190px] object-contain" />
+              <img src="/logo-horizontal.png" alt="Projeto Escola" className="h-16 max-w-[260px] object-contain" />
             </Link>
             <div className="flex items-center gap-2">
               <Link href="/perfil" className="grid h-10 w-10 place-items-center overflow-hidden rounded-full border border-ink/10 bg-white">
                 <Avatar src={profile?.avatar_url} name={profile?.name || profile?.email || "Perfil"} compact />
               </Link>
-              <button onClick={handleSignOut} className="btn-secondary px-3" title="Sair">
-                <LogOut size={16} />
-              </button>
             </div>
-          </div>
-          <div className="mt-3">
-            <UsageMeter usage={usage} compact />
           </div>
         </header>
 
-        <main className="mx-auto w-full max-w-7xl px-4 pb-28 pt-5 sm:px-6 lg:px-8 lg:py-6">{children}</main>
+        <main className="mx-auto w-full max-w-7xl px-4 pb-40 pt-5 sm:px-6 lg:px-8 lg:py-6">{children}</main>
+
+        <div className="fixed inset-x-3 bottom-[76px] z-40 lg:hidden">
+          <UsageMeter usage={usage} compact />
+        </div>
 
         <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t border-ink/10 bg-white/95 px-2 py-2 shadow-[0_-12px_35px_rgba(39,50,44,0.08)] backdrop-blur lg:hidden">
           {mobileNav.map((item) => {
@@ -136,6 +123,25 @@ function UsageMeter({ usage, compact = false }: { usage: BillingUsage | null; co
   const percent = limit > 0 ? Math.min(100, Math.round((generated / limit) * 100)) : 0;
   const shouldShowUpgrade = Boolean(usage && (usage.can_upgrade || !usage.can_generate));
   const actionLabel = usage?.can_upgrade ? "Fazer upgrade" : "Ver planos";
+
+  if (compact) {
+    return (
+      <div className="rounded-md border border-ink/10 bg-white/95 px-3 py-2 shadow-[0_-10px_24px_rgba(39,50,44,0.08)] backdrop-blur">
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="truncate text-[11px] font-bold leading-tight text-ink">{usage?.plan_name || "Sem plano"}</p>
+            <p className="truncate text-[11px] font-semibold leading-tight text-ink/60">
+              {generated}/{limit} atividades geradas
+            </p>
+          </div>
+          <span className="shrink-0 text-[11px] font-bold leading-none text-ink/70">{percent}%</span>
+        </div>
+        <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-paper" role="progressbar" aria-valuenow={percent} aria-valuemin={0} aria-valuemax={100}>
+          <span className="block h-full rounded-full bg-leaf transition-all" style={{ width: `${percent}%` }} />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="rounded-lg border border-ink/10 bg-paper p-3">
