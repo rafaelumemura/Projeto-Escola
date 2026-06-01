@@ -400,7 +400,7 @@ async function buildGridWeeklyPlanPdf(plan: PdfWeeklyPlan, items: PdfWeeklyPlanI
   const tableMargin = 30;
   const top = landscapeHeight - 34;
   const timeColumnWidth = 78;
-  const headerHeight = 42;
+  const headerHeight = 46;
   const rowHeight = 68;
   const rowsPerPage = 6;
   const dates = dateRange(plan.start_date, plan.end_date, items);
@@ -412,7 +412,7 @@ async function buildGridWeeklyPlanPdf(plan: PdfWeeklyPlan, items: PdfWeeklyPlanI
     for (const timeChunk of timeChunks.length ? timeChunks : [["--:--"]]) {
       const page = pdf.addPage([landscapeWidth, landscapeHeight]);
       const columnWidth = (landscapeWidth - tableMargin * 2 - timeColumnWidth) / Math.max(dateChunk.length, 1);
-      const tableTop = top - 54;
+      const tableTop = top - 64;
 
       page.drawText(title, {
         x: tableMargin,
@@ -444,15 +444,15 @@ async function buildGridWeeklyPlanPdf(plan: PdfWeeklyPlan, items: PdfWeeklyPlanI
         const [day, weekday] = dateHeader(date);
         page.drawText(day, {
           x: x + 8,
-          y: tableTop + 23,
-          size: 9,
+          y: tableTop + 19,
+          size: 8.5,
           font: bold,
           color: rgb(0.12, 0.18, 0.15)
         });
         page.drawText(weekday, {
           x: x + 8,
-          y: tableTop + 10,
-          size: 8,
+          y: tableTop + 7,
+          size: 7.5,
           font: regular,
           color: rgb(0.28, 0.31, 0.29)
         });
@@ -500,10 +500,10 @@ async function buildFramedWeeklyPlanPdf(plan: PdfWeeklyPlan, items: PdfWeeklyPla
   const skinWidth = 960;
   const skinHeight = 720;
   const tableX = 108;
-  const tableTop = 536;
+  const tableTop = 516;
   const tableWidth = 744;
   const timeColumnWidth = 78;
-  const headerHeight = 34;
+  const headerHeight = 40;
   const rowHeight = 54;
   const rowsPerPage = 6;
   const dates = dateRange(plan.start_date, plan.end_date, items);
@@ -549,14 +549,14 @@ async function buildFramedWeeklyPlanPdf(plan: PdfWeeklyPlan, items: PdfWeeklyPla
         const [day, weekday] = dateHeader(date);
         page.drawText(day, {
           x: x + 7,
-          y: tableTop + 19,
+          y: tableTop + 16,
           size: 8.5,
           font: bold,
           color: rgb(0.12, 0.18, 0.15)
         });
         page.drawText(weekday, {
           x: x + 7,
-          y: tableTop + 7,
+          y: tableTop + 5,
           size: 7.5,
           font: regular,
           color: rgb(0.28, 0.31, 0.29)

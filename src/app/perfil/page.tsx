@@ -16,12 +16,14 @@ export default function ProfilePage() {
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const [planningSkill, setPlanningSkill] = useState<PlanningPdfSkillKey>("grade");
   const [message, setMessage] = useState<string | null>(null);
+  const [skinMessage, setSkinMessage] = useState<string | null>(null);
   const [passwordMessage, setPasswordMessage] = useState<string | null>(null);
   const [passwordFormOpen, setPasswordFormOpen] = useState(false);
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [busy, setBusy] = useState(false);
+  const [skinBusy, setSkinBusy] = useState(false);
   const [passwordBusy, setPasswordBusy] = useState(false);
 
   useEffect(() => {
@@ -147,19 +149,28 @@ export default function ProfilePage() {
     router.replace("/login");
   }
 
-  async function selectPlanningSkill(skill: PlanningPdfSkillKey) {
-    if (!user) return;
+  function selectPlanningSkill(skill: PlanningPdfSkillKey) {
     setPlanningSkill(skill);
-    setMessage(null);
-    const { error } = await supabase.from("profiles").update({ planning_pdf_skill: skill }).eq("id", user.id);
+    setSkinMessage(null);
+  }
 
-    if (error) {
-      setMessage(error.message);
-      return;
+  async function savePlanningSkill() {
+    if (!user) return;
+    setSkinBusy(true);
+    setSkinMessage(null);
+    try {
+      const { error } = await supabase.from("profiles").update({ planning_pdf_skill: planningSkill }).eq("id", user.id);
+
+      if (error) {
+        setSkinMessage(formatPlanningSkillError(error.message));
+        return;
+      }
+
+      await refreshProfile();
+      setSkinMessage("Skin do planejamento atualizada.");
+    } finally {
+      setSkinBusy(false);
     }
-
-    await refreshProfile();
-    setMessage("Skin do planejamento atualizada.");
   }
 
   return (
@@ -278,25 +289,6 @@ export default function ProfilePage() {
 
           <section className="panel h-fit space-y-4 p-5">
             <div>
-              <p className="label mb-2">Canal de contato</p>
-              <h2 className="flex items-center gap-2 text-lg font-bold text-ink">
-                <Mail size={18} className="text-leaf" />
-                Suporte
-              </h2>
-            </div>
-            <p className="rounded-lg border border-ink/10 bg-white px-4 py-3 text-sm leading-6 text-ink/70">
-              Para um atendimento mais efetivo, nos envie um e-mail para{" "}
-              <a href="mailto:benmaprojetos@gmail.com" className="font-bold text-leaf underline underline-offset-4">
-                benmaprojetos@gmail.com
-              </a>{" "}
-              com o seu e-mail de cadastro no assunto.
-              <br />
-              *Nosso prazo de retorno é de até 48h úteis.
-            </p>
-          </section>
-
-          <section className="panel h-fit space-y-4 p-5">
-            <div>
               <p className="label mb-2">Skins do planejamento</p>
               <h2 className="text-lg font-bold text-ink">Modelo do PDF</h2>
               <p className="mt-2 text-sm leading-6 text-ink/60">
@@ -321,19 +313,53 @@ export default function ProfilePage() {
                     {skill.previewImage ? (
                       <img src={skill.previewImage} alt={skill.name} className="aspect-[4/3] w-full rounded-md object-cover" />
                     ) : (
-                      <span className="grid aspect-[4/3] w-full place-items-center rounded-md border border-ink/10 bg-paper">
-                        <span className="h-14 w-20 rounded border border-leaf/30 bg-white shadow-inner" />
+                      <span className="grid aspect-[4/3] w-full place-items-center rounded-md border border-ink/10 bg-paper p-3">
+                        <span className="h-full w-full rounded border border-ink/10 bg-white shadow-inner" />
                       </span>
                     )}
                   </button>
                 );
               })}
             </div>
+
+            {skinMessage ? <p className="rounded-md bg-mint px-3 py-2 text-sm text-ink/75">{skinMessage}</p> : null}
+
+            <button type="button" disabled={skinBusy || planningSkill === normalizePlanningPdfSkill(profile?.planning_pdf_skill)} onClick={savePlanningSkill} className="btn-primary disabled:cursor-not-allowed disabled:opacity-55">
+              <Save size={16} />
+              Salvar skin
+            </button>
+          </section>
+
+          <section className="panel h-fit space-y-4 p-5">
+            <div>
+              <p className="label mb-2">Canal de contato</p>
+              <h2 className="flex items-center gap-2 text-lg font-bold text-ink">
+                <Mail size={18} className="text-leaf" />
+                Suporte
+              </h2>
+            </div>
+            <p className="rounded-lg border border-ink/10 bg-white px-4 py-3 text-sm leading-6 text-ink/70">
+              Para um atendimento mais efetivo, nos envie um e-mail para{" "}
+              <a href="mailto:benmaprojetos@gmail.com" className="font-bold text-leaf underline underline-offset-4">
+                benmaprojetos@gmail.com
+              </a>{" "}
+              com o seu e-mail de cadastro no assunto.
+              <br />
+              *Nosso prazo de retorno é de até 48h úteis.
+            </p>
           </section>
         </section>
       </div>
     </ProtectedPage>
   );
+}
+
+function formatPlanningSkillError(message: string) {
+  if (message.includes("planning_pdf_skill")) {
+    return "A coluna planning_pdf_skill ainda não existe no Supabase. Rode a migration de skins do planejamento e tente novamente.";
+  }
+
+  return message;
 }
 
 function AvatarPreview({ src, name, compact = false }: { src?: string | null; name: string; compact?: boolean }) {

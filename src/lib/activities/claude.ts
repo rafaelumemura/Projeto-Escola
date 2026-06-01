@@ -61,11 +61,12 @@ function normalizeGeneratedActivity(raw: unknown, input: ActivityGenerationInput
 }
 
 function isPrincipleBasedEducation(methodology: string) {
-  return methodology
+  const normalized = methodology
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .includes("educacao por principios");
+    .toLowerCase();
+
+  return normalized.includes("educacao por principios") || normalized === "principios";
 }
 
 function principleBasedEducationRules(methodology: string) {

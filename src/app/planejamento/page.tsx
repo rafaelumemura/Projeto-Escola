@@ -61,7 +61,7 @@ const initialManualActivityForm: ManualActivityForm = {
 };
 
 export default function MonthlyPlanningPage() {
-  const { supabase } = useAuth();
+  const { supabase, profile } = useAuth();
   const [currentMonth, setCurrentMonth] = useState(() => monthStart(new Date()));
   const [monthlyPlan, setMonthlyPlan] = useState<MonthlyPlan | null>(null);
   const [activities, setActivities] = useState<ActivityWithCollections[]>([]);
@@ -167,6 +167,11 @@ export default function MonthlyPlanningPage() {
     event.preventDefault();
     if (!monthlyPlan || !modalDate || !startTime) {
       setMessage("Defina a data e o horário de início.");
+      return;
+    }
+
+    if (hasItemAtTime(items, modalDate, startTime)) {
+      window.alert("Já existe uma atividade cadastrada nesse horário. Selecione outro horário");
       return;
     }
 
@@ -284,7 +289,8 @@ export default function MonthlyPlanningPage() {
           weekly_plan_id: monthlyPlan.id,
           start_date: pdfStartDate,
           end_date: pdfEndDate,
-          title: pdfTitle || "Planejamento"
+          title: pdfTitle || "Planejamento",
+          skill: profile?.planning_pdf_skill
         },
         `${(pdfTitle || "planejamento").replace(/[\\/]/g, "-")}.pdf`
       );
@@ -745,6 +751,11 @@ function weekdayLabel(value: string) {
 
 function formatTime(value?: string | null) {
   return value ? value.slice(0, 5) : "--:--";
+}
+
+function hasItemAtTime(items: PlanItem[], date: string, startTime: string) {
+  const normalizedTime = formatTime(startTime);
+  return items.some((item) => item.date === date && formatTime(item.start_time) === normalizedTime);
 }
 
 function pad(value: number) {

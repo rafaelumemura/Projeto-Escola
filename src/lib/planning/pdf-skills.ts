@@ -1,15 +1,15 @@
 export const planningPdfSkills = [
   {
+    key: "grade",
+    name: "Sem skin",
+    description: "PDF limpo, sem moldura ilustrada.",
+    previewImage: null
+  },
+  {
     key: "layout_fundo_1",
     name: "Layout Fundo 1",
     description: "Moldura ilustrada para planejamentos com visual infantil.",
     previewImage: "/planning-skin-layout-fundo-1.png"
-  },
-  {
-    key: "grade",
-    name: "Grade por horário",
-    description: "Dias em colunas e horários em linhas, ideal para imprimir a semana em formato de calendário.",
-    previewImage: null
   },
   {
     key: "roteiro",

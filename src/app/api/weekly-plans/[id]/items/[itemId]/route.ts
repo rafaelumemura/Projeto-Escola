@@ -9,6 +9,24 @@ export async function PUT(
   try {
     const { supabase } = await getAuthenticatedUser(request);
     const payload = weeklyPlanItemUpdateSchema.parse(await readJson<unknown>(request));
+
+    if (payload.date && payload.start_time) {
+      const { data: existing, error: existingError } = await supabase
+        .from("weekly_plan_items")
+        .select("id")
+        .eq("weekly_plan_id", params.id)
+        .eq("date", payload.date)
+        .eq("start_time", payload.start_time)
+        .neq("id", params.itemId)
+        .limit(1);
+
+      if (existingError) throw existingError;
+
+      if (existing?.length) {
+        throw Object.assign(new Error("Já existe uma atividade cadastrada nesse horário. Selecione outro horário"), { status: 409 });
+      }
+    }
+
     const { data, error } = await supabase
       .from("weekly_plan_items")
       .update(payload)
