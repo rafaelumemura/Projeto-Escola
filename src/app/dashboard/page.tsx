@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { BookOpen, CalendarDays, FolderKanban, Sparkles } from "lucide-react";
+import { BookOpen, CalendarDays, FolderKanban, LibraryBig, Sparkles } from "lucide-react";
 import { ProtectedPage } from "@/components/layout/ProtectedPage";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { apiFetch } from "@/lib/api/client";
@@ -16,9 +16,10 @@ type PlannedItem = Database["public"]["Tables"]["weekly_plan_items"]["Row"] & {
 };
 
 export default function DashboardPage() {
-  const { supabase, profile } = useAuth();
+  const { supabase, profile, usage } = useAuth();
   const [activities, setActivities] = useState<Activity[]>([]);
-  const [activityCount, setActivityCount] = useState(0);
+  const [registeredActivityCount, setRegisteredActivityCount] = useState(0);
+  const [generatedActivityCount, setGeneratedActivityCount] = useState(0);
   const [collections, setCollections] = useState<Collection[]>([]);
   const [nextPlannedItem, setNextPlannedItem] = useState<PlannedItem | null>(null);
 
@@ -30,8 +31,9 @@ export default function DashboardPage() {
     ])
       .then(async ([activityData, collectionData, planData]) => {
         const generatedActivities = activityData.activities.filter(isGeneratedActivity);
-        setActivityCount(generatedActivities.length);
-        setActivities(generatedActivities.slice(0, 4));
+        setRegisteredActivityCount(activityData.activities.length);
+        setGeneratedActivityCount(generatedActivities.length);
+        setActivities(generatedActivities.slice(0, 5));
         setCollections(collectionData.collections);
         const details = await Promise.all(
           planData.weekly_plans.map((plan) =>
@@ -54,8 +56,9 @@ export default function DashboardPage() {
         </Link>
       }
     >
-      <div className="grid grid-cols-2 gap-3 sm:gap-4">
-        <SummaryCard icon={<BookOpen size={22} />} label="Atividades geradas" value={activityCount} href="/atividades" />
+      <div className="grid gap-3 sm:grid-cols-3 sm:gap-4">
+        <SummaryCard icon={<LibraryBig size={22} />} label="Atividades cadastradas" value={registeredActivityCount} href="/atividades" />
+        <SummaryCard icon={<BookOpen size={22} />} label="Atividades geradas" value={usage?.generated_count ?? generatedActivityCount} href="/atividades" />
         <SummaryCard icon={<FolderKanban size={22} />} label="Coleções" value={collections.length} href="/colecoes" />
       </div>
 

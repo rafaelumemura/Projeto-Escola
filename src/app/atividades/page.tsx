@@ -54,6 +54,7 @@ export default function ActivitiesPage() {
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+  const [plannedDeleteActivity, setPlannedDeleteActivity] = useState<ActivityWithCollections | null>(null);
   const [page, setPage] = useState(1);
   const [filters, setFilters] = useState({
     age_range: "",
@@ -184,17 +185,34 @@ export default function ActivitiesPage() {
       const planningStatus = await apiFetch<{ planned: boolean; count: number }>(supabase, `/api/activities/${activity.id}/planning-status`);
 
       if (planningStatus.planned) {
-        const confirmed = window.confirm("Essa atividade está planejada, se você excluir, ela sairá do planejamento, deseja excluir?");
-        if (!confirmed) {
-          setPendingDeleteId(null);
-          return;
-        }
+        setPlannedDeleteActivity(activity);
+        setPendingDeleteId(null);
+        return;
       } else if (pendingDeleteId !== activity.id) {
         setPendingDeleteId(activity.id);
         return;
       }
 
       await apiFetch(supabase, `/api/activities/${activity.id}${planningStatus.planned ? "?remove_planned=true" : ""}`, { method: "DELETE" });
+      setSelected(null);
+      setEdit(null);
+      await loadActivities();
+      setMessage("Atividade excluída.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Não foi possível excluir.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function confirmPlannedDelete() {
+    if (!plannedDeleteActivity) return;
+
+    setBusy(true);
+    setMessage(null);
+    try {
+      await apiFetch(supabase, `/api/activities/${plannedDeleteActivity.id}?remove_planned=true`, { method: "DELETE" });
+      setPlannedDeleteActivity(null);
       setSelected(null);
       setEdit(null);
       await loadActivities();
@@ -254,6 +272,13 @@ export default function ActivitiesPage() {
     );
   }
 
+  function activityCollections(activity: ActivityWithCollections) {
+    const ids = activity.collection_ids || [];
+    return ids
+      .map((id) => collections.find((collection) => collection.id === id))
+      .filter((collection): collection is Collection => Boolean(collection));
+  }
+
   return (
     <ProtectedPage title="Atividades" subtitle="Consulte, filtre, edite e reutilize atividades salvas.">
       <section className="panel mb-5 p-4">
@@ -296,6 +321,26 @@ export default function ActivitiesPage() {
             >
               <h2 className="font-bold text-ink">{activity.title}</h2>
               <p className="mt-1 text-sm text-ink/60">{activity.age_range || "Faixa etária"} • {activity.methodology || "Metodologia"}</p>
+              <div className="mt-3 flex flex-wrap gap-1.5">
+                {activityCollections(activity).length ? (
+                  activityCollections(activity).map((collection) => (
+                    <span
+                      key={collection.id}
+                      className="rounded-full border px-2 py-0.5 text-[11px] font-bold text-ink/65"
+                      style={{
+                        borderColor: collection.color || "#d9ded8",
+                        backgroundColor: `${collection.color || "#2f7d58"}18`
+                      }}
+                    >
+                      {collection.name}
+                    </span>
+                  ))
+                ) : (
+                  <span className="rounded-full border border-ink/10 bg-paper px-2 py-0.5 text-[11px] font-bold text-ink/45">
+                    Sem coleção
+                  </span>
+                )}
+              </div>
             </button>
           ))}
           {!activities.length ? <div className="panel p-5 text-sm font-semibold text-ink/60">Nenhuma atividade encontrada.</div> : null}
@@ -434,6 +479,27 @@ export default function ActivitiesPage() {
           )}
         </section>
       </div>
+
+      {plannedDeleteActivity ? (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-ink/45 px-4 py-6">
+          <div className="w-full max-w-md rounded-lg border border-ink/10 bg-white p-5 shadow-soft">
+            <p className="label mb-2">Confirmar exclusão</p>
+            <h2 className="text-lg font-bold text-ink">Atividade planejada</h2>
+            <p className="mt-3 text-sm leading-6 text-ink/70">
+              Essa atividade está planejada, se você excluir, ela sairá do planejamento, deseja excluir?
+            </p>
+            <div className="mt-5 flex flex-wrap justify-end gap-2">
+              <button type="button" disabled={busy} onClick={() => setPlannedDeleteActivity(null)} className="btn-secondary">
+                Cancelar
+              </button>
+              <button type="button" disabled={busy} onClick={confirmPlannedDelete} className="btn-danger">
+                <Trash2 size={16} />
+                Excluir
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </ProtectedPage>
   );
 }

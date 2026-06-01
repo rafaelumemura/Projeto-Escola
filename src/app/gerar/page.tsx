@@ -10,6 +10,7 @@ import { activityTypes, environments, methodologies, type ActivityGenerationInpu
 import type { Database } from "@/lib/database.types";
 
 type Activity = Database["public"]["Tables"]["activities"]["Row"];
+const generationEnvironments = environments.filter((item) => item !== "Casa");
 
 const initialForm: ActivityGenerationInput = {
   age_range: "",
@@ -121,7 +122,7 @@ export default function GenerateActivityPage() {
             <input className="field" value={form.development_area} onChange={(event) => updateField("development_area", event.target.value)} placeholder="Ex.: Linguagem, coordenação motora, matemática" required />
           </div>
           <SelectField label="Tipo de atividade" value={form.activity_type} onChange={(value) => updateField("activity_type", value as ActivityGenerationInput["activity_type"])} options={activityTypes} />
-          <SelectField label="Ambiente" value={form.environment} onChange={(value) => updateField("environment", value)} options={environments} />
+          <SelectField label="Ambiente" value={form.environment} onChange={(value) => updateField("environment", value)} options={generationEnvironments} />
           {form.environment === "Outro" ? (
             <div>
               <label className="label mb-2 block">Qual ambiente?</label>

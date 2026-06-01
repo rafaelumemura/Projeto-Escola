@@ -15,6 +15,7 @@ export default function ProfilePage() {
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const [planningSkill, setPlanningSkill] = useState<PlanningPdfSkillKey>("grade");
+  const [showAllSkins, setShowAllSkins] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [skinMessage, setSkinMessage] = useState<string | null>(null);
   const [passwordMessage, setPasswordMessage] = useState<string | null>(null);
@@ -297,7 +298,7 @@ export default function ProfilePage() {
             </div>
 
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-              {planningPdfSkills.map((skill) => {
+              {(showAllSkins ? planningPdfSkills : planningPdfSkills.slice(0, 3)).map((skill) => {
                 const active = planningSkill === skill.key;
                 return (
                   <button
@@ -321,6 +322,12 @@ export default function ProfilePage() {
                 );
               })}
             </div>
+
+            {planningPdfSkills.length > 3 ? (
+              <button type="button" onClick={() => setShowAllSkins((current) => !current)} className="text-sm font-bold text-leaf underline underline-offset-4">
+                {showAllSkins ? "Ver menos" : "Ver mais"}
+              </button>
+            ) : null}
 
             {skinMessage ? <p className="rounded-md bg-mint px-3 py-2 text-sm text-ink/75">{skinMessage}</p> : null}
 

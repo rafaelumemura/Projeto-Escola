@@ -6,6 +6,8 @@ export type Json =
   | { [key: string]: Json | undefined }
   | Json[];
 
+type PlanningPdfSkill = "grade" | "layout_fundo_1" | "layout_fundo_2" | "layout_fundo_3" | "layout_fundo_4" | "layout_fundo_5" | "layout_fundo_6" | "layout_fundo_7" | "layout_fundo_8" | "layout_fundo_9";
+
 type ActivityRow = {
   id: string;
   user_id: string;
@@ -86,7 +88,7 @@ export type Database = {
           avatar_url: string | null;
           is_admin: boolean;
           plan: "free" | "basic" | "complete" | "pro";
-          planning_pdf_skill: "layout_fundo_1" | "grade" | "roteiro" | "lista";
+          planning_pdf_skill: PlanningPdfSkill;
           password_must_change: boolean;
           created_at: string;
         };
@@ -97,7 +99,7 @@ export type Database = {
           avatar_url?: string | null;
           is_admin?: boolean;
           plan?: "free" | "basic" | "complete" | "pro";
-          planning_pdf_skill?: "layout_fundo_1" | "grade" | "roteiro" | "lista";
+          planning_pdf_skill?: PlanningPdfSkill;
           password_must_change?: boolean;
           created_at?: string;
         };
@@ -107,7 +109,7 @@ export type Database = {
           avatar_url?: string | null;
           is_admin?: boolean;
           plan?: "free" | "basic" | "complete" | "pro";
-          planning_pdf_skill?: "layout_fundo_1" | "grade" | "roteiro" | "lista";
+          planning_pdf_skill?: PlanningPdfSkill;
           password_must_change?: boolean;
         };
       };

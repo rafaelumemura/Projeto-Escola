@@ -20,7 +20,7 @@ drop constraint if exists profiles_planning_pdf_skill_check;
 
 alter table public.profiles
 add constraint profiles_planning_pdf_skill_check
-check (planning_pdf_skill in ('layout_fundo_1', 'grade', 'roteiro', 'lista'));
+check (planning_pdf_skill in ('grade', 'layout_fundo_1', 'layout_fundo_2', 'layout_fundo_3', 'layout_fundo_4', 'layout_fundo_5', 'layout_fundo_6', 'layout_fundo_7', 'layout_fundo_8', 'layout_fundo_9'));
 
 create table if not exists public.activities (
   id uuid primary key default gen_random_uuid(),

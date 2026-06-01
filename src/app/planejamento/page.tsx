@@ -79,6 +79,7 @@ export default function MonthlyPlanningPage() {
   const [pdfEndDate, setPdfEndDate] = useState(formatDate(monthEnd(new Date())));
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [appAlert, setAppAlert] = useState<string | null>(null);
 
   const monthStartDate = useMemo(() => formatDate(monthStart(currentMonth)), [currentMonth]);
   const monthEndDate = useMemo(() => formatDate(monthEnd(currentMonth)), [currentMonth]);
@@ -171,7 +172,7 @@ export default function MonthlyPlanningPage() {
     }
 
     if (hasItemAtTime(items, modalDate, startTime)) {
-      window.alert("Já existe uma atividade cadastrada nesse horário. Selecione outro horário");
+      setAppAlert("Já existe uma atividade cadastrada nesse horário. Selecione outro horário");
       return;
     }
 
@@ -249,7 +250,12 @@ export default function MonthlyPlanningPage() {
       await loadMonth();
       setMessage("Atividade adicionada ao calendário.");
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Não foi possível adicionar a atividade.");
+      const errorMessage = error instanceof Error ? error.message : "Não foi possível adicionar a atividade.";
+      if (errorMessage.includes("Já existe uma atividade cadastrada nesse horário")) {
+        setAppAlert("Já existe uma atividade cadastrada nesse horário. Selecione outro horário");
+      } else {
+        setMessage(errorMessage);
+      }
     } finally {
       setBusy(false);
     }
@@ -608,6 +614,21 @@ export default function MonthlyPlanningPage() {
               </button>
             </div>
             <ActivityView activity={viewActivity} />
+          </div>
+        </div>
+      ) : null}
+
+      {appAlert ? (
+        <div className="fixed inset-0 z-[60] grid place-items-center bg-ink/45 px-4 py-6">
+          <div className="w-full max-w-sm rounded-lg border border-ink/10 bg-white p-5 shadow-soft">
+            <p className="label mb-2">Atenção</p>
+            <h2 className="text-lg font-bold text-ink">Horário indisponível</h2>
+            <p className="mt-3 text-sm leading-6 text-ink/70">{appAlert}</p>
+            <div className="mt-5 flex justify-end">
+              <button type="button" onClick={() => setAppAlert(null)} className="btn-primary">
+                Entendi
+              </button>
+            </div>
           </div>
         </div>
       ) : null}

@@ -315,27 +315,17 @@ function drawMaterialItem(page: PDFPage, item: PrintableMaterialItem, x: number,
     page.drawRectangle({ x, y, width, height, color: fill, borderColor: accent, borderWidth: 1.3 });
   }
 
-  page.drawRectangle({ x: x + 12, y: y + height - 38, width: width - 24, height: 23, color: accent });
-  wrapText(materialTypeLabel(item.type), 30)
-    .slice(0, 1)
-    .forEach((line) => {
-      page.drawText(line, {
-        x: x + 20,
-        y: y + height - 31,
-        size: 8.5,
-        font: bold,
-        color: rgb(1, 1, 1)
-      });
-    });
-
-  const mainLines = wrapText(item.text, 25).slice(0, 3);
-  const mainBlockY = y + height / 2 + mainLines.length * 7;
+  const maxMainChars = item.shape === "circle" || item.shape === "square" ? 18 : 25;
+  const mainLines = wrapText(item.text, maxMainChars).slice(0, 3);
+  const longestLine = mainLines.reduce((longest, line) => Math.max(longest, line.length), 0);
+  const fontSize = longestLine > 16 ? 12 : longestLine > 9 ? 14 : 17;
+  const mainBlockY = y + height / 2 + (mainLines.length - 1) * (fontSize / 2);
   mainLines.forEach((line, lineIndex) => {
-    const textWidth = bold.widthOfTextAtSize(line, 15);
+    const textWidth = bold.widthOfTextAtSize(line, fontSize);
     page.drawText(line, {
       x: x + Math.max(14, (width - textWidth) / 2),
-      y: mainBlockY - lineIndex * 17,
-      size: 15,
+      y: mainBlockY - lineIndex * (fontSize + 3),
+      size: fontSize,
       font: bold,
       color: textColor
     });
@@ -348,26 +338,13 @@ function drawMaterialItem(page: PDFPage, item: PrintableMaterialItem, x: number,
         const textWidth = regular.widthOfTextAtSize(line, 9);
         page.drawText(line, {
           x: x + Math.max(14, (width - textWidth) / 2),
-          y: y + 22 - lineIndex * 11,
+          y: y + 12 - lineIndex * 10,
           size: 9,
           font: regular,
           color: rgb(0.28, 0.31, 0.29)
         });
       });
   }
-}
-
-function materialTypeLabel(type: PrintableMaterialItem["type"]) {
-  const labels: Record<PrintableMaterialItem["type"], string> = {
-    card: "Cartao",
-    shape: "Forma",
-    label: "Etiqueta",
-    token: "Peca",
-    cutout: "Recorte",
-    worksheet: "Folha"
-  };
-
-  return labels[type];
 }
 
 function hexToRgb(hex: string, fallback: RGB) {
@@ -383,9 +360,7 @@ function hexToRgb(hex: string, fallback: RGB) {
 export async function buildWeeklyPlanPdf(plan: PdfWeeklyPlan, items: PdfWeeklyPlanItem[], skill?: PlanningPdfSkillKey) {
   const selectedSkill = normalizePlanningPdfSkill(skill);
 
-  if (selectedSkill === "layout_fundo_1") return buildFramedWeeklyPlanPdf(plan, items);
-  if (selectedSkill === "roteiro") return buildDailyScriptWeeklyPlanPdf(plan, items);
-  if (selectedSkill === "lista") return buildCompactListWeeklyPlanPdf(plan, items);
+  if (selectedSkill.startsWith("layout_fundo_")) return buildFramedWeeklyPlanPdf(plan, items, selectedSkill);
 
   return buildGridWeeklyPlanPdf(plan, items);
 }
@@ -491,11 +466,11 @@ async function buildGridWeeklyPlanPdf(plan: PdfWeeklyPlan, items: PdfWeeklyPlanI
   return pdf.save();
 }
 
-async function buildFramedWeeklyPlanPdf(plan: PdfWeeklyPlan, items: PdfWeeklyPlanItem[]) {
+async function buildFramedWeeklyPlanPdf(plan: PdfWeeklyPlan, items: PdfWeeklyPlanItem[], skill: PlanningPdfSkillKey) {
   const pdf = await PDFDocument.create();
   const regular = await pdf.embedFont(StandardFonts.Helvetica);
   const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
-  const background = await embedPlanningSkinImage(pdf);
+  const background = await embedPlanningSkinImage(pdf, skill);
   const title = clean(plan.title) || "Planejamento";
   const skinWidth = 960;
   const skinHeight = 720;
@@ -913,9 +888,11 @@ function formatTime(value?: string | null) {
   return value ? value.slice(0, 5) : "--:--";
 }
 
-async function embedPlanningSkinImage(pdf: PDFDocument) {
+async function embedPlanningSkinImage(pdf: PDFDocument, skill: PlanningPdfSkillKey) {
   try {
-    const bytes = await readFile(join(process.cwd(), "public", "planning-skin-layout-fundo-1.png"));
+    const match = skill.match(/^layout_fundo_(\d)$/);
+    const fileName = `planning-skin-layout-fundo-${match?.[1] || "1"}.png`;
+    const bytes = await readFile(join(process.cwd(), "public", fileName));
     return await pdf.embedPng(bytes);
   } catch {
     return null;
