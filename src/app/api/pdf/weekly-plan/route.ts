@@ -33,19 +33,7 @@ export async function POST(request: Request) {
 
       if (error) throw error;
 
-      let itemsQuery = supabase
-        .from("weekly_plan_items")
-        .select("*, activities(*)")
-        .eq("weekly_plan_id", payload.weekly_plan_id);
-
-      if (payload.start_date) itemsQuery = itemsQuery.gte("date", payload.start_date);
-      if (payload.end_date) itemsQuery = itemsQuery.lte("date", payload.end_date);
-
-      const { data: planItems, error: itemsError } = await itemsQuery
-        .order("date", { ascending: true })
-        .order("start_time", { ascending: true });
-
-      if (itemsError) throw itemsError;
+      const planItems = await fetchPlanItemsForPdf(supabase, user.id, payload.weekly_plan_id, payload.start_date, payload.end_date);
 
       weeklyPlan = {
         ...plan,
@@ -53,7 +41,7 @@ export async function POST(request: Request) {
         start_date: payload.start_date || plan.start_date,
         end_date: payload.end_date || plan.end_date
       };
-      items = planItems || [];
+      items = planItems;
     }
 
     if (!weeklyPlan) {
@@ -82,4 +70,48 @@ export async function POST(request: Request) {
   } catch (error) {
     return fail(error);
   }
+}
+
+async function fetchPlanItemsForPdf(
+  supabase: Awaited<ReturnType<typeof getAuthenticatedUser>>["supabase"],
+  userId: string,
+  weeklyPlanId: string,
+  startDate?: string,
+  endDate?: string
+) {
+  let planIds = [weeklyPlanId];
+
+  if (startDate || endDate) {
+    const { data: plans, error: plansError } = await supabase
+      .from("weekly_plans")
+      .select("id,start_date,end_date")
+      .eq("user_id", userId);
+
+    if (plansError) throw plansError;
+
+    const rangeStart = startDate || "0000-01-01";
+    const rangeEnd = endDate || "9999-12-31";
+    planIds = (plans || [])
+      .filter((plan) => {
+        const planStart = plan.start_date || rangeStart;
+        const planEnd = plan.end_date || rangeEnd;
+        return planStart <= rangeEnd && planEnd >= rangeStart;
+      })
+      .map((plan) => plan.id);
+  }
+
+  if (!planIds.length) return [];
+
+  let itemsQuery = supabase.from("weekly_plan_items").select("*, activities(*)").in("weekly_plan_id", planIds);
+
+  if (startDate) itemsQuery = itemsQuery.gte("date", startDate);
+  if (endDate) itemsQuery = itemsQuery.lte("date", endDate);
+
+  const { data: planItems, error: itemsError } = await itemsQuery
+    .order("date", { ascending: true })
+    .order("start_time", { ascending: true });
+
+  if (itemsError) throw itemsError;
+
+  return planItems || [];
 }

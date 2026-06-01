@@ -142,8 +142,10 @@ function SummaryCard({
 }) {
   return (
     <Link href={href} className="panel block p-4 text-center transition hover:-translate-y-0.5 hover:border-leaf/40 sm:p-5">
-      <span className="mx-auto inline-flex items-center justify-center gap-2 rounded-lg bg-mint px-3 py-2 text-leaf">
-        {icon}
+      <span className="mx-auto inline-flex items-center justify-center gap-3">
+        <span className="grid h-11 w-11 place-items-center rounded-lg bg-mint text-leaf">
+          {icon}
+        </span>
         <span className="text-3xl font-bold leading-none text-ink">{value}</span>
       </span>
       <p className="mt-3 text-center text-sm font-semibold text-ink/60">{label}</p>

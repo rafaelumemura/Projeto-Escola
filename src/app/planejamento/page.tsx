@@ -21,6 +21,7 @@ type PlanItem = Database["public"]["Tables"]["weekly_plan_items"]["Row"] & {
 };
 
 const weekdays = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+const monthNames = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
 const defaultColor = "#2f7d58";
 const manualActivityTypes = ["Individual", "Dupla", "Trio", "Sala Toda"] as const;
 
@@ -576,14 +577,8 @@ export default function MonthlyPlanningPage() {
                 <input className="field" value={pdfTitle} onChange={(event) => setPdfTitle(event.target.value)} placeholder="Ex.: Semana da Natureza" />
               </label>
               <div className="grid gap-2 sm:grid-cols-2">
-                <label className="block">
-                  <span className="label mb-2 block">Data inicial</span>
-                  <input className="field" type="date" min={monthStartDate} max={monthEndDate} value={pdfStartDate} onChange={(event) => setPdfStartDate(event.target.value)} required />
-                </label>
-                <label className="block">
-                  <span className="label mb-2 block">Data final</span>
-                  <input className="field" type="date" min={monthStartDate} max={monthEndDate} value={pdfEndDate} onChange={(event) => setPdfEndDate(event.target.value)} required />
-                </label>
+                <DateSelectField label="Data inicial" value={pdfStartDate} onChange={setPdfStartDate} />
+                <DateSelectField label="Data final" value={pdfEndDate} onChange={setPdfEndDate} />
               </div>
             </div>
 
@@ -655,6 +650,61 @@ function ManualInput({
   );
 }
 
+function DateSelectField({
+  label,
+  value,
+  onChange
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  const currentYear = new Date().getFullYear();
+  const parts = parseDateParts(value) || {
+    year: currentYear,
+    month: new Date().getMonth() + 1,
+    day: new Date().getDate()
+  };
+  const years = Array.from({ length: 10 }, (_, index) => currentYear - 2 + index);
+  const daysInSelectedMonth = daysInMonth(parts.year, parts.month);
+
+  function update(next: Partial<typeof parts>) {
+    const nextYear = next.year ?? parts.year;
+    const nextMonth = next.month ?? parts.month;
+    const nextDay = Math.min(next.day ?? parts.day, daysInMonth(nextYear, nextMonth));
+    onChange(`${nextYear}-${pad(nextMonth)}-${pad(nextDay)}`);
+  }
+
+  return (
+    <label className="block">
+      <span className="label mb-2 block">{label}</span>
+      <div className="grid grid-cols-[0.75fr_1.2fr_0.95fr] gap-2">
+        <select className="field px-2" value={parts.day} onChange={(event) => update({ day: Number(event.target.value) })} required aria-label={`${label}: dia`}>
+          {Array.from({ length: daysInSelectedMonth }, (_, index) => index + 1).map((day) => (
+            <option key={day} value={day}>
+              {pad(day)}
+            </option>
+          ))}
+        </select>
+        <select className="field px-2" value={parts.month} onChange={(event) => update({ month: Number(event.target.value) })} required aria-label={`${label}: mês`}>
+          {monthNames.map((month, index) => (
+            <option key={month} value={index + 1}>
+              {month}
+            </option>
+          ))}
+        </select>
+        <select className="field px-2" value={parts.year} onChange={(event) => update({ year: Number(event.target.value) })} required aria-label={`${label}: ano`}>
+          {years.map((year) => (
+            <option key={year} value={year}>
+              {year}
+            </option>
+          ))}
+        </select>
+      </div>
+    </label>
+  );
+}
+
 function ManualSelect({
   label,
   value,
@@ -708,6 +758,12 @@ function textArray(value: string) {
     .filter(Boolean);
 }
 
+function parseDateParts(value: string) {
+  const [year, month, day] = value.split("-").map(Number);
+  if (!year || !month || !day) return null;
+  return { year, month, day };
+}
+
 function hiddenPlanTitle(date: Date) {
   return `Planejamento ${monthSlug(date)}`;
 }
@@ -730,6 +786,10 @@ function monthStart(date: Date) {
 
 function monthEnd(date: Date) {
   return new Date(date.getFullYear(), date.getMonth() + 1, 0);
+}
+
+function daysInMonth(year: number, month: number) {
+  return new Date(year, month, 0).getDate();
 }
 
 function addMonths(date: Date, amount: number) {

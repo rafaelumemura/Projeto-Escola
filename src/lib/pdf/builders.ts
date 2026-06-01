@@ -405,44 +405,19 @@ async function buildGridWeeklyPlanPdf(plan: PdfWeeklyPlan, items: PdfWeeklyPlanI
       });
 
       drawCell(page, tableMargin, tableTop, timeColumnWidth, headerHeight, rgb(0.9, 0.96, 0.92));
-      page.drawText("Horario", {
-        x: tableMargin + 10,
-        y: tableTop + 16,
-        size: 10,
-        font: bold,
-        color: rgb(0.12, 0.18, 0.15)
-      });
+      drawCenteredText(page, "Horario", tableMargin, tableTop, timeColumnWidth, headerHeight, bold, 10, rgb(0.12, 0.18, 0.15));
 
       dateChunk.forEach((date, index) => {
         const x = tableMargin + timeColumnWidth + index * columnWidth;
         drawCell(page, x, tableTop, columnWidth, headerHeight, rgb(0.9, 0.96, 0.92));
         const [day, weekday] = dateHeader(date);
-        page.drawText(day, {
-          x: x + 8,
-          y: tableTop + 19,
-          size: 8.5,
-          font: bold,
-          color: rgb(0.12, 0.18, 0.15)
-        });
-        page.drawText(weekday, {
-          x: x + 8,
-          y: tableTop + 7,
-          size: 7.5,
-          font: regular,
-          color: rgb(0.28, 0.31, 0.29)
-        });
+        drawCenteredDateHeader(page, day, weekday, x, tableTop, columnWidth, headerHeight, bold, regular);
       });
 
       timeChunk.forEach((time, rowIndex) => {
         const y = tableTop - headerHeight - rowIndex * rowHeight;
         drawCell(page, tableMargin, y, timeColumnWidth, rowHeight, rgb(1, 1, 1));
-        page.drawText(time, {
-          x: tableMargin + 10,
-          y: y + rowHeight - 22,
-          size: 9,
-          font: bold,
-          color: rgb(0.18, 0.49, 0.35)
-        });
+        drawCenteredText(page, time, tableMargin, y, timeColumnWidth, rowHeight, bold, 9, rgb(0.18, 0.49, 0.35));
 
         dateChunk.forEach((date, dateIndex) => {
           const x = tableMargin + timeColumnWidth + dateIndex * columnWidth;
@@ -509,45 +484,20 @@ async function buildFramedWeeklyPlanPdf(plan: PdfWeeklyPlan, items: PdfWeeklyPla
       });
 
       drawCell(page, tableX, tableTop, timeColumnWidth, headerHeight, rgb(0.9, 0.96, 0.92));
-      page.drawText("Horario", {
-        x: tableX + 10,
-        y: tableTop + 13,
-        size: 9.5,
-        font: bold,
-        color: rgb(0.12, 0.18, 0.15)
-      });
+      drawCenteredText(page, "Horario", tableX, tableTop, timeColumnWidth, headerHeight, bold, 9.5, rgb(0.12, 0.18, 0.15));
 
       const columnWidth = (tableWidth - timeColumnWidth) / Math.max(dateChunk.length, 1);
       dateChunk.forEach((date, index) => {
         const x = tableX + timeColumnWidth + index * columnWidth;
         drawCell(page, x, tableTop, columnWidth, headerHeight, rgb(0.9, 0.96, 0.92));
         const [day, weekday] = dateHeader(date);
-        page.drawText(day, {
-          x: x + 7,
-          y: tableTop + 16,
-          size: 8.5,
-          font: bold,
-          color: rgb(0.12, 0.18, 0.15)
-        });
-        page.drawText(weekday, {
-          x: x + 7,
-          y: tableTop + 5,
-          size: 7.5,
-          font: regular,
-          color: rgb(0.28, 0.31, 0.29)
-        });
+        drawCenteredDateHeader(page, day, weekday, x, tableTop, columnWidth, headerHeight, bold, regular);
       });
 
       timeChunk.forEach((time, rowIndex) => {
         const y = tableTop - headerHeight - rowIndex * rowHeight;
         drawCell(page, tableX, y, timeColumnWidth, rowHeight, rgb(1, 1, 1));
-        page.drawText(time, {
-          x: tableX + 10,
-          y: y + rowHeight - 21,
-          size: 8.5,
-          font: bold,
-          color: rgb(0.18, 0.49, 0.35)
-        });
+        drawCenteredText(page, time, tableX, y, timeColumnWidth, rowHeight, bold, 8.5, rgb(0.18, 0.49, 0.35));
 
         dateChunk.forEach((date, dateIndex) => {
           const x = tableX + timeColumnWidth + dateIndex * columnWidth;
@@ -739,6 +689,61 @@ function drawCell(page: PDFPage, x: number, y: number, width: number, height: nu
     color,
     borderColor: rgb(0.86, 0.88, 0.86),
     borderWidth: 0.7
+  });
+}
+
+function drawCenteredText(
+  page: PDFPage,
+  text: string,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  font: PDFFont,
+  size: number,
+  color: RGB
+) {
+  const value = clean(text);
+  const textWidth = font.widthOfTextAtSize(value, size);
+  page.drawText(value, {
+    x: x + Math.max((width - textWidth) / 2, 2),
+    y: y + (height - size) / 2 + 1,
+    size,
+    font,
+    color
+  });
+}
+
+function drawCenteredDateHeader(
+  page: PDFPage,
+  day: string,
+  weekday: string,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  bold: PDFFont,
+  regular: PDFFont
+) {
+  const centerY = y + height / 2;
+  const daySize = 8.5;
+  const weekdaySize = 7.5;
+  const dayWidth = bold.widthOfTextAtSize(day, daySize);
+  const weekdayWidth = regular.widthOfTextAtSize(weekday, weekdaySize);
+
+  page.drawText(day, {
+    x: x + Math.max((width - dayWidth) / 2, 2),
+    y: centerY + 3,
+    size: daySize,
+    font: bold,
+    color: rgb(0.12, 0.18, 0.15)
+  });
+  page.drawText(weekday, {
+    x: x + Math.max((width - weekdayWidth) / 2, 2),
+    y: centerY - 9,
+    size: weekdaySize,
+    font: regular,
+    color: rgb(0.28, 0.31, 0.29)
   });
 }
 

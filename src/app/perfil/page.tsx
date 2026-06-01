@@ -323,18 +323,20 @@ export default function ProfilePage() {
               })}
             </div>
 
-            {planningPdfSkills.length > 3 ? (
-              <button type="button" onClick={() => setShowAllSkins((current) => !current)} className="text-sm font-bold text-leaf underline underline-offset-4">
-                {showAllSkins ? "Ver menos" : "Ver mais"}
-              </button>
-            ) : null}
-
             {skinMessage ? <p className="rounded-md bg-mint px-3 py-2 text-sm text-ink/75">{skinMessage}</p> : null}
 
-            <button type="button" disabled={skinBusy || planningSkill === normalizePlanningPdfSkill(profile?.planning_pdf_skill)} onClick={savePlanningSkill} className="btn-primary disabled:cursor-not-allowed disabled:opacity-55">
-              <Save size={16} />
-              Salvar skin
-            </button>
+            <div className="flex flex-wrap items-center gap-3">
+              {planningPdfSkills.length > 3 ? (
+                <button type="button" onClick={() => setShowAllSkins((current) => !current)} className="text-sm font-bold text-leaf underline underline-offset-4">
+                  {showAllSkins ? "Ver menos" : "Ver mais"}
+                </button>
+              ) : null}
+
+              <button type="button" disabled={skinBusy || planningSkill === normalizePlanningPdfSkill(profile?.planning_pdf_skill)} onClick={savePlanningSkill} className="btn-primary disabled:cursor-not-allowed disabled:opacity-55">
+                <Save size={16} />
+                Salvar skin
+              </button>
+            </div>
           </section>
 
           <section className="panel h-fit space-y-4 p-5">
