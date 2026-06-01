@@ -28,7 +28,7 @@ export function ActivityView({ activity }: { activity: Activity }) {
   const tips = list(activity.teacher_tips);
   const variations = list(activity.variations);
   const [bnccModalOpen, setBnccModalOpen] = useState(false);
-  const bnccInfo = activity.bncc_code ? describeBnccCode(activity.bncc_code) : null;
+  const bnccInfos = activity.bncc_code ? describeBnccCodes(activity.bncc_code) : [];
 
   return (
     <>
@@ -113,7 +113,7 @@ export function ActivityView({ activity }: { activity: Activity }) {
         </div>
       </article>
 
-      {bnccModalOpen && bnccInfo ? (
+      {bnccModalOpen && bnccInfos.length ? (
         <div className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-ink/45 px-4 py-6">
           <div className="w-full max-w-lg rounded-lg border border-ink/10 bg-white p-5 shadow-soft">
             <div className="mb-4 flex items-start justify-between gap-4">
@@ -121,7 +121,7 @@ export function ActivityView({ activity }: { activity: Activity }) {
                 <p className="label mb-2">BNCC</p>
                 <h2 className="flex items-center gap-2 text-xl font-bold text-ink">
                   <BookOpen size={19} className="text-leaf" />
-                  {bnccInfo.code}
+                  Códigos BNCC
                 </h2>
               </div>
               <button type="button" onClick={() => setBnccModalOpen(false)} className="grid h-9 w-9 place-items-center rounded-md border border-ink/10 text-ink/55 hover:text-ink" title="Fechar">
@@ -129,9 +129,16 @@ export function ActivityView({ activity }: { activity: Activity }) {
               </button>
             </div>
 
-            <div className="space-y-3 text-sm leading-6 text-ink/75">
-              {bnccInfo.lines.map((line) => (
-                <p key={line}>{line}</p>
+            <div className="space-y-4 text-sm leading-6 text-ink/75">
+              {bnccInfos.map((info) => (
+                <section key={info.code} className="rounded-lg border border-ink/10 bg-white p-4">
+                  <h3 className="mb-2 text-sm font-bold text-ink">{info.code}</h3>
+                  <div className="space-y-2">
+                    {info.lines.map((line) => (
+                      <p key={`${info.code}-${line}`}>{line}</p>
+                    ))}
+                  </div>
+                </section>
               ))}
               <p className="rounded-lg border border-ink/10 bg-paper px-4 py-3 text-xs leading-5 text-ink/60">
                 A explicação mostra a estrutura do código. Para o texto oficial da habilidade, consulte a BNCC.
@@ -144,8 +151,17 @@ export function ActivityView({ activity }: { activity: Activity }) {
   );
 }
 
+function describeBnccCodes(value: string) {
+  const matches = value.toUpperCase().match(/\b(?:EI\d{2}[A-Z]{2}\d{2}|EF\d{2}[A-Z]{2}\d{2})\b/g);
+  const codes = matches?.length
+    ? Array.from(new Set(matches))
+    : Array.from(new Set(value.split(/[,\s;]+/).map((item) => item.trim().toUpperCase()).filter(Boolean)));
+
+  return codes.map(describeBnccCode);
+}
+
 function describeBnccCode(value: string) {
-  const code = value.trim().split(/[,\s;]+/)[0]?.toUpperCase() || value.trim().toUpperCase();
+  const code = value.trim().toUpperCase();
   const earlyChildhood = code.match(/^EI(\d{2})([A-Z]{2})(\d{2})$/);
   const elementary = code.match(/^EF(\d{2})([A-Z]{2})(\d{2})$/);
 

@@ -209,7 +209,7 @@ export default function ActivitiesPage() {
     }
   }
 
-  async function removeActivity(activity: ActivityWithCollections) {
+  async function handleDeleteActivity(activity: ActivityWithCollections) {
     setBusy(true);
     setMessage(null);
     try {
@@ -221,6 +221,9 @@ export default function ActivitiesPage() {
           setPendingDeleteId(null);
           return;
         }
+      } else if (pendingDeleteId !== activity.id) {
+        setPendingDeleteId(activity.id);
+        return;
       }
 
       await apiFetch(supabase, `/api/activities/${activity.id}${planningStatus.planned ? "?remove_planned=true" : ""}`, { method: "DELETE" });
@@ -385,11 +388,7 @@ export default function ActivitiesPage() {
                 <button
                   disabled={busy}
                   onClick={() => {
-                    if (pendingDeleteId === selected.id) {
-                      removeActivity(selected);
-                    } else {
-                      setPendingDeleteId(selected.id);
-                    }
+                    handleDeleteActivity(selected);
                   }}
                   className="btn-danger"
                 >

@@ -159,7 +159,7 @@ export default function ProfilePage() {
     }
 
     await refreshProfile();
-    setMessage("Skill do planejamento atualizada.");
+    setMessage("Skin do planejamento atualizada.");
   }
 
   return (
@@ -284,22 +284,23 @@ export default function ProfilePage() {
                 Suporte
               </h2>
             </div>
-            <a href="mailto:benmaprojetos@gmail.com" className="inline-flex text-sm font-bold text-leaf underline underline-offset-4">
-              benmaprojetos@gmail.com
-            </a>
             <p className="rounded-lg border border-ink/10 bg-white px-4 py-3 text-sm leading-6 text-ink/70">
-              Para um atendimento mais efetivo, nos envie um e-mail para benmaprojetos@gmail.com com o seu e-mail de cadastro no assunto.
+              Para um atendimento mais efetivo, nos envie um e-mail para{" "}
+              <a href="mailto:benmaprojetos@gmail.com" className="font-bold text-leaf underline underline-offset-4">
+                benmaprojetos@gmail.com
+              </a>{" "}
+              com o seu e-mail de cadastro no assunto.
               <br />
-              Nosso prazo de retorno é de até 48h úteis.
+              *Nosso prazo de retorno é de até 48h úteis.
             </p>
           </section>
 
           <section className="panel h-fit space-y-4 p-5">
             <div>
-              <p className="label mb-2">Skills do planejamento</p>
+              <p className="label mb-2">Skins do planejamento</p>
               <h2 className="text-lg font-bold text-ink">Modelo do PDF</h2>
               <p className="mt-2 text-sm leading-6 text-ink/60">
-                Escolha como as informações serão posicionadas quando baixar o PDF do planejamento.
+                Escolha a skin que será aplicada quando baixar o PDF do planejamento.
               </p>
             </div>
 
@@ -315,6 +316,9 @@ export default function ProfilePage() {
                       active ? "border-leaf ring-2 ring-leaf/15" : "border-ink/10 hover:border-leaf/40"
                     }`}
                   >
+                    <span className="mb-3 grid h-16 w-full place-items-center rounded-md border border-ink/10 bg-paper text-xs font-bold uppercase tracking-wide text-ink/45">
+                      Prévia
+                    </span>
                     <span className="text-sm font-bold text-ink">{skill.name}</span>
                     <span className="mt-1 block text-sm leading-6 text-ink/60">{skill.description}</span>
                   </button>

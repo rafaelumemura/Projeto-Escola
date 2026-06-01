@@ -28,6 +28,7 @@ type ManualActivityForm = {
   title: string;
   bncc_code: string;
   age_range: string;
+  estimated_time: string;
   methodology: string;
   custom_methodology: string;
   development_area: string;
@@ -37,6 +38,7 @@ type ManualActivityForm = {
   materials: string;
   objective: string;
   steps_text: string;
+  safety_notes: string;
   notes: string;
 };
 
@@ -44,6 +46,7 @@ const initialManualActivityForm: ManualActivityForm = {
   title: "",
   bncc_code: "",
   age_range: "",
+  estimated_time: "",
   methodology: "Construtivista",
   custom_methodology: "",
   development_area: "",
@@ -53,6 +56,7 @@ const initialManualActivityForm: ManualActivityForm = {
   materials: "",
   objective: "",
   steps_text: "",
+  safety_notes: "",
   notes: ""
 };
 
@@ -180,13 +184,15 @@ export default function MonthlyPlanningPage() {
         if (
           !manualForm.title.trim() ||
           !manualForm.age_range.trim() ||
+          !manualForm.estimated_time.trim() ||
           !methodology ||
           !manualForm.development_area.trim() ||
           !manualForm.activity_type ||
           !environment ||
           !manualForm.materials.trim() ||
           !manualForm.objective.trim() ||
-          !steps.length
+          !steps.length ||
+          !manualForm.safety_notes.trim()
         ) {
           setMessage("Preencha os campos da nova atividade antes de inserir.");
           return;
@@ -197,6 +203,7 @@ export default function MonthlyPlanningPage() {
           body: {
             title: manualForm.title.trim(),
             age_range: manualForm.age_range.trim(),
+            estimated_time: manualForm.estimated_time.trim(),
             methodology,
             development_area: manualForm.development_area.trim(),
             activity_type: manualForm.activity_type,
@@ -208,7 +215,7 @@ export default function MonthlyPlanningPage() {
             steps,
             teacher_tips: [],
             variations: [],
-            safety_notes: null,
+            safety_notes: manualForm.safety_notes.trim(),
             evaluation: null,
             raw_ai_response: { manual: true }
           }
@@ -504,6 +511,7 @@ export default function MonthlyPlanningPage() {
                     <ManualInput label="Nome da Atividade" value={manualForm.title} onChange={(value) => updateManualField("title", value)} required />
                     <ManualInput label="Código BNCC" value={manualForm.bncc_code} onChange={(value) => updateManualField("bncc_code", value)} />
                     <ManualInput label="Idade ou Faixa Etária" value={manualForm.age_range} onChange={(value) => updateManualField("age_range", value)} required />
+                    <ManualInput label="Tempo de duração" value={manualForm.estimated_time} onChange={(value) => updateManualField("estimated_time", value)} required />
                     <ManualSelect label="Metodologia" value={manualForm.methodology} options={methodologies} onChange={(value) => updateManualField("methodology", value)} />
                     {manualForm.methodology === "Outra" ? (
                       <ManualInput label="Qual metodologia?" value={manualForm.custom_methodology} onChange={(value) => updateManualField("custom_methodology", value)} required />
@@ -518,6 +526,7 @@ export default function MonthlyPlanningPage() {
                   <ManualArea label="Materiais Disponíveis" value={manualForm.materials} onChange={(value) => updateManualField("materials", value)} required />
                   <ManualArea label="Objetivo da Atividade" value={manualForm.objective} onChange={(value) => updateManualField("objective", value)} required />
                   <ManualArea label="Passo a passo" value={manualForm.steps_text} onChange={(value) => updateManualField("steps_text", value)} placeholder="Uma etapa por linha" required />
+                  <ManualArea label="Observações de segurança" value={manualForm.safety_notes} onChange={(value) => updateManualField("safety_notes", value)} required />
                   <ManualArea label="Anotações" value={manualForm.notes} onChange={(value) => updateManualField("notes", value)} placeholder="Espaço livre para observações do professor" />
                 </div>
               ) : null}
