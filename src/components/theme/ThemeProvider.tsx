@@ -56,16 +56,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
       const profileTheme = getProfileThemePreference(profile);
       if (user && profileTheme !== nextTheme) {
-        supabase
-          .from("profiles")
-          .update({ theme_preference: nextTheme })
-          .eq("id", user.id)
-          .then(({ error }) => {
-            if (!error) {
-              refreshProfile().catch(() => undefined);
-            }
-          })
-          .catch(() => undefined);
+        void saveThemePreference(supabase, user.id, nextTheme, refreshProfile);
       }
     },
     [profile, refreshProfile, supabase, user]
@@ -90,6 +81,22 @@ function getProfileThemePreference(profile: unknown): ThemeMode | null {
   if (!profile || typeof profile !== "object") return null;
   const value = (profile as { theme_preference?: unknown }).theme_preference;
   return isThemeMode(value) ? value : null;
+}
+
+async function saveThemePreference(
+  supabase: ReturnType<typeof useAuth>["supabase"],
+  userId: string,
+  theme: ThemeMode,
+  refreshProfile: () => Promise<void>
+) {
+  try {
+    const { error } = await supabase.from("profiles").update({ theme_preference: theme }).eq("id", userId);
+    if (!error) {
+      await refreshProfile();
+    }
+  } catch {
+    // The local theme still changes even if the remote preference is not available yet.
+  }
 }
 
 export function useTheme() {
