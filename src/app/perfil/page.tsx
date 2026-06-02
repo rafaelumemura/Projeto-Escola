@@ -1,17 +1,20 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
-import { Camera, LogOut, Mail, Save, UserRound } from "lucide-react";
+import { Camera, LogOut, Mail, Moon, Save, Sun, UserRound } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ProtectedPage } from "@/components/layout/ProtectedPage";
 import { useAuth } from "@/components/auth/AuthProvider";
+import { useTheme } from "@/components/theme/ThemeProvider";
+import type { ThemeMode } from "@/components/theme/ThemeProvider";
 import { planName } from "@/lib/billing/plans";
 import { normalizePlanningPdfSkill, planningPdfSkills, type PlanningPdfSkillKey } from "@/lib/planning/pdf-skills";
 
 export default function ProfilePage() {
   const router = useRouter();
   const { supabase, profile, usage, user, refreshProfile, signOut } = useAuth();
+  const { theme, setTheme } = useTheme();
   const [name, setName] = useState("");
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
@@ -190,6 +193,7 @@ export default function ProfilePage() {
           <div className="grid gap-3">
             <Info label="E-mail" value={profile?.email || user?.email || "-"} />
             <PlanInfo value={usage?.plan_name || planName(profile?.plan)} />
+            <ThemeSelector theme={theme} onThemeChange={setTheme} />
             <Info label="Uso do ciclo" value={`${usage?.generated_count || 0}/${usage?.activity_limit || 0} atividades geradas`} />
             <Info label="Vencimento" value={usage?.current_period_end ? new Date(usage.current_period_end).toLocaleDateString("pt-BR") : "-"} />
             <Info label="Acesso" value={profile?.is_admin ? "Admin" : "Usuário"} />
@@ -410,6 +414,38 @@ function PlanInfo({ value }: { value: string }) {
         <Link href="/planos" className="btn-primary px-3 py-1.5 text-xs">
           Fazer upgrade
         </Link>
+      </div>
+    </div>
+  );
+}
+
+function ThemeSelector({ theme, onThemeChange }: { theme: ThemeMode; onThemeChange: (theme: ThemeMode) => void }) {
+  return (
+    <div className="rounded-lg border border-ink/10 bg-white p-4">
+      <p className="label">Tema do app</p>
+      <div className="mt-3 grid grid-cols-2 gap-2">
+        <button
+          type="button"
+          onClick={() => onThemeChange("light")}
+          className={`grid h-12 place-items-center rounded-md border transition ${
+            theme === "light" ? "border-leaf bg-mint text-leaf" : "border-ink/10 bg-white text-ink/60 hover:border-leaf/35 hover:text-leaf"
+          }`}
+          title="Modo claro"
+          aria-label="Ativar modo claro"
+        >
+          <Sun size={20} />
+        </button>
+        <button
+          type="button"
+          onClick={() => onThemeChange("dark")}
+          className={`grid h-12 place-items-center rounded-md border transition ${
+            theme === "dark" ? "border-leaf bg-mint text-leaf" : "border-ink/10 bg-white text-ink/60 hover:border-leaf/35 hover:text-leaf"
+          }`}
+          title="Modo escuro"
+          aria-label="Ativar modo escuro"
+        >
+          <Moon size={20} />
+        </button>
       </div>
     </div>
   );

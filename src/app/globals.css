@@ -4,8 +4,31 @@
 
 :root {
   color-scheme: light;
-  background: #ffffff;
+  --color-ink: 29 35 32;
+  --color-paper: 255 255 255;
+  --color-surface: 255 255 255;
+  --color-mint: 220 239 231;
+  --color-leaf: 47 125 88;
+  --color-ocean: 37 109 133;
+  --color-clay: 196 109 75;
+  --color-sun: 244 201 93;
+  --shadow-soft: 0 16px 45px rgba(39, 50, 44, 0.08);
+  background: rgb(var(--color-paper));
   color: #1d2320;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --color-ink: 242 247 251;
+  --color-paper: 7 13 27;
+  --color-surface: 12 22 43;
+  --color-mint: 20 53 58;
+  --color-leaf: 45 212 170;
+  --color-ocean: 82 183 212;
+  --color-clay: 255 136 98;
+  --color-sun: 255 213 86;
+  --shadow-soft: 0 18px 50px rgba(0, 0, 0, 0.32);
+  background: rgb(var(--color-paper));
 }
 
 * {
@@ -21,8 +44,8 @@ body {
   min-height: 100%;
   margin: 0;
   overflow-x: hidden;
-  background: #ffffff;
-  color: #1d2320;
+  background: rgb(var(--color-paper));
+  color: rgb(var(--color-ink));
   font-family: Arial, Helvetica, sans-serif;
 }
 
@@ -38,12 +61,31 @@ select {
 }
 
 select option {
-  color: #1d2320;
-  background: #ffffff;
+  color: rgb(var(--color-ink));
+  background: rgb(var(--color-surface));
 }
 
 button {
   cursor: pointer;
+}
+
+:root[data-theme="dark"] .bg-white,
+:root[data-theme="dark"] .bg-white\/85,
+:root[data-theme="dark"] .bg-white\/90,
+:root[data-theme="dark"] .bg-white\/95 {
+  background-color: rgb(var(--color-surface));
+}
+
+:root[data-theme="dark"] .bg-white\/85 {
+  background-color: rgb(var(--color-surface) / 0.85);
+}
+
+:root[data-theme="dark"] .bg-white\/90 {
+  background-color: rgb(var(--color-surface) / 0.9);
+}
+
+:root[data-theme="dark"] .bg-white\/95 {
+  background-color: rgb(var(--color-surface) / 0.95);
 }
 
 button:disabled {

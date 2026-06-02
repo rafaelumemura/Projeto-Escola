@@ -9,16 +9,16 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        ink: "#1d2320",
-        paper: "#faf8f2",
-        mint: "#dcefe7",
-        leaf: "#2f7d58",
-        ocean: "#256d85",
-        clay: "#c46d4b",
-        sun: "#f4c95d"
+        ink: "rgb(var(--color-ink) / <alpha-value>)",
+        paper: "rgb(var(--color-paper) / <alpha-value>)",
+        mint: "rgb(var(--color-mint) / <alpha-value>)",
+        leaf: "rgb(var(--color-leaf) / <alpha-value>)",
+        ocean: "rgb(var(--color-ocean) / <alpha-value>)",
+        clay: "rgb(var(--color-clay) / <alpha-value>)",
+        sun: "rgb(var(--color-sun) / <alpha-value>)"
       },
       boxShadow: {
-        soft: "0 16px 45px rgba(39, 50, 44, 0.08)"
+        soft: "var(--shadow-soft)"
       }
     }
   },

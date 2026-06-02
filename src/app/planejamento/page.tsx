@@ -388,7 +388,7 @@ export default function MonthlyPlanningPage() {
           </div>
         ) : (
           <div className="panel overflow-hidden p-4">
-            <div className="mb-3 grid grid-cols-[1fr_auto] items-center gap-2">
+            <div className="mb-4 space-y-2">
               <div className="grid grid-cols-[1fr_104px] gap-2">
                 <select
                   className="field"
@@ -415,9 +415,9 @@ export default function MonthlyPlanningPage() {
                   ))}
                 </select>
               </div>
-              <button type="button" onClick={openPdfModal} className="btn-primary px-3" title="Gerar PDF">
+              <button type="button" onClick={openPdfModal} className="w-full btn-primary" title="Baixar planejamento em PDF">
                 <FileDown size={16} />
-                PDF
+                Baixar planejamento - PDF
               </button>
             </div>
 
