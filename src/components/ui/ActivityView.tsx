@@ -151,6 +151,29 @@ export function ActivityView({ activity }: { activity: Activity }) {
   );
 }
 
+const bnccSkillCatalog: Record<string, string[]> = {
+  EF01MA01: [
+    "Faz parte do componente curricular de Matemática do 1º ano do Ensino Fundamental na BNCC. Pertence à unidade temática Números.",
+    "Consiste em utilizar números naturais como indicador de quantidade ou de ordem em diferentes situações cotidianas e reconhecer situações em que os números não indicam contagem nem ordem, mas sim código de identificação."
+  ],
+  EF01MA02: [
+    "Faz parte do componente curricular de Matemática do 1º ano do Ensino Fundamental na BNCC. Pertence à unidade temática Números.",
+    "Consiste em contar de maneira exata ou aproximada, utilizando diferentes estratégias como pareamento, estimativa e agrupamento para determinar quantidades."
+  ],
+  EF01MA08: [
+    "Faz parte do componente curricular de Matemática do 1º ano do Ensino Fundamental na BNCC. Pertence à unidade temática Números.",
+    "Consiste em resolver e elaborar problemas de adição e subtração, envolvendo números de até dois algarismos, com apoio de imagens, materiais manipuláveis, registros pessoais e estratégias próprias."
+  ],
+  EI03EF04: [
+    "A habilidade consiste em recontar histórias ouvidas e planejar coletivamente roteiros de vídeos e de encenações, definindo os contextos, os personagens e a estrutura da história.",
+    "Ela pertence ao campo de experiência \"Escuta, fala, pensamento e imaginação\". Na prática, desenvolve a comunicação, a criatividade, a memória narrativa e a organização de ideias."
+  ],
+  EI03ET07: [
+    "A habilidade consiste em relacionar números às suas respectivas quantidades e identificar o antes, o depois e o entre em uma sequência.",
+    "Ela pertence ao campo de experiência \"Espaços, tempos, quantidades, relações e transformações\". Na prática, fortalece contagem, comparação de quantidades, sequência numérica e noções iniciais de ordem."
+  ]
+};
+
 function describeBnccCodes(value: string) {
   const matches = value.toUpperCase().match(/\b(?:EI\d{2}[A-Z]{2}\d{2}|EF\d{2}[A-Z]{2}\d{2})\b/g);
   const codes = matches?.length
@@ -162,6 +185,15 @@ function describeBnccCodes(value: string) {
 
 function describeBnccCode(value: string) {
   const code = value.trim().toUpperCase();
+  const catalogLines = bnccSkillCatalog[code];
+
+  if (catalogLines) {
+    return {
+      code,
+      lines: catalogLines
+    };
+  }
+
   const earlyChildhood = code.match(/^EI(\d{2})([A-Z]{2})(\d{2})$/);
   const elementary = code.match(/^EF(\d{2})([A-Z]{2})(\d{2})$/);
 
@@ -170,8 +202,8 @@ function describeBnccCode(value: string) {
     return {
       code,
       lines: [
-        `${code} é uma referência da BNCC para ${earlyChildhoodAgeGroup(ageGroup)}, dentro do campo de experiências "${earlyChildhoodField(field)}".`,
-        "De forma geral, esse código orienta uma proposta adequada à faixa etária e ao campo indicado, ajudando o professor a alinhar a atividade à intencionalidade pedagógica."
+        `Este código está relacionado a ${earlyChildhoodAgeGroup(ageGroup)} no campo de experiência "${earlyChildhoodField(field)}".`,
+        "Ainda não há uma descrição específica cadastrada para essa habilidade no app. Use essa identificação como apoio inicial e confirme o texto oficial da BNCC para registrar a habilidade com precisão."
       ]
     };
   }
@@ -181,8 +213,8 @@ function describeBnccCode(value: string) {
     return {
       code,
       lines: [
-        `${code} é uma habilidade da BNCC para o Ensino Fundamental, no componente ${elementaryComponent(component)}, aplicada ao ${elementaryYearLabel(year)}.`,
-        "De forma geral, esse código orienta o desenvolvimento de uma habilidade curricular específica e pode ser usado para justificar objetivos, observação e avaliação da atividade."
+        `Este código está relacionado ao componente curricular de ${elementaryComponent(component)} no ${elementaryYearLabel(year)} do Ensino Fundamental.`,
+        "Ainda não há uma descrição específica cadastrada para essa habilidade no app. Use essa identificação como apoio inicial e confirme o texto oficial da BNCC para registrar a habilidade com precisão."
       ]
     };
   }
