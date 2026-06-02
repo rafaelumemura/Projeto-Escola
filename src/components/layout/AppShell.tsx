@@ -36,12 +36,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen">
-      <aside className="fixed inset-y-0 left-0 hidden w-64 flex-col border-r border-ink/10 bg-white/90 px-4 py-5 lg:flex">
+      <aside className="fixed inset-y-0 left-0 hidden w-64 flex-col border-r border-ink/10 bg-white px-4 py-5 lg:flex">
         <Link href="/dashboard" className="flex items-center px-2">
-          <img src="/logo-horizontal.png" alt="Projeto Escola" className="h-24 max-w-[232px] object-contain" />
+          <img src="/logo-horizontal.png" alt="Projeto Escola" className="h-32 max-w-[236px] object-contain" />
         </Link>
 
-        <nav className="mt-6 space-y-1">
+        <nav className="mt-4 space-y-1">
           {nav.map((item) => {
             const Icon = item.icon;
             const active = pathname === item.href;
@@ -63,7 +63,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
         <div className="mt-auto space-y-3">
           <UsageMeter usage={usage} />
-          <Link href="/perfil" className="flex items-center gap-3 rounded-lg border border-ink/10 bg-paper p-3 transition hover:border-leaf/35">
+          <Link href="/perfil" className="flex items-center gap-3 rounded-lg border border-ink/10 bg-white p-3 transition hover:border-leaf/35">
             <Avatar src={profile?.avatar_url} name={profile?.name || profile?.email || "Perfil"} />
             <span className="min-w-0">
               <span className="block truncate text-sm font-semibold text-ink">{profile?.name || "Professor(a)"}</span>
@@ -74,10 +74,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </aside>
 
       <div className="lg:pl-64">
-        <header className="sticky top-0 z-20 border-b border-ink/10 bg-paper/95 px-4 py-3 backdrop-blur lg:hidden">
+        <header className="sticky top-0 z-20 border-b border-ink/10 bg-white/95 px-4 py-2 backdrop-blur lg:hidden">
           <div className="flex items-center justify-between">
             <Link href="/dashboard" className="flex min-w-0 items-center">
-              <img src="/logo-horizontal.png" alt="Projeto Escola" className="h-16 max-w-[260px] object-contain" />
+              <img src="/logo-horizontal.png" alt="Projeto Escola" className="h-24 max-w-[calc(100vw-96px)] object-contain" />
             </Link>
             <div className="flex items-center gap-2">
               <Link href="/perfil" className="grid h-10 w-10 place-items-center overflow-hidden rounded-full border border-ink/10 bg-white">
@@ -142,7 +142,7 @@ function UsageMeter({ usage, compact = false }: { usage: BillingUsage | null; co
   }
 
   return (
-    <div className="rounded-lg border border-ink/10 bg-paper p-3">
+    <div className="rounded-lg border border-ink/10 bg-white p-3">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="truncate text-xs font-bold text-ink">{usage?.plan_name || "Sem plano"}</p>

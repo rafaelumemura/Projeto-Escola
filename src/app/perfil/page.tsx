@@ -189,11 +189,7 @@ export default function ProfilePage() {
 
           <div className="grid gap-3">
             <Info label="E-mail" value={profile?.email || user?.email || "-"} />
-            <Info label="Plano atual" value={usage?.plan_name || planName(profile?.plan)} />
-            <Link href="/planos" className="rounded-lg border border-ink/10 bg-white p-4 transition hover:border-leaf/40">
-              <p className="label">Upgrade</p>
-              <p className="mt-1 text-sm font-bold text-leaf">Fazer upgrade do plano</p>
-            </Link>
+            <PlanInfo value={usage?.plan_name || planName(profile?.plan)} />
             <Info label="Uso do ciclo" value={`${usage?.generated_count || 0}/${usage?.activity_limit || 0} atividades geradas`} />
             <Info label="Vencimento" value={usage?.current_period_end ? new Date(usage.current_period_end).toLocaleDateString("pt-BR") : "-"} />
             <Info label="Acesso" value={profile?.is_admin ? "Admin" : "Usuário"} />
@@ -235,6 +231,57 @@ export default function ProfilePage() {
               Salvar perfil
             </button>
           </form>
+
+          <section className="panel h-fit space-y-4 p-5">
+            <div>
+              <p className="label mb-2">Skins do planejamento</p>
+              <h2 className="text-lg font-bold text-ink">Modelo do PDF</h2>
+              <p className="mt-2 text-sm leading-6 text-ink/60">
+                Escolha a skin que será aplicada quando baixar o PDF do planejamento.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+              {(showAllSkins ? planningPdfSkills : planningPdfSkills.slice(0, 3)).map((skill) => {
+                const active = planningSkill === skill.key;
+                return (
+                  <button
+                    key={skill.key}
+                    type="button"
+                    onClick={() => selectPlanningSkill(skill.key)}
+                    className={`overflow-hidden rounded-lg border bg-white p-2 text-left transition ${
+                      active ? "border-leaf ring-2 ring-leaf/15" : "border-ink/10 hover:border-leaf/40"
+                    }`}
+                    title={skill.name}
+                    aria-label={`Selecionar skin ${skill.name}`}
+                  >
+                    {skill.previewImage ? (
+                      <img src={skill.previewImage} alt={skill.name} className="aspect-[4/3] w-full rounded-md object-cover" />
+                    ) : (
+                      <span className="grid aspect-[4/3] w-full place-items-center rounded-md border border-ink/10 bg-paper p-3">
+                        <span className="h-full w-full rounded border border-ink/10 bg-white shadow-inner" />
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+
+            {skinMessage ? <p className="rounded-md bg-mint px-3 py-2 text-sm text-ink/75">{skinMessage}</p> : null}
+
+            <div className="flex flex-wrap items-center gap-3">
+              {planningPdfSkills.length > 3 ? (
+                <button type="button" onClick={() => setShowAllSkins((current) => !current)} className="text-sm font-bold text-leaf underline underline-offset-4">
+                  {showAllSkins ? "Ver menos" : "Ver mais"}
+                </button>
+              ) : null}
+
+              <button type="button" disabled={skinBusy || planningSkill === normalizePlanningPdfSkill(profile?.planning_pdf_skill)} onClick={savePlanningSkill} className="btn-primary disabled:cursor-not-allowed disabled:opacity-55">
+                <Save size={16} />
+                Salvar skin
+              </button>
+            </div>
+          </section>
 
           <form onSubmit={updatePassword} className="panel h-fit space-y-4 p-5">
             <div>
@@ -295,57 +342,6 @@ export default function ProfilePage() {
 
           <section className="panel h-fit space-y-4 p-5">
             <div>
-              <p className="label mb-2">Skins do planejamento</p>
-              <h2 className="text-lg font-bold text-ink">Modelo do PDF</h2>
-              <p className="mt-2 text-sm leading-6 text-ink/60">
-                Escolha a skin que será aplicada quando baixar o PDF do planejamento.
-              </p>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-              {(showAllSkins ? planningPdfSkills : planningPdfSkills.slice(0, 3)).map((skill) => {
-                const active = planningSkill === skill.key;
-                return (
-                  <button
-                    key={skill.key}
-                    type="button"
-                    onClick={() => selectPlanningSkill(skill.key)}
-                    className={`overflow-hidden rounded-lg border bg-white p-2 text-left transition ${
-                      active ? "border-leaf ring-2 ring-leaf/15" : "border-ink/10 hover:border-leaf/40"
-                    }`}
-                    title={skill.name}
-                    aria-label={`Selecionar skin ${skill.name}`}
-                  >
-                    {skill.previewImage ? (
-                      <img src={skill.previewImage} alt={skill.name} className="aspect-[4/3] w-full rounded-md object-cover" />
-                    ) : (
-                      <span className="grid aspect-[4/3] w-full place-items-center rounded-md border border-ink/10 bg-paper p-3">
-                        <span className="h-full w-full rounded border border-ink/10 bg-white shadow-inner" />
-                      </span>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-
-            {skinMessage ? <p className="rounded-md bg-mint px-3 py-2 text-sm text-ink/75">{skinMessage}</p> : null}
-
-            <div className="flex flex-wrap items-center gap-3">
-              {planningPdfSkills.length > 3 ? (
-                <button type="button" onClick={() => setShowAllSkins((current) => !current)} className="text-sm font-bold text-leaf underline underline-offset-4">
-                  {showAllSkins ? "Ver menos" : "Ver mais"}
-                </button>
-              ) : null}
-
-              <button type="button" disabled={skinBusy || planningSkill === normalizePlanningPdfSkill(profile?.planning_pdf_skill)} onClick={savePlanningSkill} className="btn-primary disabled:cursor-not-allowed disabled:opacity-55">
-                <Save size={16} />
-                Salvar skin
-              </button>
-            </div>
-          </section>
-
-          <section className="panel h-fit space-y-4 p-5">
-            <div>
               <p className="label mb-2">Canal de contato</p>
               <h2 className="flex items-center gap-2 text-lg font-bold text-ink">
                 <Mail size={18} className="text-leaf" />
@@ -401,6 +397,20 @@ function Info({ label, value }: { label: string; value: string }) {
     <div className="rounded-lg border border-ink/10 bg-white p-4">
       <p className="label">{label}</p>
       <p className="mt-1 text-sm font-semibold text-ink">{value}</p>
+    </div>
+  );
+}
+
+function PlanInfo({ value }: { value: string }) {
+  return (
+    <div className="rounded-lg border border-ink/10 bg-white p-4">
+      <p className="label">Plano atual</p>
+      <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
+        <p className="text-sm font-semibold text-ink">{value}</p>
+        <Link href="/planos" className="btn-primary px-3 py-1.5 text-xs">
+          Fazer upgrade
+        </Link>
+      </div>
     </div>
   );
 }

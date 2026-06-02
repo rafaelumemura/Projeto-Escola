@@ -4,7 +4,7 @@
 
 :root {
   color-scheme: light;
-  background: #faf8f2;
+  background: #ffffff;
   color: #1d2320;
 }
 
@@ -21,9 +21,7 @@ body {
   min-height: 100%;
   margin: 0;
   overflow-x: hidden;
-  background:
-    linear-gradient(180deg, rgba(220, 239, 231, 0.5), rgba(250, 248, 242, 0) 320px),
-    #faf8f2;
+  background: #ffffff;
   color: #1d2320;
   font-family: Arial, Helvetica, sans-serif;
 }
@@ -62,7 +60,7 @@ button:disabled {
   }
 
   .panel {
-    @apply rounded-lg border border-ink/10 bg-white/85 shadow-soft;
+    @apply rounded-lg border border-ink/10 bg-white shadow-soft;
   }
 
   .btn-primary {

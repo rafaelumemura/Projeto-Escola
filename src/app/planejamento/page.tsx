@@ -278,7 +278,7 @@ export default function MonthlyPlanningPage() {
     <ProtectedPage title="Planejamento" subtitle="Organize as atividades salvas em um calendário com horários de início.">
       {message ? <p className="mb-4 rounded-lg border border-ink/10 bg-white px-4 py-3 text-sm font-semibold text-ink/70">{message}</p> : null}
 
-      <section className="panel mb-5 p-4">
+      <section className="panel mb-5 hidden p-4 lg:block">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <p className="label mb-1">Calendário</p>
@@ -310,7 +310,7 @@ export default function MonthlyPlanningPage() {
                 <ChevronLeft size={17} />
                 {monthName(currentMonth)}
               </button>
-              <button type="button" onClick={() => openAddModal(mobileSelectedDate)} className="grid h-11 w-11 place-items-center rounded-full border border-ink/10 bg-white text-leaf shadow-soft" title="Adicionar atividade">
+              <button type="button" onClick={() => openAddModal(mobileSelectedDate)} className="grid h-11 w-11 place-items-center rounded-full border border-leaf bg-leaf text-white shadow-soft" title="Adicionar atividade">
                 <Plus size={20} />
               </button>
             </div>
@@ -321,12 +321,12 @@ export default function MonthlyPlanningPage() {
                   key={day}
                   type="button"
                   onClick={() => setMobileSelectedDate(day)}
-                  className={`rounded-full px-2 py-3 text-center font-bold transition ${
+                  className={`rounded-full px-1.5 py-2 text-center font-bold transition ${
                     day === mobileSelectedDate ? "bg-leaf text-white" : "bg-white text-ink/65"
                   }`}
                 >
                   <span className="block text-[10px] uppercase">{weekdayShort(day)}</span>
-                  <span className="block text-lg leading-none">{Number(day.slice(-2))}</span>
+                  <span className="block text-base leading-none">{Number(day.slice(-2))}</span>
                 </button>
               ))}
             </div>
@@ -388,7 +388,7 @@ export default function MonthlyPlanningPage() {
           </div>
         ) : (
           <div className="panel overflow-hidden p-4">
-            <div className="mb-4 grid grid-cols-[1fr_auto] items-center gap-3">
+            <div className="mb-3 grid grid-cols-[1fr_auto] items-center gap-2">
               <div className="grid grid-cols-[1fr_104px] gap-2">
                 <select
                   className="field"
@@ -415,21 +415,27 @@ export default function MonthlyPlanningPage() {
                   ))}
                 </select>
               </div>
+              <button type="button" onClick={openPdfModal} className="btn-primary px-3" title="Gerar PDF">
+                <FileDown size={16} />
+                PDF
+              </button>
+            </div>
+
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <h2 className="text-2xl font-bold capitalize text-ink">{monthName(currentMonth)}</h2>
               <button
                 type="button"
                 onClick={() => openAddModal(formatDate(isSameMonth(new Date(), currentMonth) ? new Date() : currentMonth), true)}
-                className="grid h-11 w-11 place-items-center rounded-full border border-ink/10 bg-white text-leaf shadow-soft"
+                className="grid h-11 w-11 place-items-center rounded-full border border-leaf bg-leaf text-white shadow-soft"
                 title="Adicionar atividade"
               >
                 <Plus size={20} />
               </button>
             </div>
 
-            <h2 className="mb-4 text-4xl font-bold capitalize text-ink">{monthName(currentMonth)}</h2>
-
             <div className="grid grid-cols-7 border-b border-ink/10 pb-2 text-center">
               {["D", "S", "T", "Q", "Q", "S", "S"].map((day, index) => (
-                <span key={`${day}-${index}`} className="text-xs font-bold uppercase text-ink/45">
+                <span key={`${day}-${index}`} className="text-[10px] font-bold uppercase text-ink/45">
                   {day}
                 </span>
               ))}
@@ -444,12 +450,12 @@ export default function MonthlyPlanningPage() {
                     key={day}
                     type="button"
                     onClick={() => setMobileSelectedDate(day)}
-                    className="flex min-h-20 flex-col items-center border-b border-ink/10 px-1 py-3 text-center transition hover:bg-paper"
+                    className="flex min-h-14 flex-col items-center border-b border-ink/10 px-1 py-2 text-center transition hover:bg-paper"
                   >
-                    <span className={`grid h-10 w-10 place-items-center rounded-full text-2xl font-bold ${isToday ? "bg-clay text-white" : "text-ink"}`}>
+                    <span className={`grid h-8 w-8 place-items-center rounded-full text-lg font-bold ${isToday ? "bg-clay text-white" : "text-ink"}`}>
                       {Number(day.slice(-2))}
                     </span>
-                    <span className="mt-auto flex h-4 max-w-full items-center justify-center gap-1 overflow-hidden">
+                    <span className="mt-auto flex h-3 max-w-full items-center justify-center gap-1 overflow-hidden">
                       {dayItems.slice(0, 3).map((item) => (
                         <span key={item.id} className="h-2 w-2 rounded-full" style={{ backgroundColor: activityColor(item.activities) }} />
                       ))}
@@ -900,11 +906,8 @@ function buildWeekStrip(value: string) {
   });
 }
 
-function buildTimelineHours(items: PlanItem[]) {
-  const hours = items.map(itemHour).filter((hour) => hour >= 0);
-  const minHour = Math.min(8, ...hours);
-  const maxHour = Math.max(18, ...hours);
-  return Array.from({ length: maxHour - minHour + 1 }, (_, index) => minHour + index);
+function buildTimelineHours(_items: PlanItem[]) {
+  return Array.from({ length: 13 }, (_, index) => 7 + index);
 }
 
 function itemHour(item: PlanItem) {
