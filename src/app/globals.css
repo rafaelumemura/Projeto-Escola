@@ -35,6 +35,15 @@ select {
   font: inherit;
 }
 
+select {
+  min-height: 44px;
+}
+
+select option {
+  color: #1d2320;
+  background: #ffffff;
+}
+
 button {
   cursor: pointer;
 }
@@ -70,5 +79,20 @@ button:disabled {
 
   .badge {
     @apply inline-flex items-center rounded-full border border-ink/10 bg-mint/70 px-2.5 py-1 text-xs font-medium text-ink/75;
+  }
+}
+
+@media (max-width: 640px) {
+  select.field {
+    min-height: 48px;
+    font-size: 16px;
+    line-height: 1.35;
+  }
+
+  select.field option {
+    min-height: 44px;
+    padding: 12px;
+    font-size: 16px;
+    line-height: 1.35;
   }
 }

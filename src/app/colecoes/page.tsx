@@ -371,7 +371,7 @@ export default function CollectionsPage() {
                   </button>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3 lg:grid-cols-1">
+                <div className="space-y-3">
                   {collectionActivities.map((activity) => (
                     <div
                       key={activity.id}

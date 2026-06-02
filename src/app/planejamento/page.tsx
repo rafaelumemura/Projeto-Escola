@@ -37,6 +37,7 @@ export default function MonthlyPlanningPage() {
   const [collections, setCollections] = useState<Collection[]>([]);
   const [items, setItems] = useState<PlanItem[]>([]);
   const [modalDate, setModalDate] = useState<string | null>(null);
+  const [modalCanChangeDate, setModalCanChangeDate] = useState(false);
   const [activityId, setActivityId] = useState("");
   const [startTime, setStartTime] = useState("");
   const [manualMode, setManualMode] = useState(false);
@@ -99,8 +100,14 @@ export default function MonthlyPlanningPage() {
   }
 
   async function ensureMonthlyPlan() {
-    const title = hiddenPlanTitle(currentMonth);
-    const legacyTitle = legacyHiddenPlanTitle(currentMonth);
+    return ensureMonthlyPlanForDate(currentMonth);
+  }
+
+  async function ensureMonthlyPlanForDate(date: Date) {
+    const title = hiddenPlanTitle(date);
+    const legacyTitle = legacyHiddenPlanTitle(date);
+    const targetStartDate = formatDate(monthStart(date));
+    const targetEndDate = formatDate(monthEnd(date));
     const plansData = await apiFetch<{ weekly_plans: MonthlyPlan[] }>(supabase, "/api/weekly-plans");
     const existing = plansData.weekly_plans.find((plan) => plan.title === title || plan.title === legacyTitle);
 
@@ -108,14 +115,15 @@ export default function MonthlyPlanningPage() {
 
     const created = await apiFetch<{ weekly_plan: MonthlyPlan }>(supabase, "/api/weekly-plans", {
       method: "POST",
-      body: { title, start_date: monthStartDate, end_date: monthEndDate }
+      body: { title, start_date: targetStartDate, end_date: targetEndDate }
     });
 
     return created.weekly_plan;
   }
 
-  function openAddModal(date: string) {
+  function openAddModal(date: string, canChangeDate = false) {
     setModalDate(date);
+    setModalCanChangeDate(canChangeDate);
     setActivityId("");
     setStartTime("");
     setManualMode(false);
@@ -125,6 +133,7 @@ export default function MonthlyPlanningPage() {
 
   function closeAddModal() {
     setModalDate(null);
+    setModalCanChangeDate(false);
     setActivityId("");
     setStartTime("");
     setManualMode(false);
@@ -155,6 +164,10 @@ export default function MonthlyPlanningPage() {
     try {
       let resolvedActivityId = activityId;
       let notes = null;
+      const selectedDate = parseDateValue(modalDate) || currentMonth;
+      const targetPlan = modalCanChangeDate && !isSameMonth(selectedDate, currentMonth)
+        ? await ensureMonthlyPlanForDate(selectedDate)
+        : monthlyPlan;
 
       if (manualMode) {
         const manualPayload = resolveManualActivityForm(manualForm);
@@ -173,7 +186,7 @@ export default function MonthlyPlanningPage() {
         return;
       }
 
-      await apiFetch(supabase, `/api/weekly-plans/${monthlyPlan.id}/items`, {
+      await apiFetch(supabase, `/api/weekly-plans/${targetPlan.id}/items`, {
         method: "POST",
         body: {
           activity_id: resolvedActivityId,
@@ -184,7 +197,11 @@ export default function MonthlyPlanningPage() {
         }
       });
       closeAddModal();
-      await loadMonth();
+      if (!isSameMonth(selectedDate, currentMonth)) {
+        setCurrentMonth(monthStart(selectedDate));
+      } else {
+        await loadMonth();
+      }
       setMessage("Atividade adicionada ao calendário.");
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Não foi possível adicionar a atividade.";
@@ -371,14 +388,36 @@ export default function MonthlyPlanningPage() {
           </div>
         ) : (
           <div className="panel overflow-hidden p-4">
-            <div className="mb-4 flex items-center justify-between gap-3">
-              <button type="button" onClick={() => setCurrentMonth(addMonths(currentMonth, -12))} className="btn-secondary rounded-full px-4">
-                <ChevronLeft size={17} />
-                {currentMonth.getFullYear()}
-              </button>
+            <div className="mb-4 grid grid-cols-[1fr_auto] items-center gap-3">
+              <div className="grid grid-cols-[1fr_104px] gap-2">
+                <select
+                  className="field"
+                  value={currentMonth.getMonth()}
+                  onChange={(event) => setCurrentMonth(new Date(currentMonth.getFullYear(), Number(event.target.value), 1))}
+                  aria-label="Selecionar mês"
+                >
+                  {calendarMonthNames.map((month, index) => (
+                    <option key={month} value={index}>
+                      {month}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  className="field"
+                  value={currentMonth.getFullYear()}
+                  onChange={(event) => setCurrentMonth(new Date(Number(event.target.value), currentMonth.getMonth(), 1))}
+                  aria-label="Selecionar ano"
+                >
+                  {mobileYearOptions(currentMonth).map((year) => (
+                    <option key={year} value={year}>
+                      {year}
+                    </option>
+                  ))}
+                </select>
+              </div>
               <button
                 type="button"
-                onClick={() => openAddModal(formatDate(isSameMonth(new Date(), currentMonth) ? new Date() : currentMonth))}
+                onClick={() => openAddModal(formatDate(isSameMonth(new Date(), currentMonth) ? new Date() : currentMonth), true)}
                 className="grid h-11 w-11 place-items-center rounded-full border border-ink/10 bg-white text-leaf shadow-soft"
                 title="Adicionar atividade"
               >
@@ -498,7 +537,7 @@ export default function MonthlyPlanningPage() {
             <div className="mb-5 flex items-start justify-between gap-4">
               <div>
                 <p className="label mb-2">Adicionar atividade</p>
-                <h2 className="text-xl font-bold text-ink">{formatDisplayDate(modalDate)}</h2>
+                <h2 className="text-xl font-bold text-ink">{modalCanChangeDate ? "Escolha a data e a atividade" : formatDisplayDate(modalDate)}</h2>
               </div>
               <button type="button" onClick={closeAddModal} className="grid h-9 w-9 place-items-center rounded-md border border-ink/10 text-ink/55 hover:text-ink" title="Fechar">
                 <X size={17} />
@@ -506,6 +545,10 @@ export default function MonthlyPlanningPage() {
             </div>
 
             <div className="space-y-4">
+              {modalCanChangeDate ? (
+                <CalendarDateField label="Data" value={modalDate} onChange={setModalDate} />
+              ) : null}
+
               <label className="block">
                 <span className="label mb-2 block">Horário de início</span>
                 <input className="field" type="time" value={startTime} onChange={(event) => setStartTime(event.target.value)} required />
@@ -753,6 +796,12 @@ function parseDateParts(value: string) {
   return { year, month, day };
 }
 
+function parseDateValue(value: string) {
+  const parts = parseDateParts(value);
+  if (!parts) return null;
+  return new Date(parts.year, parts.month - 1, parts.day);
+}
+
 function hiddenPlanTitle(date: Date) {
   return `Planejamento ${monthSlug(date)}`;
 }
@@ -771,6 +820,10 @@ function monthLabel(date: Date) {
 
 function monthName(date: Date) {
   return new Intl.DateTimeFormat("pt-BR", { month: "long" }).format(date);
+}
+
+function mobileYearOptions(date: Date) {
+  return Array.from({ length: 15 }, (_, index) => date.getFullYear() - 7 + index);
 }
 
 function monthStart(date: Date) {
