@@ -1,6 +1,7 @@
 "use client";
 
-import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { useAuth } from "@/components/auth/AuthProvider";
 
 export type ThemeMode = "light" | "dark";
 
@@ -13,6 +14,7 @@ const storageKey = "projeto-escola-theme";
 const ThemeContext = createContext<ThemeContextValue | null>(null);
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
+  const { profile, supabase, user, refreshProfile } = useAuth();
   const [theme, setThemeState] = useState<ThemeMode>("light");
 
   useEffect(() => {
@@ -23,21 +25,71 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key === storageKey && isThemeMode(event.newValue)) {
+        setThemeState(event.newValue);
+      }
+    };
+
+    window.addEventListener("storage", handleStorage);
+    return () => window.removeEventListener("storage", handleStorage);
+  }, []);
+
+  useEffect(() => {
+    const profileTheme = getProfileThemePreference(profile);
+    if (profileTheme) {
+      setThemeState((current) => (current === profileTheme ? current : profileTheme));
+    }
+  }, [profile]);
+
+  useEffect(() => {
     document.documentElement.dataset.theme = theme;
     document.documentElement.style.colorScheme = theme;
     window.localStorage.setItem(storageKey, theme);
     updateThemeAssets(theme);
   }, [theme]);
 
+  const setTheme = useCallback(
+    (nextTheme: ThemeMode) => {
+      setThemeState(nextTheme);
+      window.localStorage.setItem(storageKey, nextTheme);
+
+      const profileTheme = getProfileThemePreference(profile);
+      if (user && profileTheme !== nextTheme) {
+        supabase
+          .from("profiles")
+          .update({ theme_preference: nextTheme })
+          .eq("id", user.id)
+          .then(({ error }) => {
+            if (!error) {
+              refreshProfile().catch(() => undefined);
+            }
+          })
+          .catch(() => undefined);
+      }
+    },
+    [profile, refreshProfile, supabase, user]
+  );
+
   const value = useMemo(
     () => ({
       theme,
-      setTheme: setThemeState
+      setTheme
     }),
-    [theme]
+    [setTheme, theme]
   );
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
+}
+
+function isThemeMode(value: unknown): value is ThemeMode {
+  return value === "light" || value === "dark";
+}
+
+function getProfileThemePreference(profile: unknown): ThemeMode | null {
+  if (!profile || typeof profile !== "object") return null;
+  const value = (profile as { theme_preference?: unknown }).theme_preference;
+  return isThemeMode(value) ? value : null;
 }
 
 export function useTheme() {

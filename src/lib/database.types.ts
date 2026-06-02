@@ -7,6 +7,7 @@ export type Json =
   | Json[];
 
 type PlanningPdfSkill = "grade" | "layout_fundo_1" | "layout_fundo_2" | "layout_fundo_3" | "layout_fundo_4" | "layout_fundo_5" | "layout_fundo_6" | "layout_fundo_7" | "layout_fundo_8" | "layout_fundo_9";
+type ThemePreference = "light" | "dark";
 
 type ActivityRow = {
   id: string;
@@ -89,6 +90,7 @@ export type Database = {
           is_admin: boolean;
           plan: "free" | "basic" | "complete" | "pro";
           planning_pdf_skill: PlanningPdfSkill;
+          theme_preference: ThemePreference;
           password_must_change: boolean;
           created_at: string;
         };
@@ -100,6 +102,7 @@ export type Database = {
           is_admin?: boolean;
           plan?: "free" | "basic" | "complete" | "pro";
           planning_pdf_skill?: PlanningPdfSkill;
+          theme_preference?: ThemePreference;
           password_must_change?: boolean;
           created_at?: string;
         };
@@ -110,6 +113,7 @@ export type Database = {
           is_admin?: boolean;
           plan?: "free" | "basic" | "complete" | "pro";
           planning_pdf_skill?: PlanningPdfSkill;
+          theme_preference?: ThemePreference;
           password_must_change?: boolean;
         };
       };
