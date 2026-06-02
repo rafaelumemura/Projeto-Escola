@@ -9,9 +9,9 @@ export const metadata: Metadata = {
   description: "App para gerar atividades pedagógicas personalizadas com IA.",
   manifest: "/manifest.webmanifest",
   icons: {
-    icon: "/favicon.png",
-    shortcut: "/favicon.png",
-    apple: "/favicon.png"
+    icon: "/simbolo.webp",
+    shortcut: "/simbolo.webp",
+    apple: "/simbolo.webp"
   }
 };
 

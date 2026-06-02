@@ -51,7 +51,7 @@ export function useTheme() {
 }
 
 function updateThemeAssets(theme: ThemeMode) {
-  const faviconHref = theme === "dark" ? "/simbolo-dark.png" : "/favicon.png";
+  const faviconHref = "/simbolo.webp";
   const themeColor = theme === "dark" ? "#070d1b" : "#2f7d58";
   const icons = document.querySelectorAll<HTMLLinkElement>('link[rel="icon"], link[rel="shortcut icon"], link[rel="apple-touch-icon"]');
   const metaTheme = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]');

@@ -192,7 +192,7 @@ export default function ProfilePage() {
 
           <div className="grid gap-3">
             <Info label="E-mail" value={profile?.email || user?.email || "-"} />
-            <PlanInfo value={usage?.plan_name || planName(profile?.plan)} />
+            <PlanInfo value={usage?.plan_name || planName(profile?.plan)} planKey={usage?.plan_key || profile?.plan} />
             <ThemeSelector theme={theme} onThemeChange={setTheme} />
             <Info label="Uso do ciclo" value={`${usage?.generated_count || 0}/${usage?.activity_limit || 0} atividades geradas`} />
             <Info label="Vencimento" value={usage?.current_period_end ? new Date(usage.current_period_end).toLocaleDateString("pt-BR") : "-"} />
@@ -405,15 +405,19 @@ function Info({ label, value }: { label: string; value: string }) {
   );
 }
 
-function PlanInfo({ value }: { value: string }) {
+function PlanInfo({ value, planKey }: { value: string; planKey?: string | null }) {
+  const canUpgrade = planKey === "free" || planKey === "basic";
+
   return (
     <div className="rounded-lg border border-ink/10 bg-white p-4">
       <p className="label">Plano atual</p>
       <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm font-semibold text-ink">{value}</p>
-        <Link href="/planos" className="btn-primary px-3 py-1.5 text-xs">
-          Fazer upgrade
-        </Link>
+        {canUpgrade ? (
+          <Link href="/planos" className="btn-primary px-3 py-1.5 text-xs">
+            Fazer upgrade
+          </Link>
+        ) : null}
       </div>
     </div>
   );

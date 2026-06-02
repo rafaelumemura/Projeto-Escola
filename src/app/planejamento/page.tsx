@@ -310,7 +310,7 @@ export default function MonthlyPlanningPage() {
                 <ChevronLeft size={17} />
                 {monthName(currentMonth)}
               </button>
-              <button type="button" onClick={() => openAddModal(mobileSelectedDate)} className="grid h-11 w-11 place-items-center rounded-full border border-leaf bg-leaf text-white shadow-soft" title="Adicionar atividade">
+              <button type="button" onClick={() => openAddModal(mobileSelectedDate)} className="grid h-11 w-11 place-items-center rounded-full border border-[#00B3AF] bg-[#00B3AF] text-white shadow-soft transition hover:bg-[#009d99]" title="Adicionar atividade">
                 <Plus size={20} />
               </button>
             </div>
@@ -426,7 +426,7 @@ export default function MonthlyPlanningPage() {
               <button
                 type="button"
                 onClick={() => openAddModal(formatDate(isSameMonth(new Date(), currentMonth) ? new Date() : currentMonth), true)}
-                className="grid h-11 w-11 place-items-center rounded-full border border-leaf bg-leaf text-white shadow-soft"
+                className="grid h-11 w-11 place-items-center rounded-full border border-[#00B3AF] bg-[#00B3AF] text-white shadow-soft transition hover:bg-[#009d99]"
                 title="Adicionar atividade"
               >
                 <Plus size={20} />

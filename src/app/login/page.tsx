@@ -39,7 +39,7 @@ export default function LoginPage() {
     <main className="grid min-h-screen bg-paper px-4 py-8 lg:grid-cols-[1fr_460px]">
       <section className="hidden items-center justify-center border-r border-ink/10 px-10 lg:flex">
         <div className="max-w-2xl">
-          <img src="/logo-horizontal.png" alt="Projeto Escola" className="mb-8 h-28 max-w-full object-contain object-left" />
+          <img src="/simbolo.webp" alt="Projeto Escola" className="mb-8 h-32 max-w-full object-contain object-left" />
           <p className="text-lg leading-8 text-ink/70">
             Gere, salve e organize atividades pedagógicas com IA para educação infantil e fundamental 1.
           </p>
@@ -56,7 +56,7 @@ export default function LoginPage() {
       <section className="flex items-center justify-center">
         <div className="panel w-full max-w-md p-6">
           <div className="mb-6 lg:hidden">
-            <img src="/logo-horizontal.png" alt="Projeto Escola" className="mb-4 h-16 max-w-full object-contain object-left" />
+            <img src="/simbolo.webp" alt="Projeto Escola" className="mb-4 h-20 max-w-full object-contain object-left" />
             <p className="text-sm text-ink/65">Entre para criar atividades pedagógicas com IA.</p>
           </div>
 

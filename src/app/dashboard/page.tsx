@@ -8,7 +8,10 @@ import { useAuth } from "@/components/auth/AuthProvider";
 import { apiFetch } from "@/lib/api/client";
 import type { Database } from "@/lib/database.types";
 
-type Activity = Database["public"]["Tables"]["activities"]["Row"];
+type Activity = Database["public"]["Tables"]["activities"]["Row"] & {
+  collection_ids?: string[];
+  primary_collection_id?: string | null;
+};
 type Collection = Database["public"]["Tables"]["collections"]["Row"];
 type WeeklyPlan = Database["public"]["Tables"]["weekly_plans"]["Row"];
 type PlannedItem = Database["public"]["Tables"]["weekly_plan_items"]["Row"] & {
@@ -105,6 +108,7 @@ export default function DashboardPage() {
                   <p className="mt-1 text-sm text-ink/60">
                     {activity.age_range || "Faixa etária"} • {activity.development_area || "Área"}
                   </p>
+                  <CollectionBadges activity={activity} collections={collections} />
                 </Link>
               ))
             ) : (
@@ -120,6 +124,35 @@ export default function DashboardPage() {
         </section>
       </div>
     </ProtectedPage>
+  );
+}
+
+function CollectionBadges({ activity, collections }: { activity: Activity; collections: Collection[] }) {
+  const activityCollections = (activity.collection_ids || [])
+    .map((id) => collections.find((collection) => collection.id === id))
+    .filter((collection): collection is Collection => Boolean(collection));
+
+  return (
+    <div className="mt-3 flex flex-wrap gap-1.5">
+      {activityCollections.length ? (
+        activityCollections.map((collection) => (
+          <span
+            key={collection.id}
+            className="rounded-full border px-2 py-0.5 text-[11px] font-bold text-ink/65"
+            style={{
+              borderColor: collection.color || "#d9ded8",
+              backgroundColor: `${collection.color || "#2f7d58"}18`
+            }}
+          >
+            {collection.name}
+          </span>
+        ))
+      ) : (
+        <span className="rounded-full border border-ink/10 bg-paper px-2 py-0.5 text-[11px] font-bold text-ink/45">
+          Sem coleção
+        </span>
+      )}
+    </div>
   );
 }
 
