@@ -1,9 +1,15 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight, Eye, FileDown, Filter, FolderMinus, FolderPlus, Pencil, Printer, Save, Trash2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Eye, FileDown, Filter, FolderMinus, FolderPlus, Pencil, Plus, Printer, Save, Trash2, X } from "lucide-react";
 import { ProtectedPage } from "@/components/layout/ProtectedPage";
 import { ActivityView } from "@/components/ui/ActivityView";
+import {
+  initialManualActivityForm,
+  ManualActivityFields,
+  type ManualActivityForm,
+  resolveManualActivityForm
+} from "@/components/ui/ManualActivityFields";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { apiFetch, downloadPdf } from "@/lib/api/client";
 import { activityTypes, methodologies } from "@/lib/activities/types";
@@ -65,6 +71,8 @@ export default function ActivitiesPage() {
     collection_id: ""
   });
   const [actionCollectionId, setActionCollectionId] = useState("");
+  const [manualModalOpen, setManualModalOpen] = useState(false);
+  const [manualForm, setManualForm] = useState<ManualActivityForm>(initialManualActivityForm);
 
   const query = useMemo(() => {
     const params = new URLSearchParams();
@@ -128,6 +136,45 @@ export default function ActivitiesPage() {
     setActionCollectionId(selected?.primary_collection_id || selected?.collection_ids?.[0] || "");
     setPendingDeleteId(null);
   }, [selected?.id, selected?.primary_collection_id, selected?.collection_ids]);
+
+  function openManualModal() {
+    setManualForm(initialManualActivityForm);
+    setManualModalOpen(true);
+    setMessage(null);
+  }
+
+  function closeManualModal() {
+    setManualModalOpen(false);
+    setManualForm(initialManualActivityForm);
+  }
+
+  function updateManualField<K extends keyof ManualActivityForm>(key: K, value: ManualActivityForm[K]) {
+    setManualForm((current) => ({ ...current, [key]: value }));
+  }
+
+  async function createManualActivity(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setBusy(true);
+    setMessage(null);
+    try {
+      const manualPayload = resolveManualActivityForm(manualForm);
+      const data = await apiFetch<{ activity: Activity }>(supabase, "/api/activities", {
+        method: "POST",
+        body: manualPayload.activity
+      });
+      const created = { ...data.activity, collection_ids: [], primary_collection_id: null };
+      setActivities((current) => [created, ...current]);
+      setSelected(created);
+      setEdit(null);
+      setPage(1);
+      closeManualModal();
+      setMessage("Atividade criada.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Não foi possível criar a atividade.");
+    } finally {
+      setBusy(false);
+    }
+  }
 
   function startEdit(activity: ActivityWithCollections) {
     setSelected(activity);
@@ -286,7 +333,16 @@ export default function ActivitiesPage() {
   }
 
   return (
-    <ProtectedPage title="Atividades" subtitle="Consulte, filtre, edite e reutilize atividades salvas.">
+    <ProtectedPage
+      title="Atividades"
+      subtitle="Consulte, filtre, edite e reutilize atividades salvas."
+      actions={
+        <button type="button" onClick={openManualModal} className="btn-primary">
+          <Plus size={17} />
+          Criar atividade
+        </button>
+      }
+    >
       <section className="panel mb-5 p-4">
         <div className="mb-3 flex items-center gap-2 font-bold">
           <Filter size={18} className="text-leaf" />
@@ -313,8 +369,14 @@ export default function ActivitiesPage() {
       {message ? <p className="mb-4 rounded-lg border border-ink/10 bg-white px-4 py-3 text-sm font-semibold text-ink/70">{message}</p> : null}
 
       <div className="grid gap-5 lg:grid-cols-[360px_1fr]">
-        <aside className="space-y-3">
-          {visibleActivities.map((activity) => (
+        <aside className="rounded-lg border border-ink/10 bg-white p-3 shadow-soft lg:space-y-3 lg:rounded-none lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none">
+          <div className="mb-3 flex items-center justify-between gap-3 lg:hidden">
+            <p className="label">Lista de atividades</p>
+            <span className="text-xs font-bold text-ink/45">{activities.length} itens</span>
+          </div>
+
+          <div className="space-y-3">
+            {visibleActivities.map((activity) => (
             <button
               key={activity.id}
               onClick={() => {
@@ -348,10 +410,11 @@ export default function ActivitiesPage() {
                 )}
               </div>
             </button>
-          ))}
-          {!activities.length ? <div className="panel p-5 text-sm font-semibold text-ink/60">Nenhuma atividade encontrada.</div> : null}
+            ))}
+          </div>
+          {!activities.length ? <div className="panel mt-3 p-5 text-sm font-semibold text-ink/60 lg:mt-0">Nenhuma atividade encontrada.</div> : null}
           {activities.length > pageSize ? (
-            <div className="flex items-center justify-between gap-2 rounded-lg border border-ink/10 bg-white p-2">
+            <div className="mt-3 flex items-center justify-between gap-2 rounded-lg border border-ink/10 bg-white p-2 lg:mt-0">
               <button
                 type="button"
                 onClick={() => setPage((current) => Math.max(1, current - 1))}
@@ -380,6 +443,11 @@ export default function ActivitiesPage() {
         <section className="space-y-4">
           {selected ? (
             <>
+              <div className="rounded-lg border border-leaf/20 bg-mint/45 px-4 py-3 lg:hidden">
+                <p className="label mb-1">Detalhe da atividade</p>
+                <h2 className="text-base font-bold text-ink">{selected.title}</h2>
+              </div>
+
               {(() => {
                 const material = getSavedPrintableMaterialPlan(selected.raw_ai_response);
                 const materialReady = Boolean(material?.has_material);
@@ -390,7 +458,7 @@ export default function ActivitiesPage() {
                 const canDownloadMaterial = materialAllowed && materialReady;
 
                 return (
-              <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
+              <div className="grid grid-cols-2 gap-2 rounded-lg border border-ink/10 bg-white p-3 shadow-soft sm:flex sm:flex-wrap sm:border-0 sm:bg-transparent sm:p-0 sm:shadow-none">
                 <button onClick={() => startEdit(selected)} className="btn-secondary">
                   <Pencil size={16} />
                   Editar
@@ -514,6 +582,34 @@ export default function ActivitiesPage() {
               </button>
             </div>
           </div>
+        </div>
+      ) : null}
+
+      {manualModalOpen ? (
+        <div className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-ink/45 px-4 py-6">
+          <form onSubmit={createManualActivity} className="w-full max-w-2xl rounded-lg border border-ink/10 bg-white p-5 shadow-soft">
+            <div className="mb-5 flex items-start justify-between gap-4">
+              <div>
+                <p className="label mb-2">Atividades</p>
+                <h2 className="text-xl font-bold text-ink">Nova atividade</h2>
+              </div>
+              <button type="button" onClick={closeManualModal} className="grid h-9 w-9 place-items-center rounded-md border border-ink/10 text-ink/55 hover:text-ink" title="Fechar">
+                <X size={17} />
+              </button>
+            </div>
+
+            <ManualActivityFields form={manualForm} onChange={updateManualField} />
+
+            <div className="mt-6 flex justify-end gap-2">
+              <button type="button" onClick={closeManualModal} disabled={busy} className="btn-secondary">
+                Cancelar
+              </button>
+              <button disabled={busy} className="btn-primary">
+                <Save size={16} />
+                Salvar atividade
+              </button>
+            </div>
+          </form>
         </div>
       ) : null}
     </ProtectedPage>

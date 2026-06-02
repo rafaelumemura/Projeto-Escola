@@ -4,9 +4,14 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight, FileDown, Plus, X } from "lucide-react";
 import { ProtectedPage } from "@/components/layout/ProtectedPage";
 import { ActivityView } from "@/components/ui/ActivityView";
+import {
+  initialManualActivityForm,
+  ManualActivityFields,
+  type ManualActivityForm,
+  resolveManualActivityForm
+} from "@/components/ui/ManualActivityFields";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { apiFetch, downloadPdf } from "@/lib/api/client";
-import { environments, methodologies } from "@/lib/activities/types";
 import type { Database } from "@/lib/database.types";
 
 type MonthlyPlan = Database["public"]["Tables"]["weekly_plans"]["Row"];
@@ -23,43 +28,6 @@ type PlanItem = Database["public"]["Tables"]["weekly_plan_items"]["Row"] & {
 const weekdays = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 const calendarMonthNames = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
 const defaultColor = "#2f7d58";
-const manualActivityTypes = ["Individual", "Dupla", "Trio", "Sala Toda"] as const;
-
-type ManualActivityForm = {
-  title: string;
-  bncc_code: string;
-  age_range: string;
-  estimated_time: string;
-  methodology: string;
-  custom_methodology: string;
-  development_area: string;
-  activity_type: string;
-  environment: string;
-  custom_environment: string;
-  materials: string;
-  objective: string;
-  steps_text: string;
-  safety_notes: string;
-  notes: string;
-};
-
-const initialManualActivityForm: ManualActivityForm = {
-  title: "",
-  bncc_code: "",
-  age_range: "",
-  estimated_time: "",
-  methodology: "Construtivista",
-  custom_methodology: "",
-  development_area: "",
-  activity_type: "Sala Toda",
-  environment: "Sala de aula",
-  custom_environment: "",
-  materials: "",
-  objective: "",
-  steps_text: "",
-  safety_notes: "",
-  notes: ""
-};
 
 export default function MonthlyPlanningPage() {
   const { supabase, profile } = useAuth();
@@ -81,6 +49,7 @@ export default function MonthlyPlanningPage() {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [appAlert, setAppAlert] = useState<string | null>(null);
+  const [mobileSelectedDate, setMobileSelectedDate] = useState<string | null>(null);
 
   const monthStartDate = useMemo(() => formatDate(monthStart(currentMonth)), [currentMonth]);
   const monthEndDate = useMemo(() => formatDate(monthEnd(currentMonth)), [currentMonth]);
@@ -111,6 +80,10 @@ export default function MonthlyPlanningPage() {
     loadMonth().catch((error) => setMessage(error instanceof Error ? error.message : "Não foi possível carregar o planejamento."));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [monthStartDate, monthEndDate, supabase]);
+
+  useEffect(() => {
+    setMobileSelectedDate(null);
+  }, [monthStartDate]);
 
   async function loadMonth() {
     setBusy(true);
@@ -184,51 +157,14 @@ export default function MonthlyPlanningPage() {
       let notes = null;
 
       if (manualMode) {
-        const methodology = manualForm.methodology === "Outra" ? manualForm.custom_methodology.trim() : manualForm.methodology;
-        const environment = manualForm.environment === "Outro" ? manualForm.custom_environment.trim() : manualForm.environment;
-        const steps = textArray(manualForm.steps_text);
-
-        if (
-          !manualForm.title.trim() ||
-          !manualForm.age_range.trim() ||
-          !manualForm.estimated_time.trim() ||
-          !methodology ||
-          !manualForm.development_area.trim() ||
-          !manualForm.activity_type ||
-          !environment ||
-          !manualForm.materials.trim() ||
-          !manualForm.objective.trim() ||
-          !steps.length ||
-          !manualForm.safety_notes.trim()
-        ) {
-          setMessage("Preencha os campos da nova atividade antes de inserir.");
-          return;
-        }
+        const manualPayload = resolveManualActivityForm(manualForm);
 
         const created = await apiFetch<{ activity: Activity }>(supabase, "/api/activities", {
           method: "POST",
-          body: {
-            title: manualForm.title.trim(),
-            age_range: manualForm.age_range.trim(),
-            estimated_time: manualForm.estimated_time.trim(),
-            methodology,
-            development_area: manualForm.development_area.trim(),
-            activity_type: manualForm.activity_type,
-            environment,
-            materials: manualForm.materials.trim(),
-            objective: manualForm.objective.trim(),
-            bncc_code: manualForm.bncc_code.trim() || null,
-            description: null,
-            steps,
-            teacher_tips: [],
-            variations: [],
-            safety_notes: manualForm.safety_notes.trim(),
-            evaluation: null,
-            raw_ai_response: { manual: true }
-          }
+          body: manualPayload.activity
         });
         resolvedActivityId = created.activity.id;
-        notes = manualForm.notes.trim() || null;
+        notes = manualPayload.notes;
         setActivities((current) => [{ ...created.activity, collection_ids: [], primary_collection_id: null }, ...current]);
       }
 
@@ -349,60 +285,144 @@ export default function MonthlyPlanningPage() {
         </div>
       </section>
 
-      <section className="space-y-3 lg:hidden">
-        {calendarDays.filter((day): day is string => Boolean(day)).map((day) => {
-          const dayItems = groupedItems[day] || [];
-          return (
-            <div key={day} className="rounded-lg border border-ink/10 bg-white p-4">
-              <div className="mb-3 flex items-center justify-between gap-3">
-                <div>
-                  <p className="label mb-1">{weekdayLabel(day)}</p>
-                  <h3 className="text-lg font-bold text-ink">{formatDisplayDate(day)}</h3>
-                </div>
-                <button type="button" onClick={() => openAddModal(day)} className="grid h-9 w-9 place-items-center rounded-md border border-ink/10 bg-white text-leaf transition hover:border-leaf/40 hover:bg-mint" title="Adicionar atividade">
-                  <Plus size={16} />
+      <section className="lg:hidden">
+        {mobileSelectedDate ? (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between gap-3">
+              <button type="button" onClick={() => setMobileSelectedDate(null)} className="btn-secondary rounded-full px-4">
+                <ChevronLeft size={17} />
+                {monthName(currentMonth)}
+              </button>
+              <button type="button" onClick={() => openAddModal(mobileSelectedDate)} className="grid h-11 w-11 place-items-center rounded-full border border-ink/10 bg-white text-leaf shadow-soft" title="Adicionar atividade">
+                <Plus size={20} />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-7 gap-2">
+              {buildWeekStrip(mobileSelectedDate).map((day) => (
+                <button
+                  key={day}
+                  type="button"
+                  onClick={() => setMobileSelectedDate(day)}
+                  className={`rounded-full px-2 py-3 text-center font-bold transition ${
+                    day === mobileSelectedDate ? "bg-leaf text-white" : "bg-white text-ink/65"
+                  }`}
+                >
+                  <span className="block text-[10px] uppercase">{weekdayShort(day)}</span>
+                  <span className="block text-lg leading-none">{Number(day.slice(-2))}</span>
                 </button>
+              ))}
+            </div>
+
+            <div className="panel overflow-hidden">
+              <div className="border-b border-ink/10 bg-white px-4 py-4">
+                <p className="label mb-1">{weekdayLabel(mobileSelectedDate)}</p>
+                <h2 className="text-xl font-bold text-ink">{formatDisplayDate(mobileSelectedDate)}</h2>
               </div>
 
-              <div className="space-y-2">
-                {dayItems.map((item) => {
-                  const color = activityColor(item.activities);
+              <div className="divide-y divide-ink/10">
+                {buildTimelineHours(groupedItems[mobileSelectedDate] || []).map((hour) => {
+                  const hourItems = (groupedItems[mobileSelectedDate] || []).filter((item) => itemHour(item) === hour);
                   return (
-                    <div
-                      key={item.id}
-                      role="button"
-                      tabIndex={0}
-                      onClick={() => item.activities && setViewActivity(item.activities)}
-                      onKeyDown={(event) => {
-                        if ((event.key === "Enter" || event.key === " ") && item.activities) {
-                          setViewActivity(item.activities);
-                        }
-                      }}
-                      className="grid grid-cols-[5px_1fr_auto_auto] items-center gap-2 rounded-md bg-paper/70 px-2 py-2 text-sm"
-                    >
-                      <span className="h-6 rounded-full" style={{ backgroundColor: color }} />
-                      <span className="min-w-0 truncate font-semibold text-ink">{item.activities?.title || "Atividade removida"}</span>
-                      <span className="font-semibold text-ink/55">{formatTime(item.start_time)}</span>
-                      <button
-                        type="button"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          removeItem(item.id);
-                        }}
-                        className="text-ink/35 hover:text-clay"
-                        title="Remover"
-                      >
-                        <X size={14} />
-                      </button>
+                    <div key={hour} className="grid min-h-20 grid-cols-[58px_1fr] bg-white">
+                      <div className="border-r border-ink/10 px-2 py-3 text-right text-sm font-semibold text-ink/40">{pad(hour)}:00</div>
+                      <div className="space-y-2 px-2 py-2">
+                        {hourItems.map((item) => {
+                          const color = activityColor(item.activities);
+                          return (
+                            <div
+                              key={item.id}
+                              role="button"
+                              tabIndex={0}
+                              onClick={() => item.activities && setViewActivity(item.activities)}
+                              onKeyDown={(event) => {
+                                if ((event.key === "Enter" || event.key === " ") && item.activities) {
+                                  setViewActivity(item.activities);
+                                }
+                              }}
+                              className="grid grid-cols-[5px_1fr_auto] items-center gap-2 rounded-lg bg-paper px-2 py-2 text-sm"
+                              style={{ borderColor: color }}
+                            >
+                              <span className="h-full min-h-10 rounded-full" style={{ backgroundColor: color }} />
+                              <span className="min-w-0">
+                                <span className="block truncate font-bold text-ink">{item.activities?.title || "Atividade removida"}</span>
+                                <span className="block text-xs font-semibold text-ink/55">{formatTime(item.start_time)}</span>
+                              </span>
+                              <button
+                                type="button"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  removeItem(item.id);
+                                }}
+                                className="grid h-8 w-8 place-items-center rounded-md text-ink/35 hover:text-clay"
+                                title="Remover"
+                              >
+                                <X size={14} />
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
                   );
                 })}
-
-                {!dayItems.length ? <p className="rounded-md border border-dashed border-ink/15 p-3 text-sm font-semibold text-ink/50">Sem atividades.</p> : null}
               </div>
             </div>
-          );
-        })}
+          </div>
+        ) : (
+          <div className="panel overflow-hidden p-4">
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <button type="button" onClick={() => setCurrentMonth(addMonths(currentMonth, -12))} className="btn-secondary rounded-full px-4">
+                <ChevronLeft size={17} />
+                {currentMonth.getFullYear()}
+              </button>
+              <button
+                type="button"
+                onClick={() => openAddModal(formatDate(isSameMonth(new Date(), currentMonth) ? new Date() : currentMonth))}
+                className="grid h-11 w-11 place-items-center rounded-full border border-ink/10 bg-white text-leaf shadow-soft"
+                title="Adicionar atividade"
+              >
+                <Plus size={20} />
+              </button>
+            </div>
+
+            <h2 className="mb-4 text-4xl font-bold capitalize text-ink">{monthName(currentMonth)}</h2>
+
+            <div className="grid grid-cols-7 border-b border-ink/10 pb-2 text-center">
+              {["D", "S", "T", "Q", "Q", "S", "S"].map((day, index) => (
+                <span key={`${day}-${index}`} className="text-xs font-bold uppercase text-ink/45">
+                  {day}
+                </span>
+              ))}
+            </div>
+
+            <div className="grid grid-cols-7">
+              {calendarDays.map((day, index) => {
+                const dayItems = day ? groupedItems[day] || [] : [];
+                const isToday = day === formatDate(new Date());
+                return day ? (
+                  <button
+                    key={day}
+                    type="button"
+                    onClick={() => setMobileSelectedDate(day)}
+                    className="flex min-h-20 flex-col items-center border-b border-ink/10 px-1 py-3 text-center transition hover:bg-paper"
+                  >
+                    <span className={`grid h-10 w-10 place-items-center rounded-full text-2xl font-bold ${isToday ? "bg-clay text-white" : "text-ink"}`}>
+                      {Number(day.slice(-2))}
+                    </span>
+                    <span className="mt-auto flex h-4 max-w-full items-center justify-center gap-1 overflow-hidden">
+                      {dayItems.slice(0, 3).map((item) => (
+                        <span key={item.id} className="h-2 w-2 rounded-full" style={{ backgroundColor: activityColor(item.activities) }} />
+                      ))}
+                    </span>
+                  </button>
+                ) : (
+                  <span key={`empty-${index}`} className="min-h-20 border-b border-ink/10" />
+                );
+              })}
+            </div>
+          </div>
+        )}
       </section>
 
       <section className="panel hidden overflow-x-auto lg:block">
@@ -518,31 +538,7 @@ export default function MonthlyPlanningPage() {
                 {manualMode ? "Usar atividade salva" : "Adicionar nova atividade"}
               </button>
 
-              {manualMode ? (
-                <div className="space-y-4 rounded-lg border border-ink/10 bg-paper/60 p-3">
-                  <div className="grid gap-3 md:grid-cols-2">
-                    <ManualInput label="Nome da Atividade" value={manualForm.title} onChange={(value) => updateManualField("title", value)} required />
-                    <ManualInput label="Código BNCC" value={manualForm.bncc_code} onChange={(value) => updateManualField("bncc_code", value)} />
-                    <ManualInput label="Idade ou Faixa Etária" value={manualForm.age_range} onChange={(value) => updateManualField("age_range", value)} required />
-                    <ManualInput label="Tempo de duração" value={manualForm.estimated_time} onChange={(value) => updateManualField("estimated_time", value)} required />
-                    <ManualSelect label="Metodologia" value={manualForm.methodology} options={methodologies} onChange={(value) => updateManualField("methodology", value)} />
-                    {manualForm.methodology === "Outra" ? (
-                      <ManualInput label="Qual metodologia?" value={manualForm.custom_methodology} onChange={(value) => updateManualField("custom_methodology", value)} required />
-                    ) : null}
-                    <ManualInput label="Área de Desenvolvimento" value={manualForm.development_area} onChange={(value) => updateManualField("development_area", value)} required />
-                    <ManualSelect label="Tipo de Atividade" value={manualForm.activity_type} options={manualActivityTypes} onChange={(value) => updateManualField("activity_type", value)} />
-                    <ManualSelect label="Ambiente" value={manualForm.environment} options={environments} onChange={(value) => updateManualField("environment", value)} />
-                    {manualForm.environment === "Outro" ? (
-                      <ManualInput label="Qual ambiente?" value={manualForm.custom_environment} onChange={(value) => updateManualField("custom_environment", value)} required />
-                    ) : null}
-                  </div>
-                  <ManualArea label="Materiais Disponíveis" value={manualForm.materials} onChange={(value) => updateManualField("materials", value)} required />
-                  <ManualArea label="Objetivo da Atividade" value={manualForm.objective} onChange={(value) => updateManualField("objective", value)} required />
-                  <ManualArea label="Passo a passo" value={manualForm.steps_text} onChange={(value) => updateManualField("steps_text", value)} placeholder="Uma etapa por linha" required />
-                  <ManualArea label="Observações de segurança" value={manualForm.safety_notes} onChange={(value) => updateManualField("safety_notes", value)} required />
-                  <ManualArea label="Anotações" value={manualForm.notes} onChange={(value) => updateManualField("notes", value)} placeholder="Espaço livre para observações do professor" />
-                </div>
-              ) : null}
+              {manualMode ? <ManualActivityFields form={manualForm} onChange={updateManualField} /> : null}
             </div>
 
             <div className="mt-6 flex justify-end gap-2">
@@ -628,25 +624,6 @@ export default function MonthlyPlanningPage() {
         </div>
       ) : null}
     </ProtectedPage>
-  );
-}
-
-function ManualInput({
-  label,
-  value,
-  onChange,
-  required = false
-}: {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  required?: boolean;
-}) {
-  return (
-    <label className="block">
-      <span className="label mb-2 block">{label}</span>
-      <input className="field" value={value} onChange={(event) => onChange(event.target.value)} required={required} />
-    </label>
   );
 }
 
@@ -770,59 +747,6 @@ function CalendarDateField({
   );
 }
 
-function ManualSelect({
-  label,
-  value,
-  options,
-  onChange
-}: {
-  label: string;
-  value: string;
-  options: readonly string[];
-  onChange: (value: string) => void;
-}) {
-  return (
-    <label className="block">
-      <span className="label mb-2 block">{label}</span>
-      <select className="field" value={value} onChange={(event) => onChange(event.target.value)} required>
-        {options.map((option) => (
-          <option key={option} value={option}>
-            {option}
-          </option>
-        ))}
-      </select>
-    </label>
-  );
-}
-
-function ManualArea({
-  label,
-  value,
-  onChange,
-  placeholder,
-  required = false
-}: {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  placeholder?: string;
-  required?: boolean;
-}) {
-  return (
-    <label className="block">
-      <span className="label mb-2 block">{label}</span>
-      <textarea className="field min-h-24" value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} required={required} />
-    </label>
-  );
-}
-
-function textArray(value: string) {
-  return value
-    .split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean);
-}
-
 function parseDateParts(value: string) {
   const [year, month, day] = value.split("-").map(Number);
   if (!year || !month || !day) return null;
@@ -843,6 +767,10 @@ function monthSlug(date: Date) {
 
 function monthLabel(date: Date) {
   return new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric" }).format(date);
+}
+
+function monthName(date: Date) {
+  return new Intl.DateTimeFormat("pt-BR", { month: "long" }).format(date);
 }
 
 function monthStart(date: Date) {
@@ -897,8 +825,42 @@ function weekdayLabel(value: string) {
   return new Intl.DateTimeFormat("pt-BR", { weekday: "long" }).format(new Date(year, month - 1, day));
 }
 
+function weekdayShort(value: string) {
+  const [year, month, day] = value.split("-").map(Number);
+  return new Intl.DateTimeFormat("pt-BR", { weekday: "short" }).format(new Date(year, month - 1, day)).replace(".", "");
+}
+
 function formatTime(value?: string | null) {
   return value ? value.slice(0, 5) : "--:--";
+}
+
+function buildWeekStrip(value: string) {
+  const [year, month, day] = value.split("-").map(Number);
+  const selected = new Date(year, month - 1, day);
+  const start = new Date(selected);
+  start.setDate(selected.getDate() - selected.getDay());
+
+  return Array.from({ length: 7 }, (_, index) => {
+    const date = new Date(start);
+    date.setDate(start.getDate() + index);
+    return formatDate(date);
+  });
+}
+
+function buildTimelineHours(items: PlanItem[]) {
+  const hours = items.map(itemHour).filter((hour) => hour >= 0);
+  const minHour = Math.min(8, ...hours);
+  const maxHour = Math.max(18, ...hours);
+  return Array.from({ length: maxHour - minHour + 1 }, (_, index) => minHour + index);
+}
+
+function itemHour(item: PlanItem) {
+  const hour = Number((item.start_time || "").slice(0, 2));
+  return Number.isFinite(hour) ? hour : -1;
+}
+
+function isSameMonth(date: Date, month: Date) {
+  return date.getFullYear() === month.getFullYear() && date.getMonth() === month.getMonth();
 }
 
 function hasItemAtTime(items: PlanItem[], date: string, startTime: string) {

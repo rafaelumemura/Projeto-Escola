@@ -49,12 +49,6 @@ export default function DashboardPage() {
     <ProtectedPage
       title={`Olá, ${profile?.name || "professor(a)"}`}
       subtitle="Organize sua rotina pedagógica com atividades geradas por IA, coleções e planejamentos."
-      actions={
-        <Link href="/gerar" className="btn-primary">
-          <Sparkles size={17} />
-          Gerar nova atividade
-        </Link>
-      }
     >
       <div className="grid gap-3 sm:grid-cols-3 sm:gap-4">
         <SummaryCard icon={<LibraryBig size={22} />} label="Atividades cadastradas" value={registeredActivityCount} href="/atividades" />

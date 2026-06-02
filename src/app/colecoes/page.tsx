@@ -277,7 +277,7 @@ export default function CollectionsPage() {
             </p>
           ) : null}
 
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          <div className="grid grid-cols-2 gap-3 md:gap-4 xl:grid-cols-3">
             {collections.map((collection) => (
               <div
                 key={collection.id}
@@ -292,11 +292,11 @@ export default function CollectionsPage() {
                   borderBottomColor: collection.color || defaultCollectionColor,
                   boxShadow: selected?.id === collection.id ? `0 0 0 2px ${collection.color || defaultCollectionColor}22` : undefined
                 }}
-                className="panel block min-h-[180px] border-x-0 border-y-[8px] p-5 text-left transition hover:-translate-y-0.5"
+                className="panel block min-h-[150px] border-x-0 border-y-[8px] p-3 text-left transition hover:-translate-y-0.5 sm:min-h-[180px] sm:p-5"
               >
                 <div className="flex items-center justify-between">
-                  <span className="grid h-11 w-11 place-items-center rounded-lg bg-mint text-leaf">
-                    <FolderKanban size={22} />
+                  <span className="grid h-9 w-9 place-items-center rounded-lg bg-mint text-leaf sm:h-11 sm:w-11">
+                    <FolderKanban size={20} />
                   </span>
                   <div className="flex items-center gap-2">
                     <button
@@ -312,8 +312,8 @@ export default function CollectionsPage() {
                     </button>
                   </div>
                 </div>
-                <h2 className="mt-5 text-lg font-bold text-ink">{collection.name}</h2>
-                <p className="mt-2 min-h-10 text-sm leading-5 text-ink/60">{collection.description || "Sem descrição"}</p>
+                <h2 className="mt-4 text-base font-bold text-ink sm:mt-5 sm:text-lg">{collection.name}</h2>
+                <p className="mt-2 min-h-10 text-xs leading-5 text-ink/60 sm:text-sm">{collection.description || "Sem descrição"}</p>
                 <p className="mt-4 text-sm font-semibold text-leaf">
                   {collection.activity_count || 0} {(collection.activity_count || 0) === 1 ? "atividade salva" : "atividades salvas"}
                 </p>
@@ -371,7 +371,7 @@ export default function CollectionsPage() {
                   </button>
                 </div>
 
-                <div className="space-y-3">
+                <div className="grid grid-cols-2 gap-3 lg:grid-cols-1">
                   {collectionActivities.map((activity) => (
                     <div
                       key={activity.id}
@@ -381,13 +381,27 @@ export default function CollectionsPage() {
                       onKeyDown={(event) => {
                         if (event.key === "Enter" || event.key === " ") setViewActivity(activity);
                       }}
-                      className="grid gap-3 rounded-lg border border-ink/10 bg-white p-4 text-left transition hover:border-leaf/35 lg:grid-cols-[1fr_360px_auto]"
+                      className="grid gap-3 rounded-lg border border-ink/10 bg-white p-3 text-left transition hover:border-leaf/35 lg:grid-cols-[1fr_360px_auto] lg:p-4"
                     >
                       <div className="min-w-0">
-                        <h3 className="font-bold">{activity.title}</h3>
+                        <div className="flex items-start justify-between gap-2">
+                          <h3 className="min-w-0 text-sm font-bold leading-5 sm:text-base">{activity.title}</h3>
+                          <button
+                            type="button"
+                            disabled={busy}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              setConfirmRemoveActivityId(activity.id);
+                            }}
+                            className="grid h-7 w-7 shrink-0 place-items-center rounded-md border border-ink/10 bg-white text-ink/55 transition hover:border-clay/40 hover:text-clay lg:hidden"
+                            title="Remover da coleção"
+                          >
+                            <X size={14} />
+                          </button>
+                        </div>
                         <p className="mt-1 text-sm text-ink/60">{activity.age_range || "Faixa etária"} • {activity.development_area || "Área"}</p>
                       </div>
-                      <div className="grid grid-cols-[1fr_auto_auto] gap-2" onClick={(event) => event.stopPropagation()}>
+                      <div className="grid gap-2 sm:grid-cols-[1fr_auto_auto]" onClick={(event) => event.stopPropagation()}>
                         <select
                           className="field"
                           value={movingActivityId === activity.id ? moveTargetCollectionId : selected.id}
@@ -414,6 +428,19 @@ export default function CollectionsPage() {
                           </>
                         ) : null}
                       </div>
+                      {confirmRemoveActivityId === activity.id ? (
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            removeActivity(activity.id);
+                          }}
+                          className="btn-danger justify-center text-xs lg:hidden"
+                        >
+                          Excluir atividade
+                        </button>
+                      ) : null}
                       <button
                         type="button"
                         disabled={busy}
@@ -425,7 +452,7 @@ export default function CollectionsPage() {
                             setConfirmRemoveActivityId(activity.id);
                           }
                         }}
-                        className={confirmRemoveActivityId === activity.id ? "btn-danger px-3" : "btn-secondary px-3"}
+                        className={confirmRemoveActivityId === activity.id ? "hidden px-3 lg:inline-flex btn-danger" : "hidden px-3 lg:inline-flex btn-secondary"}
                         title="Remover da coleção"
                       >
                         {confirmRemoveActivityId === activity.id ? "Confirmar" : <X size={17} />}

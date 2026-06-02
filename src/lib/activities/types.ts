@@ -2,7 +2,7 @@ import { z } from "zod";
 
 export const methodologies = ["Tradicional", "Construtivista", "Montessori", "Waldorf", "Princípios", "Outra"] as const;
 export const activityTypes = ["Individual", "Duplas", "Trios", "Sala toda"] as const;
-export const environments = ["Sala de aula", "Pátio", "Área externa", "Casa", "Outro"] as const;
+export const environments = ["Sala de aula", "Pátio", "Área externa", "Quadra", "Casa", "Outro"] as const;
 
 export const activityGenerationInputSchema = z.object({
   age_range: z.string().min(1, "Informe a idade ou faixa etaria."),

@@ -47,33 +47,33 @@ export function ActivityView({ activity }: { activity: Activity }) {
           {activity.description ? <p className="mt-2 text-sm leading-6 text-ink/70">{activity.description}</p> : null}
         </div>
 
-        <div className="grid gap-3 border-b border-ink/10 bg-paper/70 p-5 sm:grid-cols-2 lg:grid-cols-4">
-          <div className="flex gap-3">
-            <Clock className="mt-0.5 text-ocean" size={18} />
-            <div>
+        <div className="grid grid-cols-2 gap-3 border-b border-ink/10 bg-paper/70 p-5 lg:grid-cols-4">
+          <div className="flex min-w-0 gap-2 sm:gap-3">
+            <Clock className="mt-0.5 shrink-0 text-ocean" size={18} />
+            <div className="min-w-0">
               <p className="label">Tempo</p>
-              <p className="text-sm font-semibold">{activity.estimated_time || "A definir"}</p>
+              <p className="break-words text-sm font-semibold">{activity.estimated_time || "A definir"}</p>
             </div>
           </div>
-          <div className="flex gap-3">
-            <Target className="mt-0.5 text-leaf" size={18} />
-            <div>
+          <div className="flex min-w-0 gap-2 sm:gap-3">
+            <Target className="mt-0.5 shrink-0 text-leaf" size={18} />
+            <div className="min-w-0">
               <p className="label">Área</p>
-              <p className="text-sm font-semibold">{activity.development_area || "A definir"}</p>
+              <p className="break-words text-sm font-semibold">{activity.development_area || "A definir"}</p>
             </div>
           </div>
-          <div className="flex gap-3">
-            <WandSparkles className="mt-0.5 text-clay" size={18} />
-            <div>
+          <div className="flex min-w-0 gap-2 sm:gap-3">
+            <WandSparkles className="mt-0.5 shrink-0 text-clay" size={18} />
+            <div className="min-w-0">
               <p className="label">Tipo</p>
-              <p className="text-sm font-semibold">{activity.activity_type || "A definir"}</p>
+              <p className="break-words text-sm font-semibold">{activity.activity_type || "A definir"}</p>
             </div>
           </div>
-          <div className="flex gap-3">
-            <MapPin className="mt-0.5 text-ocean" size={18} />
-            <div>
+          <div className="flex min-w-0 gap-2 sm:gap-3">
+            <MapPin className="mt-0.5 shrink-0 text-ocean" size={18} />
+            <div className="min-w-0">
               <p className="label">Ambiente</p>
-              <p className="text-sm font-semibold">{activity.environment || "A definir"}</p>
+              <p className="break-words text-sm font-semibold">{activity.environment || "A definir"}</p>
             </div>
           </div>
         </div>
@@ -141,7 +141,7 @@ export function ActivityView({ activity }: { activity: Activity }) {
                 </section>
               ))}
               <p className="rounded-lg border border-ink/10 bg-paper px-4 py-3 text-xs leading-5 text-ink/60">
-                A explicação mostra a estrutura do código. Para o texto oficial da habilidade, consulte a BNCC.
+                A explicação é um resumo orientativo do código. Para o texto oficial da habilidade, consulte a BNCC.
               </p>
             </div>
           </div>
@@ -166,27 +166,23 @@ function describeBnccCode(value: string) {
   const elementary = code.match(/^EF(\d{2})([A-Z]{2})(\d{2})$/);
 
   if (earlyChildhood) {
-    const [, ageGroup, field, objective] = earlyChildhood;
+    const [, ageGroup, field] = earlyChildhood;
     return {
       code,
       lines: [
-        "EI indica Educação Infantil.",
-        `${ageGroup} indica o grupo etário: ${earlyChildhoodAgeGroup(ageGroup)}.`,
-        `${field} indica o campo de experiências: ${earlyChildhoodField(field)}.`,
-        `${objective} é o número do objetivo de aprendizagem e desenvolvimento dentro desse campo.`
+        `${code} é uma referência da BNCC para ${earlyChildhoodAgeGroup(ageGroup)}, dentro do campo de experiências "${earlyChildhoodField(field)}".`,
+        "De forma geral, esse código orienta uma proposta adequada à faixa etária e ao campo indicado, ajudando o professor a alinhar a atividade à intencionalidade pedagógica."
       ]
     };
   }
 
   if (elementary) {
-    const [, year, component, skill] = elementary;
+    const [, year, component] = elementary;
     return {
       code,
       lines: [
-        "EF indica Ensino Fundamental.",
-        `${year} indica o ano ou bloco de anos a que a habilidade se aplica.`,
-        `${component} indica o componente curricular: ${elementaryComponent(component)}.`,
-        `${skill} é o número da habilidade dentro desse componente curricular.`
+        `${code} é uma habilidade da BNCC para o Ensino Fundamental, no componente ${elementaryComponent(component)}, aplicada ao ${elementaryYearLabel(year)}.`,
+        "De forma geral, esse código orienta o desenvolvimento de uma habilidade curricular específica e pode ser usado para justificar objetivos, observação e avaliação da atividade."
       ]
     };
   }
@@ -194,10 +190,16 @@ function describeBnccCode(value: string) {
   return {
     code,
     lines: [
-      "Este código segue uma identificação da BNCC, mas não foi possível separar todos os campos automaticamente.",
-      "Em geral, as letras indicam a etapa/componente curricular e os números indicam ano, grupo ou habilidade."
+      `${code} é uma referência associada à BNCC.`,
+      "Não foi possível reconhecer automaticamente todos os detalhes desse código, então use-o como referência geral e confirme o texto oficial da habilidade quando necessário."
     ]
   };
+}
+
+function elementaryYearLabel(code: string) {
+  const year = Number(code);
+  if (!year) return "ano ou bloco indicado pela BNCC";
+  return `${year}º ano`;
 }
 
 function earlyChildhoodAgeGroup(code: string) {
