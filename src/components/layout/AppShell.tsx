@@ -35,10 +35,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { profile, usage } = useAuth();
   const { theme } = useTheme();
-  const desktopLogoSrc = theme === "dark" ? "/logo-horizontal-dark.webp" : "/simbolo.webp";
+  const desktopLogoSrc = theme === "dark" ? "/logo-horizontal-dark.webp" : "/logo-horizontal.png";
   const mobileLogoSrc = theme === "dark" ? "/logo-horizontal-dark.webp" : "/logo-horizontal.png";
-  const desktopLogoClass = theme === "dark" ? "h-32 max-w-[236px]" : "h-32 w-32";
-  const mobileLogoClass = "h-12 max-w-[calc(100vw-104px)]";
+  const desktopLogoClass = "h-32 max-w-[236px]";
+  const mobileLogoClass = "h-14 max-w-[calc(100vw-112px)]";
 
   return (
     <div className="min-h-screen">
@@ -86,7 +86,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <img src={mobileLogoSrc} alt="Projeto Escola" className={`${mobileLogoClass} object-contain object-left`} />
             </Link>
             <div className="flex items-center gap-2">
-              <Link href="/perfil" className="grid h-12 w-12 place-items-center overflow-hidden rounded-full border border-ink/10 bg-white">
+              <Link href="/perfil" className="grid h-14 w-14 place-items-center overflow-hidden rounded-full border border-ink/10 bg-white">
                 <Avatar src={profile?.avatar_url} name={profile?.name || profile?.email || "Perfil"} compact />
               </Link>
             </div>

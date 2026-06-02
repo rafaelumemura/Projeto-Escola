@@ -25,22 +25,9 @@ type SubscriptionRow = {
 };
 
 const dayMs = 24 * 60 * 60 * 1000;
-const adminEmail = "rafaelumemura@gmail.com";
 
 export async function getBillingUsage(userId: string): Promise<BillingUsage> {
   const supabase = createSupabaseAdminClient();
-  const { data: profile, error: profileError } = await supabase
-    .from("profiles")
-    .select("email, is_admin, plan")
-    .eq("id", userId)
-    .single();
-
-  if (profileError) throw profileError;
-
-  if (profile?.is_admin || profile?.email?.toLowerCase() === adminEmail) {
-    return ensureAdminProUsage(userId);
-  }
-
   const { data, error } = await supabase
     .from("billing_subscriptions")
     .select("*")
@@ -88,52 +75,6 @@ async function createUsageFromProfilePlan(userId: string) {
   if (insertError) throw insertError;
   const normalized = await normalizeSubscription(data as SubscriptionRow);
   return subscriptionToUsage(normalized);
-}
-
-async function ensureAdminProUsage(userId: string) {
-  const supabase = createSupabaseAdminClient();
-  const now = new Date();
-  const { data: current, error: currentError } = await supabase
-    .from("billing_subscriptions")
-    .select("*")
-    .eq("user_id", userId)
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  if (currentError) throw currentError;
-
-  const periodEnd = current?.current_period_end ? new Date(current.current_period_end) : null;
-  const shouldResetCycle = !periodEnd || now > periodEnd;
-  const payload = {
-    plan_key: "pro" as const,
-    status: "active" as const,
-    activity_limit: planLimit("pro"),
-    generated_count: shouldResetCycle ? 0 : current?.generated_count || 0,
-    current_period_start: shouldResetCycle ? now.toISOString() : current?.current_period_start || now.toISOString(),
-    current_period_end: shouldResetCycle ? new Date(now.getTime() + 30 * dayMs).toISOString() : current?.current_period_end || new Date(now.getTime() + 30 * dayMs).toISOString(),
-    grace_ends_at: shouldResetCycle ? new Date(now.getTime() + 31 * dayMs).toISOString() : current?.grace_ends_at || new Date(now.getTime() + 31 * dayMs).toISOString(),
-    suspended_at: null,
-    inactive_delete_after: null,
-    canceled_at: null,
-    updated_at: now.toISOString()
-  };
-
-  const { data, error } = current
-    ? await supabase.from("billing_subscriptions").update(payload).eq("id", current.id).select("*").single()
-    : await supabase
-        .from("billing_subscriptions")
-        .insert({
-          ...payload,
-          user_id: userId
-        })
-        .select("*")
-        .single();
-
-  if (error) throw error;
-
-  await supabase.from("profiles").update({ plan: "pro", is_admin: true }).eq("id", userId);
-  return subscriptionToUsage(data as SubscriptionRow);
 }
 
 export async function assertCanGenerateActivity(userId: string) {

@@ -8,21 +8,30 @@ import { ProtectedPage } from "@/components/layout/ProtectedPage";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { useTheme } from "@/components/theme/ThemeProvider";
 import type { ThemeMode } from "@/components/theme/ThemeProvider";
-import { planName } from "@/lib/billing/plans";
+import { apiFetch } from "@/lib/api/client";
+import { PLAN_DEFINITIONS, planName, type PaidPlanKey } from "@/lib/billing/plans";
 import { normalizePlanningPdfSkill, planningPdfSkills, type PlanningPdfSkillKey } from "@/lib/planning/pdf-skills";
+
+type AccessRole = "admin" | "user";
+
+const ownerEmail = "rafaelumemura@gmail.com";
+const planOptions = Object.values(PLAN_DEFINITIONS);
 
 export default function ProfilePage() {
   const router = useRouter();
-  const { supabase, profile, usage, user, refreshProfile, signOut } = useAuth();
+  const { supabase, profile, usage, user, refreshProfile, refreshUsage, signOut } = useAuth();
   const { theme, setTheme } = useTheme();
   const [name, setName] = useState("");
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const [planningSkill, setPlanningSkill] = useState<PlanningPdfSkillKey>("grade");
+  const [accessRole, setAccessRole] = useState<AccessRole>("user");
+  const [accessPlan, setAccessPlan] = useState<PaidPlanKey>("free");
   const [showAllSkins, setShowAllSkins] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [skinMessage, setSkinMessage] = useState<string | null>(null);
   const [passwordMessage, setPasswordMessage] = useState<string | null>(null);
+  const [accessMessage, setAccessMessage] = useState<string | null>(null);
   const [passwordFormOpen, setPasswordFormOpen] = useState(false);
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -30,12 +39,22 @@ export default function ProfilePage() {
   const [busy, setBusy] = useState(false);
   const [skinBusy, setSkinBusy] = useState(false);
   const [passwordBusy, setPasswordBusy] = useState(false);
+  const [accessBusy, setAccessBusy] = useState(false);
+  const canManageOwnAccess = (profile?.email || user?.email || "").toLowerCase() === ownerEmail;
 
   useEffect(() => {
     setName(profile?.name || "");
     setAvatarPreview(profile?.avatar_url || null);
     setPlanningSkill(normalizePlanningPdfSkill(profile?.planning_pdf_skill));
   }, [profile?.avatar_url, profile?.name, profile?.planning_pdf_skill]);
+
+  useEffect(() => {
+    setAccessRole(profile?.is_admin ? "admin" : "user");
+    const currentPlan = usage?.plan_key || profile?.plan;
+    if (isPaidPlanKey(currentPlan)) {
+      setAccessPlan(currentPlan);
+    }
+  }, [profile?.is_admin, profile?.plan, usage?.plan_key]);
 
   async function saveProfile(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -178,6 +197,29 @@ export default function ProfilePage() {
     }
   }
 
+  async function saveAccessSettings(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!canManageOwnAccess) return;
+
+    setAccessBusy(true);
+    setAccessMessage(null);
+    try {
+      await apiFetch(supabase, "/api/admin/profile-access", {
+        method: "PUT",
+        body: {
+          access: accessRole,
+          plan_key: accessPlan
+        }
+      });
+      await Promise.all([refreshProfile(), refreshUsage()]);
+      setAccessMessage("Acesso e plano atualizados.");
+    } catch (error) {
+      setAccessMessage(error instanceof Error ? error.message : "Não foi possível atualizar o acesso.");
+    } finally {
+      setAccessBusy(false);
+    }
+  }
+
   return (
     <ProtectedPage title="Perfil" subtitle="Gerencie seus dados de conta e plano atual.">
       <div className="grid gap-5 lg:grid-cols-[420px_1fr]">
@@ -193,6 +235,17 @@ export default function ProfilePage() {
           <div className="grid gap-3">
             <Info label="E-mail" value={profile?.email || user?.email || "-"} />
             <PlanInfo value={usage?.plan_name || planName(profile?.plan)} planKey={usage?.plan_key || profile?.plan} />
+            {canManageOwnAccess ? (
+              <OwnerAccessPanel
+                accessPlan={accessPlan}
+                accessRole={accessRole}
+                busy={accessBusy}
+                message={accessMessage}
+                onAccessPlanChange={setAccessPlan}
+                onAccessRoleChange={setAccessRole}
+                onSubmit={saveAccessSettings}
+              />
+            ) : null}
             <ThemeSelector theme={theme} onThemeChange={setTheme} />
             <Info label="Uso do ciclo" value={`${usage?.generated_count || 0}/${usage?.activity_limit || 0} atividades geradas`} />
             <Info label="Vencimento" value={usage?.current_period_end ? new Date(usage.current_period_end).toLocaleDateString("pt-BR") : "-"} />
@@ -405,6 +458,61 @@ function Info({ label, value }: { label: string; value: string }) {
   );
 }
 
+function OwnerAccessPanel({
+  accessPlan,
+  accessRole,
+  busy,
+  message,
+  onAccessPlanChange,
+  onAccessRoleChange,
+  onSubmit
+}: {
+  accessPlan: PaidPlanKey;
+  accessRole: AccessRole;
+  busy: boolean;
+  message: string | null;
+  onAccessPlanChange: (plan: PaidPlanKey) => void;
+  onAccessRoleChange: (role: AccessRole) => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+}) {
+  return (
+    <form onSubmit={onSubmit} className="rounded-lg border border-ink/10 bg-white p-4">
+      <p className="label">Controle especial</p>
+      <p className="mt-1 text-xs leading-5 text-ink/55">
+        Visível somente para rafaelumemura@gmail.com.
+      </p>
+
+      <div className="mt-3 grid gap-3">
+        <label className="block">
+          <span className="label mb-2 block">Acesso</span>
+          <select className="field" value={accessRole} onChange={(event) => onAccessRoleChange(event.target.value as AccessRole)}>
+            <option value="admin">Admin</option>
+            <option value="user">Usuário</option>
+          </select>
+        </label>
+
+        <label className="block">
+          <span className="label mb-2 block">Plano atual</span>
+          <select className="field" value={accessPlan} onChange={(event) => onAccessPlanChange(event.target.value as PaidPlanKey)}>
+            {planOptions.map((plan) => (
+              <option key={plan.key} value={plan.key}>
+                {plan.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+
+      {message ? <p className="mt-3 rounded-md bg-mint px-3 py-2 text-sm text-ink/75">{message}</p> : null}
+
+      <button disabled={busy} className="mt-3 w-full btn-primary">
+        <Save size={16} />
+        Salvar acesso
+      </button>
+    </form>
+  );
+}
+
 function PlanInfo({ value, planKey }: { value: string; planKey?: string | null }) {
   const canUpgrade = planKey === "free" || planKey === "basic";
 
@@ -421,6 +529,10 @@ function PlanInfo({ value, planKey }: { value: string; planKey?: string | null }
       </div>
     </div>
   );
+}
+
+function isPaidPlanKey(value: unknown): value is PaidPlanKey {
+  return typeof value === "string" && value in PLAN_DEFINITIONS;
 }
 
 function ThemeSelector({ theme, onThemeChange }: { theme: ThemeMode; onThemeChange: (theme: ThemeMode) => void }) {
