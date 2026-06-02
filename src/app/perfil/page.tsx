@@ -9,7 +9,7 @@ import { useAuth } from "@/components/auth/AuthProvider";
 import { useTheme } from "@/components/theme/ThemeProvider";
 import type { ThemeMode } from "@/components/theme/ThemeProvider";
 import { apiFetch } from "@/lib/api/client";
-import { PLAN_DEFINITIONS, planName, type PaidPlanKey } from "@/lib/billing/plans";
+import { PLAN_DEFINITIONS, canUsePlanningSkins, planName, type PaidPlanKey } from "@/lib/billing/plans";
 import { normalizePlanningPdfSkill, planningPdfSkills, type PlanningPdfSkillKey } from "@/lib/planning/pdf-skills";
 
 type AccessRole = "admin" | "user";
@@ -41,6 +41,7 @@ export default function ProfilePage() {
   const [passwordBusy, setPasswordBusy] = useState(false);
   const [accessBusy, setAccessBusy] = useState(false);
   const canManageOwnAccess = (profile?.email || user?.email || "").toLowerCase() === ownerEmail;
+  const planningSkinsEnabled = canUsePlanningSkins(usage?.plan_key || profile?.plan);
 
   useEffect(() => {
     setName(profile?.name || "");
@@ -180,6 +181,11 @@ export default function ProfilePage() {
 
   async function savePlanningSkill() {
     if (!user) return;
+    if (!planningSkinsEnabled) {
+      setSkinMessage("Skins do planejamento estão disponíveis somente nos planos Completo e Pro.");
+      return;
+    }
+
     setSkinBusy(true);
     setSkinMessage(null);
     try {
@@ -294,21 +300,24 @@ export default function ProfilePage() {
               <p className="label mb-2">Skins do planejamento</p>
               <h2 className="text-lg font-bold text-ink">Modelo do PDF</h2>
               <p className="mt-2 text-sm leading-6 text-ink/60">
-                Escolha a skin que será aplicada quando baixar o PDF do planejamento.
+                {planningSkinsEnabled
+                  ? "Escolha a skin que será aplicada quando baixar o PDF do planejamento."
+                  : "Disponível somente nos planos Completo e Pro."}
               </p>
             </div>
 
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            <div className={`grid grid-cols-2 gap-3 sm:grid-cols-3 ${planningSkinsEnabled ? "" : "opacity-45"}`}>
               {(showAllSkins ? planningPdfSkills : planningPdfSkills.slice(0, 3)).map((skill) => {
                 const active = planningSkill === skill.key;
                 return (
                   <button
                     key={skill.key}
                     type="button"
+                    disabled={!planningSkinsEnabled}
                     onClick={() => selectPlanningSkill(skill.key)}
                     className={`overflow-hidden rounded-lg border bg-white p-2 text-left transition ${
                       active ? "border-leaf ring-2 ring-leaf/15" : "border-ink/10 hover:border-leaf/40"
-                    }`}
+                    } disabled:cursor-not-allowed`}
                     title={skill.name}
                     aria-label={`Selecionar skin ${skill.name}`}
                   >
@@ -328,12 +337,12 @@ export default function ProfilePage() {
 
             <div className="flex flex-wrap items-center gap-3">
               {planningPdfSkills.length > 3 ? (
-                <button type="button" onClick={() => setShowAllSkins((current) => !current)} className="text-sm font-bold text-leaf underline underline-offset-4">
+                <button type="button" disabled={!planningSkinsEnabled} onClick={() => setShowAllSkins((current) => !current)} className="text-sm font-bold text-leaf underline underline-offset-4 disabled:cursor-not-allowed disabled:opacity-45">
                   {showAllSkins ? "Ver menos" : "Ver mais"}
                 </button>
               ) : null}
 
-              <button type="button" disabled={skinBusy || planningSkill === normalizePlanningPdfSkill(profile?.planning_pdf_skill)} onClick={savePlanningSkill} className="btn-primary disabled:cursor-not-allowed disabled:opacity-55">
+              <button type="button" disabled={!planningSkinsEnabled || skinBusy || planningSkill === normalizePlanningPdfSkill(profile?.planning_pdf_skill)} onClick={savePlanningSkill} className="btn-primary disabled:cursor-not-allowed disabled:opacity-55">
                 <Save size={16} />
                 Salvar skin
               </button>

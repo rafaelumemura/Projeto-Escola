@@ -1,5 +1,7 @@
 import { z } from "zod";
 import { fail, readJson } from "@/lib/api/http";
+import { canUsePlanningSkins } from "@/lib/billing/plans";
+import { getBillingUsage } from "@/lib/billing/usage";
 import { buildWeeklyPlanPdf } from "@/lib/pdf/builders";
 import { normalizePlanningPdfSkill } from "@/lib/planning/pdf-skills";
 import { getAuthenticatedUser } from "@/lib/supabase/server";
@@ -48,12 +50,17 @@ export async function POST(request: Request) {
       throw Object.assign(new Error("Informe weekly_plan_id ou weekly_plan."), { status: 400 });
     }
 
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("*")
-      .eq("id", user.id)
-      .single();
-    const skill = normalizePlanningPdfSkill(payload.skill || profile?.planning_pdf_skill);
+    const [{ data: profile }, usage] = await Promise.all([
+      supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", user.id)
+        .single(),
+      getBillingUsage(user.id)
+    ]);
+    const skill = canUsePlanningSkins(usage.plan_key)
+      ? normalizePlanningPdfSkill(payload.skill || profile?.planning_pdf_skill)
+      : "grade";
 
     const bytes = await buildWeeklyPlanPdf(
       weeklyPlan as Parameters<typeof buildWeeklyPlanPdf>[0],

@@ -72,6 +72,10 @@ export function canUsePrintableMaterial(planKey?: string | null) {
   return planKey === "complete" || planKey === "pro";
 }
 
+export function canUsePlanningSkins(planKey?: string | null) {
+  return planKey === "complete" || planKey === "pro";
+}
+
 export function emptyBillingUsage(message = "Nenhum plano ativo."): BillingUsage {
   return {
     plan_key: null,

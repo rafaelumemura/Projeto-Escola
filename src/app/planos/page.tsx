@@ -5,9 +5,25 @@ import { Check, Crown } from "lucide-react";
 import { ProtectedPage } from "@/components/layout/ProtectedPage";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { apiFetch } from "@/lib/api/client";
-import { collectionLimit, PLAN_DEFINITIONS, type BillingUsage, type PaidPlanKey } from "@/lib/billing/plans";
+import { PLAN_DEFINITIONS, type BillingUsage, type PaidPlanKey } from "@/lib/billing/plans";
 
 const plans = [PLAN_DEFINITIONS.basic, PLAN_DEFINITIONS.complete];
+const planFeatures: Record<(typeof plans)[number]["key"], string[]> = {
+  basic: [
+    "Geração de até 25 atividades",
+    "PDF descritivo da atividade",
+    "Até 5 coleções",
+    "Planejamento de atividades"
+  ],
+  complete: [
+    "Geração de até 100 atividades",
+    "PDF descritivo da atividade",
+    "PDF de material imprimível da atividade",
+    "Até 15 coleções",
+    "Planejamento de atividades",
+    "Skins de planejamento"
+  ]
+};
 
 export default function PlansPage() {
   const { supabase } = useAuth();
@@ -64,11 +80,9 @@ export default function PlansPage() {
               <p className="mt-1 text-sm font-semibold text-ink/60">atividades por ciclo de {plan.periodDays} dias</p>
 
               <div className="mt-5 space-y-2 text-sm text-ink/70">
-                <PlanFeature text="Geração de atividades com Claude API" />
-                <PlanFeature text="PDF descritivo da atividade" />
-                <PlanFeature text={`${collectionLimit(plan.key)} coleções`} />
-                <PlanFeature text="Planejamento mensal" />
-                {plan.key === "complete" ? <PlanFeature text="Material imprimível personalizado" /> : null}
+                {planFeatures[plan.key].map((feature) => (
+                  <PlanFeature key={feature} text={feature} />
+                ))}
               </div>
 
               <button
