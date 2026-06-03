@@ -508,10 +508,22 @@ begin
       plan_key = p_plan_key,
       status = 'active',
       activity_limit = plan_limit,
-      generated_count = 0,
-      current_period_start = p_started_at,
-      current_period_end = p_started_at + make_interval(days => period_days),
-      grace_ends_at = p_started_at + make_interval(days => period_days + 1),
+      generated_count = case
+        when active_subscription.current_period_end <= p_started_at then 0
+        else least(generated_count, plan_limit)
+      end,
+      current_period_start = case
+        when active_subscription.current_period_end <= p_started_at then p_started_at
+        else current_period_start
+      end,
+      current_period_end = case
+        when active_subscription.current_period_end <= p_started_at then p_started_at + make_interval(days => period_days)
+        else current_period_end
+      end,
+      grace_ends_at = case
+        when active_subscription.current_period_end <= p_started_at then p_started_at + make_interval(days => period_days + 1)
+        else grace_ends_at
+      end,
       suspended_at = null,
       inactive_delete_after = null,
       canceled_at = null,

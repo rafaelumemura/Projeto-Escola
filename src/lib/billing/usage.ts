@@ -1,4 +1,5 @@
 import { createSupabaseAdminClient } from "@/lib/supabase/server";
+import type { Json } from "@/lib/database.types";
 import {
   emptyBillingUsage,
   isPlanKey,
@@ -44,7 +45,8 @@ export async function getBillingUsage(userId: string): Promise<BillingUsage> {
   }
 
   const normalized = await normalizeSubscription(data as SubscriptionRow);
-  return subscriptionToUsage(normalized);
+  const reconciled = await reconcileGeneratedCount(normalized);
+  return subscriptionToUsage(reconciled);
 }
 
 async function createUsageFromProfilePlan(userId: string) {
@@ -104,6 +106,74 @@ export async function incrementActivityGeneration(userId: string) {
 
   if (error) throw error;
   return subscriptionToUsage(data as SubscriptionRow);
+}
+
+export async function reconcileLatestBillingGeneratedCount(userId: string) {
+  const supabase = createSupabaseAdminClient();
+  const { data, error } = await supabase
+    .from("billing_subscriptions")
+    .select("*")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) throw error;
+  if (!data) return null;
+
+  return reconcileGeneratedCount(data as SubscriptionRow);
+}
+
+async function reconcileGeneratedCount(subscription: SubscriptionRow) {
+  if (!subscription.current_period_start || !subscription.current_period_end) return subscription;
+
+  const actualGeneratedCount = await countGeneratedActivitiesInCycle(
+    subscription.user_id,
+    subscription.current_period_start,
+    subscription.current_period_end
+  );
+  const cappedGeneratedCount = Math.min(subscription.activity_limit || planLimit(subscription.plan_key), actualGeneratedCount);
+
+  if (cappedGeneratedCount <= subscription.generated_count) {
+    return subscription;
+  }
+
+  const supabase = createSupabaseAdminClient();
+  const { data, error } = await supabase
+    .from("billing_subscriptions")
+    .update({
+      generated_count: cappedGeneratedCount,
+      updated_at: new Date().toISOString()
+    })
+    .eq("id", subscription.id)
+    .select("*")
+    .single();
+
+  if (error) throw error;
+  return data as SubscriptionRow;
+}
+
+async function countGeneratedActivitiesInCycle(userId: string, periodStart: string, periodEnd: string) {
+  const supabase = createSupabaseAdminClient();
+  const { data, error } = await supabase
+    .from("activities")
+    .select("raw_ai_response")
+    .eq("user_id", userId)
+    .gte("created_at", periodStart)
+    .lte("created_at", periodEnd);
+
+  if (error) throw error;
+
+  return (data || []).filter((activity) => !isManualRawAiResponse(activity.raw_ai_response as Json | null)).length;
+}
+
+function isManualRawAiResponse(rawAiResponse: Json | null) {
+  return Boolean(
+    rawAiResponse &&
+      typeof rawAiResponse === "object" &&
+      !Array.isArray(rawAiResponse) &&
+      (rawAiResponse as { manual?: unknown }).manual === true
+  );
 }
 
 async function normalizeSubscription(subscription: SubscriptionRow) {

@@ -37,7 +37,7 @@ export async function PUT(request: Request) {
     const graceEnd = new Date(now.getTime() + (periodDays + 1) * dayMs);
     const { data: current, error: currentError } = await supabase
       .from("billing_subscriptions")
-      .select("id")
+      .select("id, generated_count, current_period_start, current_period_end, grace_ends_at")
       .eq("user_id", user.id)
       .in("status", ["active", "past_due", "suspended"])
       .order("created_at", { ascending: false })
@@ -46,14 +46,16 @@ export async function PUT(request: Request) {
 
     if (currentError) throw currentError;
 
+    const currentCycle = current?.current_period_end && new Date(current.current_period_end) > now ? current : null;
+    const activityLimit = planLimit(payload.plan_key);
     const subscriptionPayload = {
       plan_key: payload.plan_key,
       status: "active",
-      activity_limit: planLimit(payload.plan_key),
-      generated_count: 0,
-      current_period_start: now.toISOString(),
-      current_period_end: periodEnd.toISOString(),
-      grace_ends_at: graceEnd.toISOString(),
+      activity_limit: activityLimit,
+      generated_count: currentCycle ? Math.min(currentCycle.generated_count || 0, activityLimit) : 0,
+      current_period_start: currentCycle ? currentCycle.current_period_start : now.toISOString(),
+      current_period_end: currentCycle ? currentCycle.current_period_end : periodEnd.toISOString(),
+      grace_ends_at: currentCycle ? currentCycle.grace_ends_at || graceEnd.toISOString() : graceEnd.toISOString(),
       suspended_at: null,
       inactive_delete_after: null,
       canceled_at: null,

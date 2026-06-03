@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { fail, ok, readJson } from "@/lib/api/http";
 import { isPlanKey, type PaidPlanKey } from "@/lib/billing/plans";
+import { reconcileLatestBillingGeneratedCount } from "@/lib/billing/usage";
 import { createSupabaseAdminClient } from "@/lib/supabase/server";
 
 type HotmartPayload = Record<string, unknown>;
@@ -46,6 +47,8 @@ export async function POST(request: Request) {
       });
       if (error) throw error;
     }
+
+    await reconcileLatestBillingGeneratedCount(userId);
 
     const profileUpdate: Record<string, string | boolean> = {
       name,

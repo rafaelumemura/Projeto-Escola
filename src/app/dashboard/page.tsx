@@ -24,7 +24,7 @@ export default function DashboardPage() {
   const [registeredActivityCount, setRegisteredActivityCount] = useState(0);
   const [generatedActivityCount, setGeneratedActivityCount] = useState(0);
   const [collections, setCollections] = useState<Collection[]>([]);
-  const [nextPlannedItem, setNextPlannedItem] = useState<PlannedItem | null>(null);
+  const [nextPlannedItems, setNextPlannedItems] = useState<PlannedItem[]>([]);
 
   useEffect(() => {
     Promise.all([
@@ -43,7 +43,7 @@ export default function DashboardPage() {
             apiFetch<{ items: PlannedItem[] }>(supabase, `/api/weekly-plans/${plan.id}`).catch(() => ({ items: [] }))
           )
         );
-        setNextPlannedItem(findNextPlannedItem(details.flatMap((detail) => detail.items)));
+        setNextPlannedItems(findNextPlannedItems(details.flatMap((detail) => detail.items), 5));
       })
       .catch(() => undefined);
   }, [supabase]);
@@ -68,19 +68,23 @@ export default function DashboardPage() {
             </Link>
           </div>
 
-          {nextPlannedItem ? (
-            <Link href="/planejamento" className="block rounded-lg border border-ink/10 bg-white p-4 transition hover:border-leaf/40">
-              <div className="flex flex-wrap items-center gap-3">
-                <span className="badge">
-                  <CalendarDays size={14} />
-                  {formatPlannedDateTime(nextPlannedItem)}
-                </span>
-                <h3 className="font-bold text-ink">{nextPlannedItem.activities?.title || "Atividade planejada"}</h3>
-              </div>
-              {nextPlannedItem.activities?.development_area ? (
-                <p className="mt-2 text-sm text-ink/60">{nextPlannedItem.activities.development_area}</p>
-              ) : null}
-            </Link>
+          {nextPlannedItems.length ? (
+            <div className="space-y-3">
+              {nextPlannedItems.map((plannedItem) => (
+                <Link key={plannedItem.id} href="/planejamento" className="block rounded-lg border border-ink/10 bg-white p-4 transition hover:border-leaf/40">
+                  <div className="flex flex-wrap items-center gap-3">
+                    <span className="badge">
+                      <CalendarDays size={14} />
+                      {formatPlannedDateTime(plannedItem)}
+                    </span>
+                    <h3 className="font-bold text-ink">{plannedItem.activities?.title || "Atividade planejada"}</h3>
+                  </div>
+                  {plannedItem.activities?.development_area ? (
+                    <p className="mt-2 text-sm text-ink/60">{plannedItem.activities.development_area}</p>
+                  ) : null}
+                </Link>
+              ))}
+            </div>
           ) : (
             <div className="rounded-lg border border-dashed border-ink/20 bg-white p-5 text-sm font-semibold text-ink/60">
               Nenhuma atividade planejada nos próximos dias.
@@ -180,7 +184,7 @@ function SummaryCard({
   );
 }
 
-function findNextPlannedItem(items: PlannedItem[]) {
+function findNextPlannedItems(items: PlannedItem[], limit: number) {
   const now = new Date();
   const upcoming = items
     .filter((item) => item.date)
@@ -191,7 +195,7 @@ function findNextPlannedItem(items: PlannedItem[]) {
     })
     .sort((a, b) => a.date.getTime() - b.date.getTime());
 
-  return upcoming[0]?.item || null;
+  return upcoming.slice(0, limit).map((entry) => entry.item);
 }
 
 function parsePlannedDate(item: PlannedItem) {
