@@ -6,7 +6,10 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test:hotmart": "node --test tests/hotmart-payload.test.cjs",
+    "typecheck:hotmart": "tsc -p tsconfig.hotmart.json --pretty false",
+    "billing:maintenance": "node scripts/run-billing-maintenance.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.4",

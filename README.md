@@ -31,6 +31,7 @@ SUPABASE_SERVICE_ROLE_KEY=
 ANTHROPIC_API_KEY=
 ANTHROPIC_MODEL=claude-sonnet-4-5-20250929
 BILLING_MAINTENANCE_SECRET=
+APP_URL=https://projetoescola.attivakids.com.br
 HOTMART_WEBHOOK_SECRET=
 HOTMART_TEMP_PASSWORD=acesso123
 HOTMART_BASIC_PRODUCT_ID=
@@ -39,6 +40,9 @@ HOTMART_PRO_PRODUCT_ID=
 HOTMART_BASIC_OFFER_CODE=
 HOTMART_COMPLETE_OFFER_CODE=
 HOTMART_PRO_OFFER_CODE=
+HOTMART_BASIC_PLAN_ID=
+HOTMART_COMPLETE_PLAN_ID=
+HOTMART_PRO_PLAN_ID=
 HOTMART_BASIC_URL=
 HOTMART_COMPLETE_URL=
 HOTMART_UPGRADE_URL=
@@ -63,6 +67,7 @@ O arquivo `supabase/schema.sql` cria:
 - `weekly_plans`
 - `weekly_plan_items`
 - `billing_subscriptions`
+- `hotmart_events`
 - bucket `avatars` no Supabase Storage
 
 Ele também ativa RLS em todas as tabelas e cria policies para que cada usuário acesse apenas seus próprios dados.
@@ -92,15 +97,53 @@ select public.upgrade_subscription_to_complete('USER_ID_AQUI');
 
 A função `public.billing_maintenance()` suspende planos vencidos após 1 dia de carência e exclui usuários suspensos há mais de 30 dias. Ela também está exposta em `POST /api/billing/maintenance` usando o header `x-maintenance-secret`.
 
+Para que isso aconteça mesmo quando nenhum usuário abre o app, crie um serviço Cron no próprio projeto Railway, compartilhe `APP_URL` e `BILLING_MAINTENANCE_SECRET` e execute diariamente:
+
+```bash
+npm run billing:maintenance
+```
+
 O checkout redireciona para os links configurados em `HOTMART_BASIC_URL`, `HOTMART_COMPLETE_URL` e, para upgrade, `HOTMART_UPGRADE_URL`.
 
 ### Webhook Hotmart
 
-A rota `POST /api/hotmart/webhook` recebe a confirmação de compra, cria o usuário no Supabase Auth com a senha provisória `HOTMART_TEMP_PASSWORD` ou `acesso123`, ativa o plano contratado e marca o perfil para troca obrigatória de senha no primeiro acesso.
+A rota pública é:
 
-Se `HOTMART_WEBHOOK_SECRET` estiver configurado, envie o mesmo valor em um destes lugares: header `x-hotmart-hottok`, header `hottok`, header `x-webhook-token`, header `Authorization: Bearer <token>` ou query string `?token=<token>`.
+```txt
+POST https://projetoescola.attivakids.com.br/api/hotmart/webhook
+```
 
-Para identificação mais confiável do plano, configure `HOTMART_BASIC_OFFER_CODE`, `HOTMART_COMPLETE_OFFER_CODE` e `HOTMART_PRO_OFFER_CODE` com os códigos das ofertas/planos da Hotmart. Se você tiver produtos separados por plano, também pode usar `HOTMART_BASIC_PRODUCT_ID`, `HOTMART_COMPLETE_PRODUCT_ID` e `HOTMART_PRO_PRODUCT_ID`. Se esses valores não existirem, o backend tenta inferir pelo nome da oferta/produto.
+Configure na Hotmart o token Hottok com o mesmo valor de `HOTMART_WEBHOOK_SECRET`. O endpoint exige esse valor no header oficial `X-HOTMART-HOTTOK`; tokens em URL não são aceitos.
+
+Eventos tratados:
+
+- `PURCHASE_APPROVED` e `PURCHASE_COMPLETE`: criam ou atualizam o usuário, ativam o plano e iniciam o ciclo.
+- `PURCHASE_DELAYED`, `PURCHASE_EXPIRED` e `PURCHASE_CANCELED`: marcam pagamento pendente.
+- `PURCHASE_REFUNDED` e `PURCHASE_CHARGEBACK`: suspendem o acesso.
+- `SUBSCRIPTION_CANCELLATION`: agenda o cancelamento para o final do período já pago.
+- `SWITCH_PLAN`: altera o plano sem duplicar o usuário.
+- `UPDATE_SUBSCRIPTION_CHARGE_DATE`: atualiza a próxima cobrança.
+
+Cada evento é salvo em `hotmart_events`. O `id` enviado pela Hotmart é único, portanto reenvios não duplicam assinaturas nem zeram contadores.
+
+Para novos compradores, o backend usa o Supabase Admin para criar o usuário com `HOTMART_TEMP_PASSWORD` ou `acesso123`, confirma o e-mail e marca `password_must_change`. Se o usuário já existir no Auth, mesmo sem perfil, o cadastro é reaproveitado.
+
+Para distinguir os planos, configure preferencialmente os códigos das ofertas:
+
+```env
+HOTMART_BASIC_OFFER_CODE=
+HOTMART_COMPLETE_OFFER_CODE=
+```
+
+Também são aceitos `HOTMART_*_PLAN_ID` e, somente quando cada plano for um produto separado, `HOTMART_*_PRODUCT_ID`. Vários códigos para o mesmo plano podem ser separados por vírgula.
+
+Depois do deploy, abra `GET /api/hotmart/webhook`. A resposta mostra apenas se segredo e mapeamentos estão configurados, sem revelar seus valores.
+
+Para instalar a estrutura de auditoria e idempotência em um banco existente, execute:
+
+```txt
+supabase/migrations/2026-06-06_harden_hotmart_webhook.sql
+```
 
 ## APIs internas
 
