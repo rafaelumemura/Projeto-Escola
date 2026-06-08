@@ -24,7 +24,7 @@ type PlannedItem = Database["public"]["Tables"]["weekly_plan_items"]["Row"] & {
   activities?: Activity | null;
 };
 
-const statAccents = ["#00B3AF", "#2F80ED", "#C98117", "#6B55D9"];
+const statAccents = ["#00B3AF", "#2F80ED", "#C98117", "#FF4F64"];
 
 export default function DashboardPage() {
   const { supabase, profile, usage } = useAuth();
@@ -33,6 +33,7 @@ export default function DashboardPage() {
   const [generatedActivityCount, setGeneratedActivityCount] = useState(0);
   const [collections, setCollections] = useState<Collection[]>([]);
   const [plannedItems, setPlannedItems] = useState<PlannedItem[]>([]);
+  const [now, setNow] = useState(() => new Date());
 
   useEffect(() => {
     Promise.all([
@@ -56,8 +57,13 @@ export default function DashboardPage() {
       .catch(() => undefined);
   }, [supabase]);
 
-  const now = useMemo(() => new Date(), []);
-  const nextPlannedItems = useMemo(() => findNextPlannedItems(plannedItems, 5), [plannedItems]);
+  useEffect(() => {
+    const interval = window.setInterval(() => setNow(new Date()), 60_000);
+    return () => window.clearInterval(interval);
+  }, []);
+
+  const futurePlannedItems = useMemo(() => findFuturePlannedItems(plannedItems, now), [now, plannedItems]);
+  const nextPlannedItems = useMemo(() => futurePlannedItems.slice(0, 5).map((entry) => entry.item), [futurePlannedItems]);
   const todayItems = useMemo(() => plannedItems.filter((item) => isSameDay(parsePlannedDate(item), now)), [now, plannedItems]);
   const generatedCount = Math.max(usage?.generated_count ?? 0, generatedActivityCount);
 
@@ -79,7 +85,7 @@ export default function DashboardPage() {
         </div>
       </section>
 
-      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <section className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
         <StatCard
           href="/atividades"
           icon={<LibraryBig size={22} />}
@@ -90,7 +96,7 @@ export default function DashboardPage() {
         <StatCard
           href="/atividades"
           icon={<BookOpen size={22} />}
-          label="Atividades geradas por IA"
+          label="Atividades geradas"
           value={generatedCount}
           accent={statAccents[1]}
         />
@@ -105,12 +111,12 @@ export default function DashboardPage() {
           href="/planejamento"
           icon={<CalendarDays size={22} />}
           label="Atividades planejadas"
-          value={plannedItems.length}
+          value={futurePlannedItems.length}
           accent={statAccents[3]}
         />
       </section>
 
-      <section className="mt-6 space-y-6">
+      <section className="mt-6 grid gap-6 lg:grid-cols-2 lg:items-start">
         <UpcomingPanel items={nextPlannedItems} />
         <MiniCalendar date={now} items={plannedItems} />
       </section>
@@ -164,12 +170,12 @@ function StatCard({
   return (
     <Link
       href={href}
-      className="panel group block overflow-hidden p-5 transition hover:-translate-y-0.5 hover:border-leaf/35"
+      className="panel group block overflow-hidden p-4 transition hover:-translate-y-0.5 hover:border-leaf/35 sm:p-5"
       style={{ borderTop: `5px solid ${accent}` }}
     >
       <div className="flex items-center gap-4">
         <span
-          className="grid h-12 w-12 shrink-0 place-items-center rounded-lg border"
+          className="grid h-10 w-10 shrink-0 place-items-center rounded-lg border sm:h-12 sm:w-12"
           style={{
             borderColor: `${accent}33`,
             backgroundColor: `${accent}18`,
@@ -178,9 +184,9 @@ function StatCard({
         >
           {icon}
         </span>
-        <span className="text-4xl font-bold leading-none text-ink">{value}</span>
+        <span className="text-3xl font-bold leading-none text-ink sm:text-4xl">{value}</span>
       </div>
-      <p className="mt-4 max-w-32 text-sm font-bold leading-5 text-ink/58">{label}</p>
+      <p className="mt-4 text-sm font-bold leading-5 text-ink/58 sm:max-w-32">{label}</p>
     </Link>
   );
 }
@@ -306,7 +312,7 @@ function DashboardActivityCard({
 }) {
   const activityCollections = activityCollectionsFor(activity, collections);
   return (
-    <Link href="/atividades" className="panel group overflow-hidden p-5 transition hover:-translate-y-0.5 hover:border-leaf/35">
+    <Link href={`/atividades?atividade=${activity.id}`} className="panel group overflow-hidden p-5 transition hover:-translate-y-0.5 hover:border-leaf/35">
       <div className="mb-4 h-1.5 rounded-full" style={{ backgroundColor: accent }} />
       <p className="text-xs font-bold uppercase tracking-wide text-ink/40">
         {activityCollections.length ? activityCollections.map((collection) => collection.name).join(", ") : activity.development_area || "Sem coleção"}
@@ -323,9 +329,8 @@ function DashboardActivityCard({
   );
 }
 
-function findNextPlannedItems(items: PlannedItem[], limit: number) {
-  const now = new Date();
-  const upcoming = items
+function findFuturePlannedItems(items: PlannedItem[], now: Date) {
+  return items
     .filter((item) => item.date)
     .map((item) => ({ item, date: parsePlannedDate(item) }))
     .filter((entry): entry is { item: PlannedItem; date: Date } => {
@@ -333,8 +338,6 @@ function findNextPlannedItems(items: PlannedItem[], limit: number) {
       return entry.date >= now;
     })
     .sort((a, b) => a.date.getTime() - b.date.getTime());
-
-  return upcoming.slice(0, limit).map((entry) => entry.item);
 }
 
 function parsePlannedDate(item: PlannedItem) {
