@@ -22,6 +22,7 @@ export function ProtectedPage({
   const router = useRouter();
   const pathname = usePathname();
   const { loading, profile, usage, user } = useAuth();
+  const headerAccent = pageHeaderAccent(pathname);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -76,8 +77,10 @@ export function ProtectedPage({
       {!hideHeader ? (
         <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div className="min-w-0">
-            <p className="label mb-2">Projeto Escola</p>
-            <h1 className="text-2xl font-bold text-ink sm:text-3xl">{title}</h1>
+            <h1 className="text-2xl font-bold sm:text-3xl" style={{ color: headerAccent }}>
+              {title}
+            </h1>
+            <span className="mt-2 block h-1.5 w-24 rounded-full sm:w-32" style={{ backgroundColor: headerAccent }} />
             {subtitle ? <p className="mt-2 max-w-3xl text-sm leading-6 text-ink/65">{subtitle}</p> : null}
           </div>
           {actions ? <div className="flex w-full flex-wrap gap-2 sm:w-auto">{actions}</div> : null}
@@ -86,4 +89,12 @@ export function ProtectedPage({
       {children}
     </AppShell>
   );
+}
+
+function pageHeaderAccent(pathname: string) {
+  if (pathname.startsWith("/atividades")) return "#00B3AF";
+  if (pathname.startsWith("/gerar")) return "#2F80ED";
+  if (pathname.startsWith("/colecoes")) return "#C98117";
+  if (pathname.startsWith("/planejamento")) return "#FF4F64";
+  return "#00B3AF";
 }
