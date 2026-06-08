@@ -1,8 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
-import { BookOpen, CalendarDays, FolderKanban, LibraryBig, Sparkles } from "lucide-react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import {
+  BookOpen,
+  CalendarDays,
+  FolderKanban,
+  LibraryBig,
+  Sparkles
+} from "lucide-react";
 import { ProtectedPage } from "@/components/layout/ProtectedPage";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { apiFetch } from "@/lib/api/client";
@@ -18,13 +24,15 @@ type PlannedItem = Database["public"]["Tables"]["weekly_plan_items"]["Row"] & {
   activities?: Activity | null;
 };
 
+const statAccents = ["#00B3AF", "#2F80ED", "#C98117", "#6B55D9"];
+
 export default function DashboardPage() {
   const { supabase, profile, usage } = useAuth();
   const [activities, setActivities] = useState<Activity[]>([]);
   const [registeredActivityCount, setRegisteredActivityCount] = useState(0);
   const [generatedActivityCount, setGeneratedActivityCount] = useState(0);
   const [collections, setCollections] = useState<Collection[]>([]);
-  const [nextPlannedItems, setNextPlannedItems] = useState<PlannedItem[]>([]);
+  const [plannedItems, setPlannedItems] = useState<PlannedItem[]>([]);
 
   useEffect(() => {
     Promise.all([
@@ -43,143 +51,274 @@ export default function DashboardPage() {
             apiFetch<{ items: PlannedItem[] }>(supabase, `/api/weekly-plans/${plan.id}`).catch(() => ({ items: [] }))
           )
         );
-        setNextPlannedItems(findNextPlannedItems(details.flatMap((detail) => detail.items), 5));
+        setPlannedItems(details.flatMap((detail) => detail.items));
       })
       .catch(() => undefined);
   }, [supabase]);
 
+  const now = useMemo(() => new Date(), []);
+  const nextPlannedItems = useMemo(() => findNextPlannedItems(plannedItems, 5), [plannedItems]);
+  const todayItems = useMemo(() => plannedItems.filter((item) => isSameDay(parsePlannedDate(item), now)), [now, plannedItems]);
+  const generatedCount = Math.max(usage?.generated_count ?? 0, generatedActivityCount);
+
   return (
-    <ProtectedPage
-      title={`Olá, ${profile?.name || "professor(a)"}`}
-      subtitle="Organize sua rotina pedagógica com atividades geradas por IA, coleções e planejamentos."
-    >
-      <div className="grid gap-3 sm:grid-cols-3 sm:gap-4">
-        <SummaryCard icon={<LibraryBig size={22} />} label="Atividades cadastradas" value={registeredActivityCount} href="/atividades" />
-        <SummaryCard icon={<BookOpen size={22} />} label="Atividades geradas" value={usage?.generated_count ?? generatedActivityCount} href="/atividades" />
-        <SummaryCard icon={<FolderKanban size={22} />} label="Coleções" value={collections.length} href="/colecoes" />
-      </div>
+    <ProtectedPage title="Dashboard" hideHeader>
+      <section className="mb-8">
+        <p className="text-xs font-bold uppercase tracking-[0.18em] text-leaf sm:text-sm">{formatHeroDate(now)}</p>
+        <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h1 className="text-3xl font-bold leading-tight text-ink sm:text-4xl">
+              Olá, {profile?.name || "professor(a)"}
+            </h1>
+            <p className="mt-3 text-base font-semibold leading-7 text-ink/55 sm:text-lg">
+              {todayItems.length
+                ? `Você tem ${todayItems.length} ${todayItems.length === 1 ? "atividade planejada" : "atividades planejadas"} para hoje.`
+                : "Você não tem atividades planejadas para hoje."}
+            </p>
+          </div>
+        </div>
+      </section>
 
-      <div className="mt-6 space-y-6">
-        <section className="panel p-5">
-          <div className="mb-4 flex items-center justify-between gap-3">
-            <h2 className="text-lg font-bold">Próximas atividades planejadas</h2>
-            <Link href="/planejamento" className="text-sm font-semibold text-leaf">
-              Ver planejamento
+      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard
+          href="/atividades"
+          icon={<LibraryBig size={22} />}
+          label="Atividades cadastradas"
+          value={registeredActivityCount}
+          accent={statAccents[0]}
+        />
+        <StatCard
+          href="/atividades"
+          icon={<BookOpen size={22} />}
+          label="Atividades geradas por IA"
+          value={generatedCount}
+          accent={statAccents[1]}
+        />
+        <StatCard
+          href="/colecoes"
+          icon={<FolderKanban size={22} />}
+          label="Coleções"
+          value={collections.length}
+          accent={statAccents[2]}
+        />
+        <StatCard
+          href="/planejamento"
+          icon={<CalendarDays size={22} />}
+          label="Atividades planejadas"
+          value={plannedItems.length}
+          accent={statAccents[3]}
+        />
+      </section>
+
+      <section className="mt-6 space-y-6">
+        <UpcomingPanel items={nextPlannedItems} />
+        <MiniCalendar date={now} items={plannedItems} />
+      </section>
+
+      <section className="mt-8">
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <h2 className="text-xl font-bold text-ink">Últimas atividades geradas</h2>
+          <Link href="/atividades" className="text-sm font-bold text-leaf">
+            Ver todas
+          </Link>
+        </div>
+
+        {activities.length ? (
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {activities.map((activity, index) => (
+              <DashboardActivityCard
+                key={activity.id}
+                activity={activity}
+                collections={collections}
+                accent={activityAccent(activity, collections, index)}
+              />
+            ))}
+          </div>
+        ) : (
+          <div className="panel border-dashed p-8 text-center">
+            <p className="text-sm font-semibold text-ink/70">Nenhuma atividade salva ainda.</p>
+            <Link href="/gerar" className="mt-4 inline-flex btn-primary">
+              <Sparkles size={16} />
+              Criar primeira atividade
             </Link>
           </div>
-
-          {nextPlannedItems.length ? (
-            <div className="space-y-3">
-              {nextPlannedItems.map((plannedItem) => (
-                <Link key={plannedItem.id} href="/planejamento" className="block rounded-lg border border-ink/10 bg-white p-4 transition hover:border-leaf/40">
-                  <div className="flex flex-wrap items-center gap-3">
-                    <span className="badge">
-                      <CalendarDays size={14} />
-                      {formatPlannedDateTime(plannedItem)}
-                    </span>
-                    <h3 className="font-bold text-ink">{plannedItem.activities?.title || "Atividade planejada"}</h3>
-                  </div>
-                  {plannedItem.activities?.development_area ? (
-                    <p className="mt-2 text-sm text-ink/60">{plannedItem.activities.development_area}</p>
-                  ) : null}
-                </Link>
-              ))}
-            </div>
-          ) : (
-            <div className="rounded-lg border border-dashed border-ink/20 bg-white p-5 text-sm font-semibold text-ink/60">
-              Nenhuma atividade planejada nos próximos dias.
-            </div>
-          )}
-        </section>
-
-        <section className="panel p-5">
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-lg font-bold">Últimas atividades geradas</h2>
-            <Link href="/atividades" className="text-sm font-semibold text-leaf">
-              Ver todas
-            </Link>
-          </div>
-
-          <div className="space-y-3">
-            {activities.length ? (
-              activities.map((activity) => (
-                <Link
-                  key={activity.id}
-                  href="/atividades"
-                  className="block rounded-lg border border-ink/10 bg-white p-4 transition hover:border-leaf/40"
-                >
-                  <h3 className="font-bold text-ink">{activity.title}</h3>
-                  <p className="mt-1 text-sm text-ink/60">
-                    {activity.age_range || "Faixa etária"} • {activity.development_area || "Área"}
-                  </p>
-                  <CollectionBadges activity={activity} collections={collections} />
-                </Link>
-              ))
-            ) : (
-              <div className="rounded-lg border border-dashed border-ink/20 p-6 text-center">
-                <p className="text-sm font-semibold text-ink/70">Nenhuma atividade salva ainda.</p>
-                <Link href="/gerar" className="mt-3 inline-flex btn-primary">
-                  <Sparkles size={16} />
-                  Criar primeira atividade
-                </Link>
-              </div>
-            )}
-          </div>
-        </section>
-      </div>
+        )}
+      </section>
     </ProtectedPage>
   );
 }
 
-function CollectionBadges({ activity, collections }: { activity: Activity; collections: Collection[] }) {
-  const activityCollections = (activity.collection_ids || [])
-    .map((id) => collections.find((collection) => collection.id === id))
-    .filter((collection): collection is Collection => Boolean(collection));
-
-  return (
-    <div className="mt-3 flex flex-wrap gap-1.5">
-      {activityCollections.length ? (
-        activityCollections.map((collection) => (
-          <span
-            key={collection.id}
-            className="rounded-full border px-2 py-0.5 text-[11px] font-bold text-ink/65"
-            style={{
-              borderColor: collection.color || "#d9ded8",
-              backgroundColor: `${collection.color || "#2f7d58"}18`
-            }}
-          >
-            {collection.name}
-          </span>
-        ))
-      ) : (
-        <span className="rounded-full border border-ink/10 bg-paper px-2 py-0.5 text-[11px] font-bold text-ink/45">
-          Sem coleção
-        </span>
-      )}
-    </div>
-  );
-}
-
-function SummaryCard({
+function StatCard({
   icon,
   label,
   value,
-  href
+  href,
+  accent
 }: {
-  icon: React.ReactNode;
+  icon: ReactNode;
   label: string;
   value: number;
   href: string;
+  accent: string;
 }) {
   return (
-    <Link href={href} className="panel block p-4 text-center transition hover:-translate-y-0.5 hover:border-leaf/40 sm:p-5">
-      <span className="mx-auto inline-flex items-center justify-center gap-3">
-        <span className="grid h-11 w-11 place-items-center rounded-lg bg-mint text-leaf">
+    <Link
+      href={href}
+      className="panel group block overflow-hidden p-5 transition hover:-translate-y-0.5 hover:border-leaf/35"
+      style={{ borderTop: `5px solid ${accent}` }}
+    >
+      <div className="flex items-center gap-4">
+        <span
+          className="grid h-12 w-12 shrink-0 place-items-center rounded-lg border"
+          style={{
+            borderColor: `${accent}33`,
+            backgroundColor: `${accent}18`,
+            color: accent
+          }}
+        >
           {icon}
         </span>
-        <span className="text-3xl font-bold leading-none text-ink">{value}</span>
-      </span>
-      <p className="mt-3 text-center text-sm font-semibold text-ink/60">{label}</p>
+        <span className="text-4xl font-bold leading-none text-ink">{value}</span>
+      </div>
+      <p className="mt-4 max-w-32 text-sm font-bold leading-5 text-ink/58">{label}</p>
+    </Link>
+  );
+}
+
+function UpcomingPanel({ items }: { items: PlannedItem[] }) {
+  return (
+    <section className="panel overflow-hidden">
+      <div className="flex items-center justify-between gap-3 border-b border-ink/10 px-5 py-4">
+        <div className="flex items-center gap-2">
+          <span className="h-3 w-3 rounded-sm border-2 border-leaf" />
+          <h2 className="text-xl font-bold text-ink">Próximas atividades</h2>
+        </div>
+        <Link href="/planejamento" className="text-sm font-bold text-leaf">
+          Ver planejamento
+        </Link>
+      </div>
+
+      {items.length ? (
+        <div className="divide-y divide-ink/10">
+          {items.map((item, index) => (
+            <UpcomingActivityCard key={item.id} item={item} accent={statAccents[index % statAccents.length]} />
+          ))}
+        </div>
+      ) : (
+        <div className="p-5 text-sm font-semibold text-ink/60">Nenhuma atividade planejada nos próximos dias.</div>
+      )}
+    </section>
+  );
+}
+
+function UpcomingActivityCard({ item, accent }: { item: PlannedItem; accent: string }) {
+  const date = parsePlannedDate(item);
+  return (
+    <Link href="/planejamento" className="grid gap-4 px-5 py-4 transition hover:bg-mint/25 sm:grid-cols-[96px_1fr]">
+      <div className="flex items-center gap-3 sm:block">
+        <p className="text-xs font-bold uppercase tracking-wide text-ink/35">{date ? shortWeekday(date) : "Data"}</p>
+        <p className="text-lg font-bold text-leaf">{date ? formatTime(date) : "--:--"}</p>
+      </div>
+      <div className="min-w-0 border-l-4 pl-4" style={{ borderColor: accent }}>
+        <h3 className="truncate text-base font-bold text-ink">{item.activities?.title || "Atividade planejada"}</h3>
+        <p className="mt-1 line-clamp-2 text-sm leading-6 text-ink/58">
+          {item.activities?.development_area || item.notes || "Sem área informada"}
+        </p>
+      </div>
+    </Link>
+  );
+}
+
+function MiniCalendar({ date, items }: { date: Date; items: PlannedItem[] }) {
+  const monthStart = new Date(date.getFullYear(), date.getMonth(), 1);
+  const monthDays = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+  const leadingEmptyDays = monthStart.getDay();
+  const days = Array.from({ length: leadingEmptyDays + monthDays }, (_, index) => {
+    const day = index - leadingEmptyDays + 1;
+    return day > 0 ? new Date(date.getFullYear(), date.getMonth(), day) : null;
+  });
+  const weekItems = groupItemsByDate(currentWeekItems(items, date));
+
+  return (
+    <section className="panel p-5">
+      <div className="mb-5 flex items-center gap-2">
+        <span className="h-3 w-3 rounded-sm border-2 border-leaf" />
+        <h2 className="text-xl font-bold text-ink">{monthTitle(date)}</h2>
+      </div>
+
+      <div className="grid grid-cols-7 gap-y-2 text-center">
+        {["D", "S", "T", "Q", "Q", "S", "S"].map((day, index) => (
+          <span key={`${day}-${index}`} className="text-xs font-bold uppercase text-ink/35">
+            {day}
+          </span>
+        ))}
+        {days.map((day, index) => {
+          const itemCount = day ? itemsOnDate(items, day).length : 0;
+          const today = isSameDay(day, date);
+          return (
+            <span key={day?.toISOString() || `empty-${index}`} className="grid min-h-12 place-items-center">
+              {day ? (
+                <span
+                  className={`relative grid h-11 w-11 place-items-center rounded-lg text-sm font-bold ${
+                    today ? "bg-leaf text-white" : "text-ink/70"
+                  }`}
+                >
+                  {day.getDate()}
+                  {itemCount ? (
+                    <span className={`absolute bottom-1.5 h-1.5 w-1.5 rounded-full ${today ? "bg-white" : "bg-leaf"}`} />
+                  ) : null}
+                </span>
+              ) : null}
+            </span>
+          );
+        })}
+      </div>
+
+      <div className="mt-6">
+        <p className="text-sm font-bold text-ink">Esta semana</p>
+        {weekItems.length ? (
+          <div className="mt-3 space-y-2">
+            {weekItems.map((item, index) => (
+              <div key={item.key} className="flex items-center gap-3 text-sm font-semibold text-ink/62">
+                <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: statAccents[index % statAccents.length] }} />
+                <span>
+                  {item.label} — {item.count} {item.count === 1 ? "atividade" : "atividades"}
+                </span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="mt-3 text-sm font-semibold text-ink/50">Nenhuma atividade nesta semana.</p>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function DashboardActivityCard({
+  activity,
+  collections,
+  accent
+}: {
+  activity: Activity;
+  collections: Collection[];
+  accent: string;
+}) {
+  const activityCollections = activityCollectionsFor(activity, collections);
+  return (
+    <Link href="/atividades" className="panel group overflow-hidden p-5 transition hover:-translate-y-0.5 hover:border-leaf/35">
+      <div className="mb-4 h-1.5 rounded-full" style={{ backgroundColor: accent }} />
+      <p className="text-xs font-bold uppercase tracking-wide text-ink/40">
+        {activityCollections.length ? activityCollections.map((collection) => collection.name).join(", ") : activity.development_area || "Sem coleção"}
+      </p>
+      <h3 className="mt-4 line-clamp-3 min-h-20 text-xl font-bold leading-7 text-ink">{activity.title}</h3>
+      <div className="mt-4 flex flex-wrap items-center gap-3 text-sm font-semibold text-ink/52">
+        <span className="inline-flex items-center gap-2">
+          <span className="h-3 w-3 rounded-sm border border-ink/30" />
+          {activity.age_range || "Faixa etária"}
+        </span>
+        {activity.development_area ? <span>{activity.development_area}</span> : null}
+      </div>
     </Link>
   );
 }
@@ -205,15 +344,90 @@ function parsePlannedDate(item: PlannedItem) {
   return new Date(year, month - 1, day, hour, minute);
 }
 
-function formatPlannedDateTime(item: PlannedItem) {
-  const date = parsePlannedDate(item);
-  if (!date) return "Sem data";
+function formatHeroDate(date: Date) {
   return new Intl.DateTimeFormat("pt-BR", {
-    day: "2-digit",
-    month: "2-digit",
+    weekday: "long",
+    day: "numeric",
+    month: "long"
+  })
+    .format(date)
+    .replace(",", "")
+    .toUpperCase();
+}
+
+function formatTime(date: Date) {
+  return new Intl.DateTimeFormat("pt-BR", {
     hour: "2-digit",
     minute: "2-digit"
   }).format(date);
+}
+
+function shortWeekday(date: Date) {
+  return new Intl.DateTimeFormat("pt-BR", { weekday: "short" }).format(date).replace(".", "");
+}
+
+function monthTitle(date: Date) {
+  const label = new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric" }).format(date);
+  return label.charAt(0).toUpperCase() + label.slice(1);
+}
+
+function itemsOnDate(items: PlannedItem[], date: Date) {
+  return items.filter((item) => isSameDay(parsePlannedDate(item), date));
+}
+
+function currentWeekItems(items: PlannedItem[], date: Date) {
+  const start = new Date(date);
+  start.setHours(0, 0, 0, 0);
+  start.setDate(date.getDate() - date.getDay());
+  const end = new Date(start);
+  end.setDate(start.getDate() + 7);
+  return items.filter((item) => {
+    const plannedDate = parsePlannedDate(item);
+    return Boolean(plannedDate && plannedDate >= start && plannedDate < end);
+  });
+}
+
+function groupItemsByDate(items: PlannedItem[]) {
+  const grouped = new Map<string, { key: string; label: string; count: number }>();
+  for (const item of items) {
+    const date = parsePlannedDate(item);
+    if (!date) continue;
+    const key = dateKey(date);
+    const current = grouped.get(key);
+    if (current) {
+      current.count += 1;
+    } else {
+      grouped.set(key, {
+        key,
+        label: new Intl.DateTimeFormat("pt-BR", { weekday: "short", day: "2-digit" }).format(date).replace(".", ""),
+        count: 1
+      });
+    }
+  }
+  return Array.from(grouped.values()).sort((a, b) => a.key.localeCompare(b.key));
+}
+
+function isSameDay(left: Date | null, right: Date | null) {
+  if (!left || !right) return false;
+  return left.getFullYear() === right.getFullYear() && left.getMonth() === right.getMonth() && left.getDate() === right.getDate();
+}
+
+function dateKey(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function activityAccent(activity: Activity, collections: Collection[], index: number) {
+  const primaryCollection = activityCollectionsFor(activity, collections)[0];
+  return primaryCollection?.color || statAccents[index % statAccents.length];
+}
+
+function activityCollectionsFor(activity: Activity, collections: Collection[]) {
+  return (activity.collection_ids || [])
+    .map((id) => collections.find((collection) => collection.id === id))
+    .filter((collection): collection is Collection => Boolean(collection));
 }
 
 function isGeneratedActivity(activity: Activity) {
