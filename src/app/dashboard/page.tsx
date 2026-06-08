@@ -7,7 +7,8 @@ import {
   CalendarDays,
   FolderKanban,
   LibraryBig,
-  Sparkles
+  Sparkles,
+  Target
 } from "lucide-react";
 import { ProtectedPage } from "@/components/layout/ProtectedPage";
 import { useAuth } from "@/components/auth/AuthProvider";
@@ -319,13 +320,18 @@ function DashboardActivityCard({
         {activityCollections.length ? activityCollections.map((collection) => collection.name).join(", ") : activity.development_area || "Sem coleção"}
       </p>
       <h3 className="mt-4 line-clamp-3 text-xl font-bold leading-7 text-ink">{activity.title}</h3>
-      {summary ? <p className="mt-3 line-clamp-3 text-sm leading-6 text-ink/60">{summary}</p> : null}
+      {summary ? <p className="mt-3 line-clamp-2 text-sm leading-6 text-ink/60">{summary}</p> : null}
       <div className="mt-4 flex flex-wrap items-center gap-3 text-sm font-semibold text-ink/52">
         <span className="inline-flex items-center gap-2">
           <BookOpen size={14} className="shrink-0 text-ink/35" />
           {activity.age_range || "Faixa etária"}
         </span>
-        {activity.development_area ? <span>{activity.development_area}</span> : null}
+        {activity.development_area ? (
+          <span className="inline-flex items-center gap-2">
+            <Target size={14} className="shrink-0 text-leaf" />
+            {activity.development_area}
+          </span>
+        ) : null}
       </div>
     </Link>
   );
