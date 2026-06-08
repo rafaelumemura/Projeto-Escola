@@ -196,7 +196,7 @@ function UpcomingPanel({ items }: { items: PlannedItem[] }) {
     <section className="panel overflow-hidden">
       <div className="flex items-center justify-between gap-3 border-b border-ink/10 px-5 py-4">
         <div className="flex items-center gap-2">
-          <span className="h-3 w-3 rounded-sm border-2 border-leaf" />
+          <Sparkles size={18} className="shrink-0 text-leaf" />
           <h2 className="text-xl font-bold text-ink">Próximas atividades</h2>
         </div>
         <Link href="/planejamento" className="text-sm font-bold text-leaf">
@@ -248,7 +248,7 @@ function MiniCalendar({ date, items }: { date: Date; items: PlannedItem[] }) {
   return (
     <section className="panel p-5">
       <div className="mb-5 flex items-center gap-2">
-        <span className="h-3 w-3 rounded-sm border-2 border-leaf" />
+        <CalendarDays size={18} className="shrink-0 text-leaf" />
         <h2 className="text-xl font-bold text-ink">{monthTitle(date)}</h2>
       </div>
 
@@ -311,16 +311,18 @@ function DashboardActivityCard({
   accent: string;
 }) {
   const activityCollections = activityCollectionsFor(activity, collections);
+  const summary = firstParagraph(activity.description);
   return (
     <Link href={`/atividades?atividade=${activity.id}`} className="panel group overflow-hidden p-5 transition hover:-translate-y-0.5 hover:border-leaf/35">
       <div className="mb-4 h-1.5 rounded-full" style={{ backgroundColor: accent }} />
       <p className="text-xs font-bold uppercase tracking-wide text-ink/40">
         {activityCollections.length ? activityCollections.map((collection) => collection.name).join(", ") : activity.development_area || "Sem coleção"}
       </p>
-      <h3 className="mt-4 line-clamp-3 min-h-20 text-xl font-bold leading-7 text-ink">{activity.title}</h3>
+      <h3 className="mt-4 line-clamp-3 text-xl font-bold leading-7 text-ink">{activity.title}</h3>
+      {summary ? <p className="mt-3 line-clamp-3 text-sm leading-6 text-ink/60">{summary}</p> : null}
       <div className="mt-4 flex flex-wrap items-center gap-3 text-sm font-semibold text-ink/52">
         <span className="inline-flex items-center gap-2">
-          <span className="h-3 w-3 rounded-sm border border-ink/30" />
+          <BookOpen size={14} className="shrink-0 text-ink/35" />
           {activity.age_range || "Faixa etária"}
         </span>
         {activity.development_area ? <span>{activity.development_area}</span> : null}
@@ -413,6 +415,13 @@ function groupItemsByDate(items: PlannedItem[]) {
 function isSameDay(left: Date | null, right: Date | null) {
   if (!left || !right) return false;
   return left.getFullYear() === right.getFullYear() && left.getMonth() === right.getMonth() && left.getDate() === right.getDate();
+}
+
+function firstParagraph(value: string | null) {
+  return (value || "")
+    .split(/\n+/)
+    .map((paragraph) => paragraph.trim())
+    .find(Boolean) || "";
 }
 
 function dateKey(date: Date) {
