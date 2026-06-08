@@ -150,7 +150,7 @@ function UsageMeter({ usage, compact = false }: { usage: BillingUsage | null; co
       <div>
         <div className="flex items-center justify-between gap-3 text-xs text-ink/60">
           <span className="inline-flex min-w-0 items-center gap-2 truncate">
-            <span className="h-2.5 w-2.5 shrink-0 rounded-sm border border-sun bg-sun/15" />
+            <BookOpen size={13} className="shrink-0 text-sun" />
             {generated} de {limit} atividades
           </span>
           <span className="font-semibold text-ink/70">{percent}%</span>
