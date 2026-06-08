@@ -77,7 +77,7 @@ export function ProtectedPage({
       {!hideHeader ? (
         <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div className="min-w-0">
-            <h1 className="text-2xl font-bold sm:text-3xl" style={{ color: headerAccent }}>
+            <h1 className="text-2xl font-bold text-ink sm:text-3xl">
               {title}
             </h1>
             <span className="mt-2 block h-1.5 w-24 rounded-full sm:w-32" style={{ backgroundColor: headerAccent }} />
