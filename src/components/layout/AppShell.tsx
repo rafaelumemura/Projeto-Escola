@@ -5,7 +5,6 @@ import { usePathname } from "next/navigation";
 import {
   BookOpen,
   CalendarDays,
-  Crown,
   FolderKanban,
   LayoutDashboard,
   Sparkles,
@@ -68,7 +67,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </nav>
 
         <div className="mt-auto space-y-3">
-          <UsageMeter usage={usage} />
           <Link href="/perfil" className="flex items-center gap-3 rounded-lg border border-ink/10 bg-white p-3 transition hover:border-leaf/35">
             <Avatar src={profile?.avatar_url} name={profile?.name || profile?.email || "Perfil"} />
             <span className="min-w-0">
@@ -76,6 +74,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <span className="block truncate text-xs text-ink/55">{profile?.email}</span>
             </span>
           </Link>
+          <UsageMeter usage={usage} />
         </div>
       </aside>
 
@@ -133,9 +132,8 @@ function UsageMeter({ usage, compact = false }: { usage: BillingUsage | null; co
       <div className="rounded-md border border-ink/10 bg-white/95 px-3 py-2 shadow-[0_-10px_24px_rgba(39,50,44,0.08)] backdrop-blur">
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
-            <p className="truncate text-[11px] font-bold leading-tight text-ink">{usage?.plan_name || "Sem plano"}</p>
             <p className="truncate text-[11px] font-semibold leading-tight text-ink/60">
-              {generated}/{limit} atividades geradas
+              {generated} de {limit} atividades
             </p>
           </div>
           <span className="shrink-0 text-[11px] font-bold leading-none text-ink/70">{percent}%</span>
@@ -149,21 +147,15 @@ function UsageMeter({ usage, compact = false }: { usage: BillingUsage | null; co
 
   return (
     <div className="rounded-lg border border-ink/10 bg-white p-3">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="truncate text-xs font-bold text-ink">{usage?.plan_name || "Sem plano"}</p>
-        </div>
-        <Crown size={17} className="shrink-0 text-sun" />
-      </div>
-
-      <div className="mt-2">
+      <div>
         <div className="flex items-center justify-between gap-3 text-xs text-ink/60">
-          <span>
-            {generated}/{limit} atividades geradas
+          <span className="inline-flex min-w-0 items-center gap-2 truncate">
+            <span className="h-2.5 w-2.5 shrink-0 rounded-sm border border-sun bg-sun/15" />
+            {generated} de {limit} atividades
           </span>
           <span className="font-semibold text-ink/70">{percent}%</span>
         </div>
-        <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-white" role="progressbar" aria-valuenow={percent} aria-valuemin={0} aria-valuemax={100}>
+        <div className="mt-2 h-2 overflow-hidden rounded-full bg-mint/50" role="progressbar" aria-valuenow={percent} aria-valuemin={0} aria-valuemax={100}>
           <span className="block h-full rounded-full bg-leaf transition-all" style={{ width: `${percent}%` }} />
         </div>
       </div>

@@ -10,11 +10,13 @@ export function ProtectedPage({
   title,
   subtitle,
   actions,
+  hideHeader = false,
   children
 }: {
   title: string;
   subtitle?: string;
   actions?: React.ReactNode;
+  hideHeader?: boolean;
   children: React.ReactNode;
 }) {
   const router = useRouter();
@@ -71,14 +73,16 @@ export function ProtectedPage({
 
   return (
     <AppShell>
-      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div className="min-w-0">
-          <p className="label mb-2">Projeto Escola</p>
-          <h1 className="text-2xl font-bold text-ink sm:text-3xl">{title}</h1>
-          {subtitle ? <p className="mt-2 max-w-3xl text-sm leading-6 text-ink/65">{subtitle}</p> : null}
+      {!hideHeader ? (
+        <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+          <div className="min-w-0">
+            <p className="label mb-2">Projeto Escola</p>
+            <h1 className="text-2xl font-bold text-ink sm:text-3xl">{title}</h1>
+            {subtitle ? <p className="mt-2 max-w-3xl text-sm leading-6 text-ink/65">{subtitle}</p> : null}
+          </div>
+          {actions ? <div className="flex w-full flex-wrap gap-2 sm:w-auto">{actions}</div> : null}
         </div>
-        {actions ? <div className="flex w-full flex-wrap gap-2 sm:w-auto">{actions}</div> : null}
-      </div>
+      ) : null}
       {children}
     </AppShell>
   );
