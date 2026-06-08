@@ -1,645 +1,440 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight, Eye, FileDown, Filter, FolderMinus, FolderPlus, Pencil, Plus, Printer, Save, Trash2, X } from "lucide-react";
-import { ProtectedPage } from "@/components/layout/ProtectedPage";
-import { ActivityView } from "@/components/ui/ActivityView";
+import Link from "next/link";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
-  initialManualActivityForm,
-  ManualActivityFields,
-  type ManualActivityForm,
-  resolveManualActivityForm
-} from "@/components/ui/ManualActivityFields";
+  BookOpen,
+  CalendarDays,
+  FolderKanban,
+  LibraryBig,
+  Sparkles
+} from "lucide-react";
+import { ProtectedPage } from "@/components/layout/ProtectedPage";
 import { useAuth } from "@/components/auth/AuthProvider";
-import { apiFetch, downloadPdf } from "@/lib/api/client";
-import { activityTypes, methodologies } from "@/lib/activities/types";
-import { canUsePrintableMaterial } from "@/lib/billing/plans";
-import type { Database, Json } from "@/lib/database.types";
-import type { PrintableMaterialPlan } from "@/lib/activities/printable-material";
+import { apiFetch } from "@/lib/api/client";
+import type { Database } from "@/lib/database.types";
 
-type Activity = Database["public"]["Tables"]["activities"]["Row"];
-type ActivityWithCollections = Activity & {
+type Activity = Database["public"]["Tables"]["activities"]["Row"] & {
   collection_ids?: string[];
   primary_collection_id?: string | null;
 };
 type Collection = Database["public"]["Tables"]["collections"]["Row"];
-type EditState = Partial<Activity> & {
-  steps_text?: string;
-  teacher_tips_text?: string;
-  variations_text?: string;
+type WeeklyPlan = Database["public"]["Tables"]["weekly_plans"]["Row"];
+type PlannedItem = Database["public"]["Tables"]["weekly_plan_items"]["Row"] & {
+  activities?: Activity | null;
 };
 
-const pageSize = 10;
+const statAccents = ["#00B3AF", "#2F80ED", "#C98117", "#FF4F64"];
 
-function arrayText(value: Json | null | undefined) {
-  return Array.isArray(value) ? value.map(String).join("\n") : typeof value === "string" ? value : "";
-}
-
-function textArray(value: string | undefined) {
-  return (value || "")
-    .split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean);
-}
-
-function getSavedPrintableMaterialPlan(rawAiResponse: Json | null): PrintableMaterialPlan | null {
-  if (!rawAiResponse || typeof rawAiResponse !== "object" || Array.isArray(rawAiResponse)) return null;
-  const material = (rawAiResponse as { printable_material?: unknown }).printable_material;
-
-  if (!material || typeof material !== "object" || Array.isArray(material)) return null;
-  if (typeof (material as { has_material?: unknown }).has_material !== "boolean") return null;
-
-  return material as PrintableMaterialPlan;
-}
-
-export default function ActivitiesPage() {
-  const { supabase, usage } = useAuth();
-  const [activities, setActivities] = useState<ActivityWithCollections[]>([]);
+export default function DashboardPage() {
+  const { supabase, profile, usage } = useAuth();
+  const [activities, setActivities] = useState<Activity[]>([]);
+  const [registeredActivityCount, setRegisteredActivityCount] = useState(0);
+  const [generatedActivityCount, setGeneratedActivityCount] = useState(0);
   const [collections, setCollections] = useState<Collection[]>([]);
-  const [selected, setSelected] = useState<ActivityWithCollections | null>(null);
-  const [edit, setEdit] = useState<EditState | null>(null);
-  const [message, setMessage] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
-  const [plannedDeleteActivity, setPlannedDeleteActivity] = useState<ActivityWithCollections | null>(null);
-  const [page, setPage] = useState(1);
-  const [filters, setFilters] = useState({
-    age_range: "",
-    development_area: "",
-    methodology: "",
-    activity_type: "",
-    collection_id: ""
-  });
-  const [actionCollectionId, setActionCollectionId] = useState("");
-  const [manualModalOpen, setManualModalOpen] = useState(false);
-  const [manualForm, setManualForm] = useState<ManualActivityForm>(initialManualActivityForm);
-
-  const query = useMemo(() => {
-    const params = new URLSearchParams();
-    Object.entries(filters).forEach(([key, value]) => {
-      if (value) params.set(key, value);
-    });
-    return params.toString() ? `/api/activities?${params.toString()}` : "/api/activities";
-  }, [filters]);
-
-  const totalPages = Math.max(1, Math.ceil(activities.length / pageSize));
-  const visibleActivities = useMemo(() => {
-    const safePage = Math.min(page, totalPages);
-    const start = (safePage - 1) * pageSize;
-    return activities.slice(start, start + pageSize);
-  }, [activities, page, totalPages]);
-
-  async function loadActivities() {
-    const data = await apiFetch<{ activities: ActivityWithCollections[] }>(supabase, query);
-    setActivities(data.activities);
-    setSelected((current) => {
-      if (!current) return data.activities[0] || null;
-      return data.activities.find((activity) => activity.id === current.id) || data.activities[0] || null;
-    });
-  }
+  const [plannedItems, setPlannedItems] = useState<PlannedItem[]>([]);
+  const [now, setNow] = useState(() => new Date());
 
   useEffect(() => {
     Promise.all([
-      loadActivities(),
-      apiFetch<{ collections: Collection[] }>(supabase, "/api/collections")
+      apiFetch<{ activities: Activity[] }>(supabase, "/api/activities"),
+      apiFetch<{ collections: Collection[] }>(supabase, "/api/collections"),
+      apiFetch<{ weekly_plans: WeeklyPlan[] }>(supabase, "/api/weekly-plans")
     ])
-      .then(([, collectionData]) => {
+      .then(async ([activityData, collectionData, planData]) => {
+        const generatedActivities = activityData.activities.filter(isGeneratedActivity);
+        setRegisteredActivityCount(activityData.activities.length);
+        setGeneratedActivityCount(generatedActivities.length);
+        setActivities(generatedActivities.slice(0, 5));
         setCollections(collectionData.collections);
+        const details = await Promise.all(
+          planData.weekly_plans.map((plan) =>
+            apiFetch<{ items: PlannedItem[] }>(supabase, `/api/weekly-plans/${plan.id}`).catch(() => ({ items: [] }))
+          )
+        );
+        setPlannedItems(details.flatMap((detail) => detail.items));
       })
-      .catch((error) => setMessage(error instanceof Error ? error.message : "Não foi possível carregar dados."));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [query, supabase]);
+      .catch(() => undefined);
+  }, [supabase]);
 
   useEffect(() => {
-    setPage(1);
-  }, [query]);
+    const interval = window.setInterval(() => setNow(new Date()), 60_000);
+    return () => window.clearInterval(interval);
+  }, []);
 
-  useEffect(() => {
-    if (page > totalPages) {
-      setPage(totalPages);
-    }
-  }, [page, totalPages]);
-
-  useEffect(() => {
-    if (!visibleActivities.length) {
-      if (selected) setSelected(null);
-      return;
-    }
-
-    if (!selected || !visibleActivities.some((activity) => activity.id === selected.id)) {
-      setSelected(visibleActivities[0]);
-      setEdit(null);
-    }
-  }, [selected, visibleActivities]);
-
-  useEffect(() => {
-    setActionCollectionId(selected?.primary_collection_id || selected?.collection_ids?.[0] || "");
-    setPendingDeleteId(null);
-  }, [selected?.id, selected?.primary_collection_id, selected?.collection_ids]);
-
-  function openManualModal() {
-    setManualForm(initialManualActivityForm);
-    setManualModalOpen(true);
-    setMessage(null);
-  }
-
-  function closeManualModal() {
-    setManualModalOpen(false);
-    setManualForm(initialManualActivityForm);
-  }
-
-  function updateManualField<K extends keyof ManualActivityForm>(key: K, value: ManualActivityForm[K]) {
-    setManualForm((current) => ({ ...current, [key]: value }));
-  }
-
-  async function createManualActivity(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setBusy(true);
-    setMessage(null);
-    try {
-      const manualPayload = resolveManualActivityForm(manualForm);
-      const data = await apiFetch<{ activity: Activity }>(supabase, "/api/activities", {
-        method: "POST",
-        body: manualPayload.activity
-      });
-      const created = { ...data.activity, collection_ids: [], primary_collection_id: null };
-      setActivities((current) => [created, ...current]);
-      setSelected(created);
-      setEdit(null);
-      setPage(1);
-      closeManualModal();
-      setMessage("Atividade criada.");
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Não foi possível criar a atividade.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  function startEdit(activity: ActivityWithCollections) {
-    setSelected(activity);
-    setEdit({
-      ...activity,
-      steps_text: arrayText(activity.steps),
-      teacher_tips_text: arrayText(activity.teacher_tips),
-      variations_text: arrayText(activity.variations)
-    });
-  }
-
-  async function saveEdit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!edit?.id) return;
-
-    setBusy(true);
-    setMessage(null);
-    try {
-      const payload = {
-        title: edit.title,
-        age_range: edit.age_range,
-        methodology: edit.methodology,
-        development_area: edit.development_area,
-        activity_type: edit.activity_type,
-        environment: edit.environment,
-        materials: edit.materials,
-        objective: edit.objective,
-        estimated_time: edit.estimated_time,
-        bncc_code: edit.bncc_code,
-        description: edit.description,
-        steps: textArray(edit.steps_text),
-        teacher_tips: textArray(edit.teacher_tips_text),
-        variations: textArray(edit.variations_text),
-        safety_notes: edit.safety_notes,
-        evaluation: edit.evaluation
-      };
-      const data = await apiFetch<{ activity: Activity }>(supabase, `/api/activities/${edit.id}`, {
-        method: "PUT",
-        body: payload
-      });
-      setSelected(data.activity);
-      setEdit(null);
-      await loadActivities();
-      setMessage("Atividade atualizada.");
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Não foi possível salvar.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function handleDeleteActivity(activity: ActivityWithCollections) {
-    setBusy(true);
-    setMessage(null);
-    try {
-      const planningStatus = await apiFetch<{ planned: boolean; count: number }>(supabase, `/api/activities/${activity.id}/planning-status`);
-
-      if (planningStatus.planned) {
-        setPlannedDeleteActivity(activity);
-        setPendingDeleteId(null);
-        return;
-      } else if (pendingDeleteId !== activity.id) {
-        setPendingDeleteId(activity.id);
-        return;
-      }
-
-      await apiFetch(supabase, `/api/activities/${activity.id}${planningStatus.planned ? "?remove_planned=true" : ""}`, { method: "DELETE" });
-      setSelected(null);
-      setEdit(null);
-      await loadActivities();
-      setMessage("Atividade excluída.");
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Não foi possível excluir.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function confirmPlannedDelete() {
-    if (!plannedDeleteActivity) return;
-
-    setBusy(true);
-    setMessage(null);
-    try {
-      await apiFetch(supabase, `/api/activities/${plannedDeleteActivity.id}?remove_planned=true`, { method: "DELETE" });
-      setPlannedDeleteActivity(null);
-      setSelected(null);
-      setEdit(null);
-      await loadActivities();
-      setMessage("Atividade excluída.");
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Não foi possível excluir.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function addToCollection() {
-    if (!selected || !actionCollectionId) return setMessage("Escolha uma atividade e uma coleção.");
-    setBusy(true);
-    setMessage(null);
-    try {
-      await apiFetch(supabase, `/api/collections/${actionCollectionId}/activities`, {
-        method: "POST",
-        body: { activity_id: selected.id }
-      });
-      await loadActivities();
-      setMessage("Atividade adicionada à coleção.");
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Não foi possível adicionar à coleção.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function removeFromCollection() {
-    if (!selected || !actionCollectionId) return setMessage("Escolha uma atividade e uma coleção.");
-    setBusy(true);
-    setMessage(null);
-    try {
-      await apiFetch(supabase, `/api/collections/${actionCollectionId}/activities/${selected.id}`, { method: "DELETE" });
-      await loadActivities();
-      setMessage("Atividade removida da coleção.");
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Não foi possível remover da coleção.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function downloadPrintableMaterial(activity: ActivityWithCollections) {
-    if (!canUsePrintableMaterial(usage?.plan_key)) {
-      setMessage("Material imprimível disponível apenas no plano Completo.");
-      return;
-    }
-
-    const material = getSavedPrintableMaterialPlan(activity.raw_ai_response);
-    if (!material?.has_material) {
-      setMessage(material?.reason || "Esta atividade ainda não possui material imprimível salvo.");
-      return;
-    }
-
-    await downloadPdf(
-      supabase,
-      "/api/pdf/activity-material",
-      { activity_id: activity.id, material_plan: material },
-      materialPdfFileName(activity.title)
-    );
-  }
-
-  function activityCollections(activity: ActivityWithCollections) {
-    const ids = activity.collection_ids || [];
-    return ids
-      .map((id) => collections.find((collection) => collection.id === id))
-      .filter((collection): collection is Collection => Boolean(collection));
-  }
+  const futurePlannedItems = useMemo(() => findFuturePlannedItems(plannedItems, now), [now, plannedItems]);
+  const nextPlannedItems = useMemo(() => futurePlannedItems.slice(0, 5).map((entry) => entry.item), [futurePlannedItems]);
+  const todayItems = useMemo(() => plannedItems.filter((item) => isSameDay(parsePlannedDate(item), now)), [now, plannedItems]);
+  const generatedCount = Math.max(usage?.generated_count ?? 0, generatedActivityCount);
 
   return (
-    <ProtectedPage
-      title="Atividades"
-      subtitle="Consulte, filtre, edite e reutilize atividades salvas."
-      actions={
-        <button type="button" onClick={openManualModal} className="btn-primary">
-          <Plus size={17} />
-          Criar atividade
-        </button>
-      }
-    >
-      <section className="panel mb-5 p-4">
-        <div className="mb-3 flex items-center gap-2 font-bold">
-          <Filter size={18} className="text-leaf" />
-          Filtros
-        </div>
-        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-5">
-          <input className="field" placeholder="Idade" value={filters.age_range} onChange={(event) => setFilters({ ...filters, age_range: event.target.value })} />
-          <input className="field" placeholder="Área de Desenvolvimento" value={filters.development_area} onChange={(event) => setFilters({ ...filters, development_area: event.target.value })} />
-          <select className="field" value={filters.methodology} onChange={(event) => setFilters({ ...filters, methodology: event.target.value })}>
-            <option value="">Metodologia</option>
-            {methodologies.map((item) => <option key={item}>{item}</option>)}
-          </select>
-          <select className="field" value={filters.activity_type} onChange={(event) => setFilters({ ...filters, activity_type: event.target.value })}>
-            <option value="">Tipo</option>
-            {activityTypes.map((item) => <option key={item}>{item}</option>)}
-          </select>
-          <select className="field" value={filters.collection_id} onChange={(event) => setFilters({ ...filters, collection_id: event.target.value })}>
-            <option value="">Coleção</option>
-            {collections.map((collection) => <option key={collection.id} value={collection.id}>{collection.name}</option>)}
-          </select>
+    <ProtectedPage title="Dashboard" hideHeader>
+      <section className="mb-8">
+        <p className="text-xs font-bold uppercase tracking-[0.18em] text-leaf sm:text-sm">{formatHeroDate(now)}</p>
+        <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h1 className="text-3xl font-bold leading-tight text-ink sm:text-4xl">
+              Olá, {profile?.name || "professor(a)"}
+            </h1>
+            <p className="mt-3 text-base font-semibold leading-7 text-ink/55 sm:text-lg">
+              {todayItems.length
+                ? `Você tem ${todayItems.length} ${todayItems.length === 1 ? "atividade planejada" : "atividades planejadas"} para hoje.`
+                : "Você não tem atividades planejadas para hoje."}
+            </p>
+          </div>
         </div>
       </section>
 
-      {message ? <p className="mb-4 rounded-lg border border-ink/10 bg-white px-4 py-3 text-sm font-semibold text-ink/70">{message}</p> : null}
+      <section className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
+        <StatCard
+          href="/atividades"
+          icon={<LibraryBig size={22} />}
+          label="Atividades cadastradas"
+          value={registeredActivityCount}
+          accent={statAccents[0]}
+        />
+        <StatCard
+          href="/atividades"
+          icon={<BookOpen size={22} />}
+          label="Atividades geradas"
+          value={generatedCount}
+          accent={statAccents[1]}
+        />
+        <StatCard
+          href="/colecoes"
+          icon={<FolderKanban size={22} />}
+          label="Coleções"
+          value={collections.length}
+          accent={statAccents[2]}
+        />
+        <StatCard
+          href="/planejamento"
+          icon={<CalendarDays size={22} />}
+          label="Atividades planejadas"
+          value={futurePlannedItems.length}
+          accent={statAccents[3]}
+        />
+      </section>
 
-      <div className="grid gap-5 lg:grid-cols-[360px_1fr]">
-        <aside className="rounded-lg border border-ink/10 bg-white p-3 shadow-soft lg:space-y-3 lg:rounded-none lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none">
-          <div className="mb-3 flex items-center justify-between gap-3 lg:hidden">
-            <p className="label">Lista de atividades</p>
-            <span className="text-xs font-bold text-ink/45">{activities.length} itens</span>
-          </div>
+      <section className="mt-6 grid gap-6 lg:grid-cols-2 lg:items-start">
+        <UpcomingPanel items={nextPlannedItems} />
+        <MiniCalendar date={now} items={plannedItems} />
+      </section>
 
-          <div className="space-y-3">
-            {visibleActivities.map((activity) => (
-            <button
-              key={activity.id}
-              onClick={() => {
-                setSelected(activity);
-                setEdit(null);
-              }}
-              className={`w-full rounded-lg border bg-white p-4 text-left transition ${
-                selected?.id === activity.id ? "border-leaf ring-2 ring-leaf/15" : "border-ink/10 hover:border-leaf/40"
-              }`}
-            >
-              <h2 className="font-bold text-ink">{activity.title}</h2>
-              <p className="mt-1 text-sm text-ink/60">{activity.age_range || "Faixa etária"} • {activity.methodology || "Metodologia"}</p>
-              <div className="mt-3 flex flex-wrap gap-1.5">
-                {activityCollections(activity).length ? (
-                  activityCollections(activity).map((collection) => (
-                    <span
-                      key={collection.id}
-                      className="rounded-full border px-2 py-0.5 text-[11px] font-bold text-ink/65"
-                      style={{
-                        borderColor: collection.color || "#d9ded8",
-                        backgroundColor: `${collection.color || "#2f7d58"}18`
-                      }}
-                    >
-                      {collection.name}
-                    </span>
-                  ))
-                ) : (
-                  <span className="rounded-full border border-ink/10 bg-paper px-2 py-0.5 text-[11px] font-bold text-ink/45">
-                    Sem coleção
-                  </span>
-                )}
-              </div>
-            </button>
+      <section className="mt-8">
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <h2 className="text-xl font-bold text-ink">Últimas atividades geradas</h2>
+          <Link href="/atividades" className="text-sm font-bold text-leaf">
+            Ver todas
+          </Link>
+        </div>
+
+        {activities.length ? (
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {activities.map((activity, index) => (
+              <DashboardActivityCard
+                key={activity.id}
+                activity={activity}
+                collections={collections}
+                accent={activityAccent(activity, collections, index)}
+              />
             ))}
           </div>
-          {!activities.length ? <div className="panel mt-3 p-5 text-sm font-semibold text-ink/60 lg:mt-0">Nenhuma atividade encontrada.</div> : null}
-          {activities.length > pageSize ? (
-            <div className="mt-3 flex items-center justify-between gap-2 rounded-lg border border-ink/10 bg-white p-2 lg:mt-0">
-              <button
-                type="button"
-                onClick={() => setPage((current) => Math.max(1, current - 1))}
-                disabled={page === 1}
-                className="btn-secondary px-3 disabled:cursor-not-allowed disabled:opacity-50"
-                title="Página anterior"
-              >
-                <ChevronLeft size={16} />
-              </button>
-              <span className="text-xs font-bold text-ink/60">
-                Página {page} de {totalPages}
-              </span>
-              <button
-                type="button"
-                onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
-                disabled={page === totalPages}
-                className="btn-secondary px-3 disabled:cursor-not-allowed disabled:opacity-50"
-                title="Próxima página"
-              >
-                <ChevronRight size={16} />
-              </button>
-            </div>
-          ) : null}
-        </aside>
-
-        <section className="space-y-4">
-          {selected ? (
-            <>
-              <div className="rounded-lg border border-leaf/20 bg-mint/45 px-4 py-3 lg:hidden">
-                <p className="label mb-1">Detalhe da atividade</p>
-                <h2 className="text-base font-bold text-ink">{selected.title}</h2>
-              </div>
-
-              {(() => {
-                const material = getSavedPrintableMaterialPlan(selected.raw_ai_response);
-                const materialReady = Boolean(material?.has_material);
-                const materialAllowed = canUsePrintableMaterial(usage?.plan_key);
-                const materialReason = !materialAllowed
-                  ? "Material imprimível disponível apenas no plano Completo."
-                  : material?.reason || "Esta atividade ainda não possui análise de material imprimível salva.";
-                const canDownloadMaterial = materialAllowed && materialReady;
-
-                return (
-              <div className="grid grid-cols-2 gap-2 rounded-lg border border-ink/10 bg-white p-3 shadow-soft sm:flex sm:flex-wrap sm:border-0 sm:bg-transparent sm:p-0 sm:shadow-none">
-                <button onClick={() => startEdit(selected)} className="btn-secondary">
-                  <Pencil size={16} />
-                  Editar
-                </button>
-                <button onClick={() => downloadPdf(supabase, "/api/pdf/activity", { activity_id: selected.id }, pdfFileName(selected.title))} className="btn-secondary">
-                  <FileDown size={16} />
-                  PDF
-                </button>
-                <button
-                  disabled={busy || !canDownloadMaterial}
-                  onClick={() => downloadPrintableMaterial(selected)}
-                  className="btn-secondary col-span-2 sm:col-span-1 disabled:cursor-not-allowed disabled:opacity-50"
-                  title={canDownloadMaterial ? "Baixar material imprimível desta atividade." : materialReason}
-                >
-                  <Printer size={16} />
-                  Material imprimível
-                </button>
-                <button
-                  disabled={busy}
-                  onClick={() => {
-                    handleDeleteActivity(selected);
-                  }}
-                  className="btn-danger"
-                >
-                  <Trash2 size={16} />
-                  {pendingDeleteId === selected.id ? "Confirmar exclusão" : "Excluir"}
-                </button>
-              </div>
-                );
-              })()}
-
-              {selected && usage && !canUsePrintableMaterial(usage.plan_key) ? (
-                <p className="rounded-lg border border-ink/10 bg-white px-4 py-3 text-sm text-ink/65">
-                  Material imprimível disponível apenas no plano Completo.
-                </p>
-              ) : null}
-
-              {selected && canUsePrintableMaterial(usage?.plan_key) && getSavedPrintableMaterialPlan(selected.raw_ai_response)?.has_material === false ? (
-                <p className="rounded-lg border border-ink/10 bg-white px-4 py-3 text-sm text-ink/65">
-                  {getSavedPrintableMaterialPlan(selected.raw_ai_response)?.reason || "A IA avaliou que esta atividade não precisa de material imprimível."}
-                </p>
-              ) : null}
-
-              {selected && canUsePrintableMaterial(usage?.plan_key) && !getSavedPrintableMaterialPlan(selected.raw_ai_response) ? (
-                <p className="rounded-lg border border-ink/10 bg-white px-4 py-3 text-sm text-ink/65">
-                  Esta atividade foi criada antes da análise automática de material imprimível. As novas atividades já salvam essa análise no momento da geração.
-                </p>
-              ) : null}
-
-              <div className="rounded-lg border border-ink/10 bg-white p-4">
-                <div className="grid grid-cols-[1fr_auto_auto] gap-2">
-                  <select className="field" value={actionCollectionId} onChange={(event) => setActionCollectionId(event.target.value)}>
-                    <option value="">Coleção</option>
-                    {collections.map((collection) => <option key={collection.id} value={collection.id}>{collection.name}</option>)}
-                  </select>
-                  <button disabled={busy} onClick={addToCollection} className="btn-secondary px-3" title="Adicionar à coleção">
-                    <FolderPlus size={17} />
-                  </button>
-                  <button disabled={busy} onClick={removeFromCollection} className="btn-secondary px-3" title="Remover da coleção">
-                    <FolderMinus size={17} />
-                  </button>
-                </div>
-              </div>
-
-              {edit ? (
-                <form onSubmit={saveEdit} className="panel space-y-4 p-5">
-                  <div className="grid gap-3 md:grid-cols-2">
-                    <EditInput label="Título" value={edit.title} onChange={(value) => setEdit({ ...edit, title: value })} />
-                    <EditInput label="Faixa etária" value={edit.age_range} onChange={(value) => setEdit({ ...edit, age_range: value })} />
-                    <EditInput label="Tempo estimado" value={edit.estimated_time} onChange={(value) => setEdit({ ...edit, estimated_time: value })} />
-                    <EditInput label="Área" value={edit.development_area} onChange={(value) => setEdit({ ...edit, development_area: value })} />
-                    <EditInput label="Metodologia" value={edit.methodology} onChange={(value) => setEdit({ ...edit, methodology: value })} />
-                    <EditInput label="Tipo" value={edit.activity_type} onChange={(value) => setEdit({ ...edit, activity_type: value })} />
-                    <EditInput label="Ambiente" value={edit.environment} onChange={(value) => setEdit({ ...edit, environment: value })} />
-                    <EditInput label="BNCC" value={edit.bncc_code} onChange={(value) => setEdit({ ...edit, bncc_code: value })} />
-                  </div>
-                  <EditArea label="Materiais" value={edit.materials} onChange={(value) => setEdit({ ...edit, materials: value })} />
-                  <EditArea label="Objetivo" value={edit.objective} onChange={(value) => setEdit({ ...edit, objective: value })} />
-                  <EditArea label="Descrição" value={edit.description} onChange={(value) => setEdit({ ...edit, description: value })} />
-                  <EditArea label="Passo a passo (uma linha por item)" value={edit.steps_text} onChange={(value) => setEdit({ ...edit, steps_text: value })} />
-                  <EditArea label="Dicas (uma linha por item)" value={edit.teacher_tips_text} onChange={(value) => setEdit({ ...edit, teacher_tips_text: value })} />
-                  <EditArea label="Variações (uma linha por item)" value={edit.variations_text} onChange={(value) => setEdit({ ...edit, variations_text: value })} />
-                  <EditArea label="Segurança" value={edit.safety_notes} onChange={(value) => setEdit({ ...edit, safety_notes: value })} />
-                  <EditArea label="Avaliação" value={edit.evaluation} onChange={(value) => setEdit({ ...edit, evaluation: value })} />
-                  <div className="flex gap-2">
-                    <button disabled={busy} className="btn-primary">
-                      <Save size={16} />
-                      Salvar edição
-                    </button>
-                    <button type="button" onClick={() => setEdit(null)} className="btn-secondary">
-                      <Eye size={16} />
-                      Voltar à visualização
-                    </button>
-                  </div>
-                </form>
-              ) : (
-                <ActivityView activity={selected} />
-              )}
-            </>
-          ) : (
-            <div className="panel p-8 text-center text-sm font-semibold text-ink/60">Selecione uma atividade.</div>
-          )}
-        </section>
-      </div>
-
-      {plannedDeleteActivity ? (
-        <div className="fixed inset-0 z-50 grid place-items-center bg-ink/45 px-4 py-6">
-          <div className="w-full max-w-md rounded-lg border border-ink/10 bg-white p-5 shadow-soft">
-            <p className="label mb-2">Confirmar exclusão</p>
-            <h2 className="text-lg font-bold text-ink">Atividade planejada</h2>
-            <p className="mt-3 text-sm leading-6 text-ink/70">
-              Essa atividade está planejada, se você excluir, ela sairá do planejamento, deseja excluir?
-            </p>
-            <div className="mt-5 flex flex-wrap justify-end gap-2">
-              <button type="button" disabled={busy} onClick={() => setPlannedDeleteActivity(null)} className="btn-secondary">
-                Cancelar
-              </button>
-              <button type="button" disabled={busy} onClick={confirmPlannedDelete} className="btn-danger">
-                <Trash2 size={16} />
-                Excluir
-              </button>
-            </div>
+        ) : (
+          <div className="panel border-dashed p-8 text-center">
+            <p className="text-sm font-semibold text-ink/70">Nenhuma atividade salva ainda.</p>
+            <Link href="/gerar" className="mt-4 inline-flex btn-primary">
+              <Sparkles size={16} />
+              Criar primeira atividade
+            </Link>
           </div>
-        </div>
-      ) : null}
-
-      {manualModalOpen ? (
-        <div className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-ink/45 px-4 py-6">
-          <form onSubmit={createManualActivity} className="w-full max-w-2xl rounded-lg border border-ink/10 bg-white p-5 shadow-soft">
-            <div className="mb-5 flex items-start justify-between gap-4">
-              <div>
-                <p className="label mb-2">Atividades</p>
-                <h2 className="text-xl font-bold text-ink">Nova atividade</h2>
-              </div>
-              <button type="button" onClick={closeManualModal} className="grid h-9 w-9 place-items-center rounded-md border border-ink/10 text-ink/55 hover:text-ink" title="Fechar">
-                <X size={17} />
-              </button>
-            </div>
-
-            <ManualActivityFields form={manualForm} onChange={updateManualField} />
-
-            <div className="mt-6 flex justify-end gap-2">
-              <button type="button" onClick={closeManualModal} disabled={busy} className="btn-secondary">
-                Cancelar
-              </button>
-              <button disabled={busy} className="btn-primary">
-                <Save size={16} />
-                Salvar atividade
-              </button>
-            </div>
-          </form>
-        </div>
-      ) : null}
+        )}
+      </section>
     </ProtectedPage>
   );
 }
 
-function pdfFileName(title: string | null) {
-  const safeTitle = (title || "atividade").replace(/[\\/]/g, "-").trim() || "atividade";
-  return `${safeTitle}.pdf`;
-}
-
-function materialPdfFileName(title: string | null) {
-  const safeTitle = (title || "atividade").replace(/[\\/]/g, "-").trim() || "atividade";
-  return `${safeTitle}-material.pdf`;
-}
-
-function EditInput({ label, value, onChange }: { label: string; value?: string | null; onChange: (value: string) => void }) {
+function StatCard({
+  icon,
+  label,
+  value,
+  href,
+  accent
+}: {
+  icon: ReactNode;
+  label: string;
+  value: number;
+  href: string;
+  accent: string;
+}) {
   return (
-    <label>
-      <span className="label mb-2 block">{label}</span>
-      <input className="field" value={value || ""} onChange={(event) => onChange(event.target.value)} />
-    </label>
+    <Link
+      href={href}
+      className="panel group block overflow-hidden p-4 transition hover:-translate-y-0.5 hover:border-leaf/35 sm:p-5"
+      style={{ borderTop: `5px solid ${accent}` }}
+    >
+      <div className="flex items-center gap-4">
+        <span
+          className="grid h-10 w-10 shrink-0 place-items-center rounded-lg border sm:h-12 sm:w-12"
+          style={{
+            borderColor: `${accent}33`,
+            backgroundColor: `${accent}18`,
+            color: accent
+          }}
+        >
+          {icon}
+        </span>
+        <span className="text-3xl font-bold leading-none text-ink sm:text-4xl">{value}</span>
+      </div>
+      <p className="mt-4 text-sm font-bold leading-5 text-ink/58 sm:max-w-32">{label}</p>
+    </Link>
   );
 }
 
-function EditArea({ label, value, onChange }: { label: string; value?: string | null; onChange: (value: string) => void }) {
+function UpcomingPanel({ items }: { items: PlannedItem[] }) {
   return (
-    <label>
-      <span className="label mb-2 block">{label}</span>
-      <textarea className="field min-h-24" value={value || ""} onChange={(event) => onChange(event.target.value)} />
-    </label>
+    <section className="panel overflow-hidden">
+      <div className="flex items-center justify-between gap-3 border-b border-ink/10 px-5 py-4">
+        <div className="flex items-center gap-2">
+          <span className="h-3 w-3 rounded-sm border-2 border-leaf" />
+          <h2 className="text-xl font-bold text-ink">Próximas atividades</h2>
+        </div>
+        <Link href="/planejamento" className="text-sm font-bold text-leaf">
+          Ver planejamento
+        </Link>
+      </div>
+
+      {items.length ? (
+        <div className="divide-y divide-ink/10">
+          {items.map((item, index) => (
+            <UpcomingActivityCard key={item.id} item={item} accent={statAccents[index % statAccents.length]} />
+          ))}
+        </div>
+      ) : (
+        <div className="p-5 text-sm font-semibold text-ink/60">Nenhuma atividade planejada nos próximos dias.</div>
+      )}
+    </section>
   );
+}
+
+function UpcomingActivityCard({ item, accent }: { item: PlannedItem; accent: string }) {
+  const date = parsePlannedDate(item);
+  return (
+    <Link href="/planejamento" className="grid gap-4 px-5 py-4 transition hover:bg-mint/25 sm:grid-cols-[96px_1fr]">
+      <div className="flex items-center gap-3 sm:block">
+        <p className="text-xs font-bold uppercase tracking-wide text-ink/35">{date ? shortWeekday(date) : "Data"}</p>
+        <p className="text-lg font-bold text-leaf">{date ? formatTime(date) : "--:--"}</p>
+      </div>
+      <div className="min-w-0 border-l-4 pl-4" style={{ borderColor: accent }}>
+        <h3 className="truncate text-base font-bold text-ink">{item.activities?.title || "Atividade planejada"}</h3>
+        <p className="mt-1 line-clamp-2 text-sm leading-6 text-ink/58">
+          {item.activities?.development_area || item.notes || "Sem área informada"}
+        </p>
+      </div>
+    </Link>
+  );
+}
+
+function MiniCalendar({ date, items }: { date: Date; items: PlannedItem[] }) {
+  const monthStart = new Date(date.getFullYear(), date.getMonth(), 1);
+  const monthDays = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+  const leadingEmptyDays = monthStart.getDay();
+  const days = Array.from({ length: leadingEmptyDays + monthDays }, (_, index) => {
+    const day = index - leadingEmptyDays + 1;
+    return day > 0 ? new Date(date.getFullYear(), date.getMonth(), day) : null;
+  });
+  const weekItems = groupItemsByDate(currentWeekItems(items, date));
+
+  return (
+    <section className="panel p-5">
+      <div className="mb-5 flex items-center gap-2">
+        <span className="h-3 w-3 rounded-sm border-2 border-leaf" />
+        <h2 className="text-xl font-bold text-ink">{monthTitle(date)}</h2>
+      </div>
+
+      <div className="grid grid-cols-7 gap-y-2 text-center">
+        {["D", "S", "T", "Q", "Q", "S", "S"].map((day, index) => (
+          <span key={`${day}-${index}`} className="text-xs font-bold uppercase text-ink/35">
+            {day}
+          </span>
+        ))}
+        {days.map((day, index) => {
+          const itemCount = day ? itemsOnDate(items, day).length : 0;
+          const today = isSameDay(day, date);
+          return (
+            <span key={day?.toISOString() || `empty-${index}`} className="grid min-h-12 place-items-center">
+              {day ? (
+                <span
+                  className={`relative grid h-11 w-11 place-items-center rounded-lg text-sm font-bold ${
+                    today ? "bg-leaf text-white" : "text-ink/70"
+                  }`}
+                >
+                  {day.getDate()}
+                  {itemCount ? (
+                    <span className={`absolute bottom-1.5 h-1.5 w-1.5 rounded-full ${today ? "bg-white" : "bg-leaf"}`} />
+                  ) : null}
+                </span>
+              ) : null}
+            </span>
+          );
+        })}
+      </div>
+
+      <div className="mt-6">
+        <p className="text-sm font-bold text-ink">Esta semana</p>
+        {weekItems.length ? (
+          <div className="mt-3 space-y-2">
+            {weekItems.map((item, index) => (
+              <div key={item.key} className="flex items-center gap-3 text-sm font-semibold text-ink/62">
+                <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: statAccents[index % statAccents.length] }} />
+                <span>
+                  {item.label} — {item.count} {item.count === 1 ? "atividade" : "atividades"}
+                </span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="mt-3 text-sm font-semibold text-ink/50">Nenhuma atividade nesta semana.</p>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function DashboardActivityCard({
+  activity,
+  collections,
+  accent
+}: {
+  activity: Activity;
+  collections: Collection[];
+  accent: string;
+}) {
+  const activityCollections = activityCollectionsFor(activity, collections);
+  return (
+    <Link href={`/atividades?atividade=${activity.id}`} className="panel group overflow-hidden p-5 transition hover:-translate-y-0.5 hover:border-leaf/35">
+      <div className="mb-4 h-1.5 rounded-full" style={{ backgroundColor: accent }} />
+      <p className="text-xs font-bold uppercase tracking-wide text-ink/40">
+        {activityCollections.length ? activityCollections.map((collection) => collection.name).join(", ") : activity.development_area || "Sem coleção"}
+      </p>
+      <h3 className="mt-4 line-clamp-3 min-h-20 text-xl font-bold leading-7 text-ink">{activity.title}</h3>
+      <div className="mt-4 flex flex-wrap items-center gap-3 text-sm font-semibold text-ink/52">
+        <span className="inline-flex items-center gap-2">
+          <span className="h-3 w-3 rounded-sm border border-ink/30" />
+          {activity.age_range || "Faixa etária"}
+        </span>
+        {activity.development_area ? <span>{activity.development_area}</span> : null}
+      </div>
+    </Link>
+  );
+}
+
+function findFuturePlannedItems(items: PlannedItem[], now: Date) {
+  return items
+    .filter((item) => item.date)
+    .map((item) => ({ item, date: parsePlannedDate(item) }))
+    .filter((entry): entry is { item: PlannedItem; date: Date } => {
+      if (!entry.date) return false;
+      return entry.date >= now;
+    })
+    .sort((a, b) => a.date.getTime() - b.date.getTime());
+}
+
+function parsePlannedDate(item: PlannedItem) {
+  const [year, month, day] = item.date.split("-").map(Number);
+  if (!year || !month || !day) return null;
+  const [hour = 0, minute = 0] = (item.start_time || "00:00").split(":").map(Number);
+  return new Date(year, month - 1, day, hour, minute);
+}
+
+function formatHeroDate(date: Date) {
+  return new Intl.DateTimeFormat("pt-BR", {
+    weekday: "long",
+    day: "numeric",
+    month: "long"
+  })
+    .format(date)
+    .replace(",", "")
+    .toUpperCase();
+}
+
+function formatTime(date: Date) {
+  return new Intl.DateTimeFormat("pt-BR", {
+    hour: "2-digit",
+    minute: "2-digit"
+  }).format(date);
+}
+
+function shortWeekday(date: Date) {
+  return new Intl.DateTimeFormat("pt-BR", { weekday: "short" }).format(date).replace(".", "");
+}
+
+function monthTitle(date: Date) {
+  const label = new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric" }).format(date);
+  return label.charAt(0).toUpperCase() + label.slice(1);
+}
+
+function itemsOnDate(items: PlannedItem[], date: Date) {
+  return items.filter((item) => isSameDay(parsePlannedDate(item), date));
+}
+
+function currentWeekItems(items: PlannedItem[], date: Date) {
+  const start = new Date(date);
+  start.setHours(0, 0, 0, 0);
+  start.setDate(date.getDate() - date.getDay());
+  const end = new Date(start);
+  end.setDate(start.getDate() + 7);
+  return items.filter((item) => {
+    const plannedDate = parsePlannedDate(item);
+    return Boolean(plannedDate && plannedDate >= start && plannedDate < end);
+  });
+}
+
+function groupItemsByDate(items: PlannedItem[]) {
+  const grouped = new Map<string, { key: string; label: string; count: number }>();
+  for (const item of items) {
+    const date = parsePlannedDate(item);
+    if (!date) continue;
+    const key = dateKey(date);
+    const current = grouped.get(key);
+    if (current) {
+      current.count += 1;
+    } else {
+      grouped.set(key, {
+        key,
+        label: new Intl.DateTimeFormat("pt-BR", { weekday: "short", day: "2-digit" }).format(date).replace(".", ""),
+        count: 1
+      });
+    }
+  }
+  return Array.from(grouped.values()).sort((a, b) => a.key.localeCompare(b.key));
+}
+
+function isSameDay(left: Date | null, right: Date | null) {
+  if (!left || !right) return false;
+  return left.getFullYear() === right.getFullYear() && left.getMonth() === right.getMonth() && left.getDate() === right.getDate();
+}
+
+function dateKey(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function activityAccent(activity: Activity, collections: Collection[], index: number) {
+  const primaryCollection = activityCollectionsFor(activity, collections)[0];
+  return primaryCollection?.color || statAccents[index % statAccents.length];
+}
+
+function activityCollectionsFor(activity: Activity, collections: Collection[]) {
+  return (activity.collection_ids || [])
+    .map((id) => collections.find((collection) => collection.id === id))
+    .filter((collection): collection is Collection => Boolean(collection));
+}
+
+function isGeneratedActivity(activity: Activity) {
+  const raw = activity.raw_ai_response;
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return true;
+  return (raw as { manual?: unknown }).manual !== true;
 }
