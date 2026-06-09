@@ -2,13 +2,16 @@ import { fail, ok, readJson } from "@/lib/api/http";
 import { activityUpdateSchema } from "@/lib/activities/types";
 import { getAuthenticatedUser } from "@/lib/supabase/server";
 
-export async function GET(request: Request, { params }: { params: { id: string } }) {
+type ActivityRouteContext = { params: Promise<{ id: string }> };
+
+export async function GET(request: Request, { params }: ActivityRouteContext) {
   try {
+    const { id } = await params;
     const { user, supabase } = await getAuthenticatedUser(request);
     const { data, error } = await supabase
       .from("activities")
       .select("*")
-      .eq("id", params.id)
+      .eq("id", id)
       .eq("user_id", user.id)
       .single();
 
@@ -20,15 +23,16 @@ export async function GET(request: Request, { params }: { params: { id: string }
   }
 }
 
-export async function PUT(request: Request, { params }: { params: { id: string } }) {
+export async function PUT(request: Request, { params }: ActivityRouteContext) {
   try {
+    const { id } = await params;
     const { user, supabase } = await getAuthenticatedUser(request);
     const body = await readJson<unknown>(request);
     const payload = activityUpdateSchema.parse(body);
     const { data, error } = await supabase
       .from("activities")
       .update(payload)
-      .eq("id", params.id)
+      .eq("id", id)
       .eq("user_id", user.id)
       .select("*")
       .single();
@@ -41,15 +45,16 @@ export async function PUT(request: Request, { params }: { params: { id: string }
   }
 }
 
-export async function DELETE(request: Request, { params }: { params: { id: string } }) {
+export async function DELETE(request: Request, { params }: ActivityRouteContext) {
   try {
+    const { id } = await params;
     const { user, supabase } = await getAuthenticatedUser(request);
     const { searchParams } = new URL(request.url);
     const removePlanned = searchParams.get("remove_planned") === "true";
     const { data: activity, error: activityError } = await supabase
       .from("activities")
       .select("id")
-      .eq("id", params.id)
+      .eq("id", id)
       .eq("user_id", user.id)
       .single();
 
@@ -61,7 +66,7 @@ export async function DELETE(request: Request, { params }: { params: { id: strin
       const { count, error: countError } = await supabase
         .from("weekly_plan_items")
         .select("id", { count: "exact", head: true })
-        .eq("activity_id", params.id)
+        .eq("activity_id", id)
         .in("weekly_plan_id", planIds)
         .gte("date", todayInSaoPaulo());
 
@@ -78,14 +83,14 @@ export async function DELETE(request: Request, { params }: { params: { id: strin
         const { error: planItemsError } = await supabase
           .from("weekly_plan_items")
           .delete()
-          .eq("activity_id", params.id)
+          .eq("activity_id", id)
           .in("weekly_plan_id", planIds);
 
         if (planItemsError) throw planItemsError;
       }
     }
 
-    const { error } = await supabase.from("activities").delete().eq("id", params.id).eq("user_id", user.id);
+    const { error } = await supabase.from("activities").delete().eq("id", id).eq("user_id", user.id);
 
     if (error) throw error;
 

@@ -1,8 +1,5 @@
 import { created, fail, ok, readJson } from "@/lib/api/http";
-import { analyzePrintableMaterialWithClaude, attachPrintableMaterialPlan, type PrintableMaterialPlan } from "@/lib/activities/printable-material";
 import { activityFilterSchema, activitySaveSchema } from "@/lib/activities/types";
-import { canUsePrintableMaterial, type BillingUsage } from "@/lib/billing/plans";
-import { assertCanGenerateActivity, incrementActivityGeneration } from "@/lib/billing/usage";
 import type { Json } from "@/lib/database.types";
 import { getAuthenticatedUser } from "@/lib/supabase/server";
 
@@ -81,35 +78,27 @@ export async function POST(request: Request) {
     const body = await readJson<unknown>(request);
     const payload = activitySaveSchema.parse(body);
     const manualActivity = isManualActivity(payload.raw_ai_response);
-    let generationUsage: BillingUsage | null = null;
 
     if (!manualActivity) {
-      generationUsage = await assertCanGenerateActivity(user.id);
+      throw Object.assign(
+        new Error("Atividades geradas por IA devem ser criadas pelo endpoint de geração."),
+        { status: 403 }
+      );
     }
-
-    const printableMaterial =
-      !manualActivity && canUsePrintableMaterial(generationUsage?.plan_key)
-        ? await analyzePrintableMaterialForSave(payload)
-        : null;
-    const rawAiResponse = printableMaterial
-      ? attachPrintableMaterialPlan(payload.raw_ai_response ?? payload, printableMaterial)
-      : payload.raw_ai_response ?? payload;
 
     const { data, error } = await supabase
       .from("activities")
       .insert({
         ...payload,
         user_id: user.id,
-        raw_ai_response: rawAiResponse as Json
+        raw_ai_response: (payload.raw_ai_response ?? payload) as Json
       })
       .select("*")
       .single();
 
     if (error) throw error;
 
-    const usage = manualActivity ? null : await incrementActivityGeneration(user.id);
-
-    return created({ activity: data, usage });
+    return created({ activity: data, usage: null });
   } catch (error) {
     return fail(error);
   }
@@ -122,19 +111,4 @@ function isManualActivity(rawAiResponse: unknown) {
       "manual" in rawAiResponse &&
       (rawAiResponse as { manual?: unknown }).manual === true
   );
-}
-
-async function analyzePrintableMaterialForSave(activity: Parameters<typeof analyzePrintableMaterialWithClaude>[0]): Promise<PrintableMaterialPlan> {
-  try {
-    return await analyzePrintableMaterialWithClaude(activity);
-  } catch (error) {
-    const reason = error instanceof Error ? error.message : "Não foi possível analisar o material imprimível.";
-    return {
-      has_material: false,
-      reason,
-      title: null,
-      teacher_note: null,
-      pages: []
-    };
-  }
 }

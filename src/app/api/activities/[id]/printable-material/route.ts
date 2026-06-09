@@ -6,8 +6,9 @@ import { getAuthenticatedUser } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 
-export async function POST(request: Request, { params }: { params: { id: string } }) {
+export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const { id } = await params;
     const { user, supabase } = await getAuthenticatedUser(request);
     const usage = await getBillingUsage(user.id);
 
@@ -18,7 +19,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
     const { data: activity, error } = await supabase
       .from("activities")
       .select("*")
-      .eq("id", params.id)
+      .eq("id", id)
       .eq("user_id", user.id)
       .single();
 

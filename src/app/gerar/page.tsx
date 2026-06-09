@@ -54,16 +54,12 @@ export default function GenerateActivityPage() {
     setSavedActivityId(null);
 
     try {
-      const data = await apiFetch<{ activity: Partial<Activity> }>(supabase, "/api/activities/generate", {
+      const data = await apiFetch<{ activity: Activity }>(supabase, "/api/activities/generate", {
         method: "POST",
         body: payload
       });
-      const saved = await apiFetch<{ activity: Activity }>(supabase, "/api/activities", {
-        method: "POST",
-        body: data.activity
-      });
-      setGenerated(saved.activity);
-      setSavedActivityId(saved.activity.id);
+      setGenerated(data.activity);
+      setSavedActivityId(data.activity.id);
       window.dispatchEvent(new Event("billing-usage-changed"));
       setMessage("Atividade gerada e salva automaticamente em Atividades.");
     } catch (error) {

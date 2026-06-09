@@ -4,9 +4,10 @@ import { getAuthenticatedUser } from "@/lib/supabase/server";
 
 export async function PUT(
   request: Request,
-  { params }: { params: { id: string; itemId: string } }
+  { params }: { params: Promise<{ id: string; itemId: string }> }
 ) {
   try {
+    const { id, itemId } = await params;
     const { supabase } = await getAuthenticatedUser(request);
     const payload = weeklyPlanItemUpdateSchema.parse(await readJson<unknown>(request));
 
@@ -14,10 +15,10 @@ export async function PUT(
       const { data: existing, error: existingError } = await supabase
         .from("weekly_plan_items")
         .select("id")
-        .eq("weekly_plan_id", params.id)
+        .eq("weekly_plan_id", id)
         .eq("date", payload.date)
         .eq("start_time", payload.start_time)
-        .neq("id", params.itemId)
+        .neq("id", itemId)
         .limit(1);
 
       if (existingError) throw existingError;
@@ -30,8 +31,8 @@ export async function PUT(
     const { data, error } = await supabase
       .from("weekly_plan_items")
       .update(payload)
-      .eq("weekly_plan_id", params.id)
-      .eq("id", params.itemId)
+      .eq("weekly_plan_id", id)
+      .eq("id", itemId)
       .select("*")
       .single();
 
@@ -45,15 +46,16 @@ export async function PUT(
 
 export async function DELETE(
   request: Request,
-  { params }: { params: { id: string; itemId: string } }
+  { params }: { params: Promise<{ id: string; itemId: string }> }
 ) {
   try {
+    const { id, itemId } = await params;
     const { supabase } = await getAuthenticatedUser(request);
     const { error } = await supabase
       .from("weekly_plan_items")
       .delete()
-      .eq("weekly_plan_id", params.id)
-      .eq("id", params.itemId);
+      .eq("weekly_plan_id", id)
+      .eq("id", itemId);
 
     if (error) throw error;
 

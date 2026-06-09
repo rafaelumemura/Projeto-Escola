@@ -2,8 +2,9 @@ import { weeklyPlanItemCreateSchema } from "@/lib/api/schemas";
 import { created, fail, readJson } from "@/lib/api/http";
 import { getAuthenticatedUser } from "@/lib/supabase/server";
 
-export async function POST(request: Request, { params }: { params: { id: string } }) {
+export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const { id } = await params;
     const { supabase } = await getAuthenticatedUser(request);
     const payload = weeklyPlanItemCreateSchema.parse(await readJson<unknown>(request));
 
@@ -11,7 +12,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
       const { data: existing, error: existingError } = await supabase
         .from("weekly_plan_items")
         .select("id")
-        .eq("weekly_plan_id", params.id)
+        .eq("weekly_plan_id", id)
         .eq("date", payload.date)
         .eq("start_time", payload.start_time)
         .limit(1);
@@ -27,7 +28,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
       .from("weekly_plan_items")
       .insert({
         ...payload,
-        weekly_plan_id: params.id
+        weekly_plan_id: id
       })
       .select("*")
       .single();

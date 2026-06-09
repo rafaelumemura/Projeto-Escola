@@ -1,13 +1,14 @@
 import { fail, ok } from "@/lib/api/http";
 import { getAuthenticatedUser } from "@/lib/supabase/server";
 
-export async function GET(request: Request, { params }: { params: { id: string } }) {
+export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const { id } = await params;
     const { user, supabase } = await getAuthenticatedUser(request);
     const { data: activity, error: activityError } = await supabase
       .from("activities")
       .select("id")
-      .eq("id", params.id)
+      .eq("id", id)
       .eq("user_id", user.id)
       .single();
 
@@ -22,7 +23,7 @@ export async function GET(request: Request, { params }: { params: { id: string }
     const { count, error } = await supabase
       .from("weekly_plan_items")
       .select("id", { count: "exact", head: true })
-      .eq("activity_id", params.id)
+      .eq("activity_id", id)
       .in("weekly_plan_id", planIds)
       .gte("date", todayInSaoPaulo());
 

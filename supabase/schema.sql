@@ -16,11 +16,21 @@ alter table public.profiles
 add column if not exists planning_pdf_skill text not null default 'grade';
 
 alter table public.profiles
+add column if not exists theme_preference text not null default 'light';
+
+alter table public.profiles
 drop constraint if exists profiles_planning_pdf_skill_check;
 
 alter table public.profiles
 add constraint profiles_planning_pdf_skill_check
 check (planning_pdf_skill in ('grade', 'layout_fundo_1', 'layout_fundo_2', 'layout_fundo_3', 'layout_fundo_4', 'layout_fundo_5', 'layout_fundo_6', 'layout_fundo_7', 'layout_fundo_8', 'layout_fundo_9'));
+
+alter table public.profiles
+drop constraint if exists profiles_theme_preference_check;
+
+alter table public.profiles
+add constraint profiles_theme_preference_check
+check (theme_preference in ('light', 'dark'));
 
 create table if not exists public.activities (
   id uuid primary key default gen_random_uuid(),
@@ -165,6 +175,12 @@ create policy "profiles_update_own"
 on public.profiles for update
 using (id = auth.uid())
 with check (id = auth.uid());
+
+revoke insert, update, delete on table public.profiles from public, anon, authenticated;
+grant update (name, avatar_url, planning_pdf_skill, theme_preference)
+on table public.profiles
+to authenticated;
+grant select, insert, update, delete on table public.profiles to service_role;
 
 drop policy if exists "activities_select_own" on public.activities;
 create policy "activities_select_own"
@@ -920,17 +936,100 @@ begin
 end;
 $pe_hotmart_billing_maintenance$;
 
+create or replace function public.reserve_activity_generation(p_user_id uuid)
+returns public.billing_subscriptions
+language plpgsql
+security definer
+set search_path = public
+as $pe_reserve_activity_generation$
+declare
+  current_subscription public.billing_subscriptions;
+begin
+  select *
+  into current_subscription
+  from public.billing_subscriptions
+  where user_id = p_user_id
+    and status in ('active', 'past_due', 'suspended')
+  order by created_at desc
+  limit 1
+  for update;
+
+  if current_subscription.id is null then
+    raise exception 'Nenhum plano ativo foi encontrado.';
+  end if;
+
+  if current_subscription.status <> 'active' then
+    raise exception 'O plano não está ativo.';
+  end if;
+
+  if current_subscription.current_period_end < now() then
+    raise exception 'O ciclo atual do plano venceu.';
+  end if;
+
+  if current_subscription.generated_count >= current_subscription.activity_limit then
+    raise exception 'Você usou todas as gerações disponíveis neste ciclo.';
+  end if;
+
+  update public.billing_subscriptions
+  set
+    generated_count = generated_count + 1,
+    updated_at = now()
+  where id = current_subscription.id
+  returning * into current_subscription;
+
+  return current_subscription;
+end;
+$pe_reserve_activity_generation$;
+
+create or replace function public.release_activity_generation(
+  p_user_id uuid,
+  p_subscription_id uuid
+)
+returns public.billing_subscriptions
+language plpgsql
+security definer
+set search_path = public
+as $pe_release_activity_generation$
+declare
+  current_subscription public.billing_subscriptions;
+begin
+  select *
+  into current_subscription
+  from public.billing_subscriptions
+  where id = p_subscription_id
+    and user_id = p_user_id
+  for update;
+
+  if current_subscription.id is null then
+    return null;
+  end if;
+
+  update public.billing_subscriptions
+  set
+    generated_count = greatest(0, generated_count - 1),
+    updated_at = now()
+  where id = current_subscription.id
+  returning * into current_subscription;
+
+  return current_subscription;
+end;
+$pe_release_activity_generation$;
+
 revoke execute on function public.activate_subscription_cycle(uuid, text, text, text, text, timestamp with time zone) from public, anon, authenticated;
 revoke execute on function public.upgrade_subscription_to_complete(uuid, text, text, text) from public, anon, authenticated;
 revoke execute on function public.apply_hotmart_subscription_activation(uuid, text, text, text, text, text, text, text, timestamp with time zone, timestamp with time zone) from public, anon, authenticated;
 revoke execute on function public.apply_hotmart_subscription_status(uuid, text, text, text, text, timestamp with time zone, boolean) from public, anon, authenticated;
 revoke execute on function public.billing_maintenance() from public, anon, authenticated;
+revoke execute on function public.reserve_activity_generation(uuid) from public, anon, authenticated;
+revoke execute on function public.release_activity_generation(uuid, uuid) from public, anon, authenticated;
 
 grant execute on function public.activate_subscription_cycle(uuid, text, text, text, text, timestamp with time zone) to service_role;
 grant execute on function public.upgrade_subscription_to_complete(uuid, text, text, text) to service_role;
 grant execute on function public.apply_hotmart_subscription_activation(uuid, text, text, text, text, text, text, text, timestamp with time zone, timestamp with time zone) to service_role;
 grant execute on function public.apply_hotmart_subscription_status(uuid, text, text, text, text, timestamp with time zone, boolean) to service_role;
 grant execute on function public.billing_maintenance() to service_role;
+grant execute on function public.reserve_activity_generation(uuid) to service_role;
+grant execute on function public.release_activity_generation(uuid, uuid) to service_role;
 
 revoke all on table public.hotmart_events from public, anon, authenticated;
 grant all on table public.hotmart_events to service_role;

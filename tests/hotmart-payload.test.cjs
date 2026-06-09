@@ -28,7 +28,10 @@ require.extensions[".ts"] = function transpileTypeScript(module, filename) {
   module._compile(output.outputText, filename);
 };
 
-const { parseHotmartPayload } = require("../src/lib/hotmart/payload.ts");
+const {
+  isSyntheticHotmartTest,
+  parseHotmartPayload
+} = require("../src/lib/hotmart/payload.ts");
 
 test("identifica plano básico pelo código da oferta", () => {
   process.env.HOTMART_BASIC_OFFER_CODE = "BASIC-2026";
@@ -137,4 +140,67 @@ test("normaliza datas Hotmart em milissegundos", () => {
   );
 
   assert.equal(event.occurredAt, new Date(timestamp).toISOString());
+});
+
+test("reconhece o postback sintético de compra da Hotmart", () => {
+  const event = parseHotmartPayload(
+    {
+      id: "test-event",
+      event: "PURCHASE_APPROVED",
+      data: {
+        buyer: {
+          email: "testecomprador@example.com",
+          name: "Teste Comprador"
+        },
+        product: {
+          id: 0,
+          name: "Produto test postback2"
+        },
+        purchase: {
+          offer: { code: "test" }
+        },
+        subscription: {
+          plan: {
+            id: 123,
+            name: "plano de teste"
+          }
+        }
+      }
+    },
+    "fallback"
+  );
+
+  assert.equal(isSyntheticHotmartTest(event), true);
+  assert.equal(event.productName, "Produto test postback2");
+});
+
+test("extrai produto e oferta atual do postback sintético de troca de plano", () => {
+  const event = parseHotmartPayload(
+    {
+      id: "switch-test-event",
+      event: "SWITCH_PLAN",
+      data: {
+        subscriber: { email: "teste@hotmart.com.br" },
+        subscription: {
+          product: {
+            id: 0,
+            name: "Produto test postback2"
+          }
+        },
+        plans: [
+          {
+            id: 654321,
+            name: "Novo produto test postback2",
+            current: true,
+            offer: { key: "n6hup357" }
+          }
+        ]
+      }
+    },
+    "fallback"
+  );
+
+  assert.equal(event.productId, "0");
+  assert.equal(event.offerCode, "n6hup357");
+  assert.equal(isSyntheticHotmartTest(event), true);
 });

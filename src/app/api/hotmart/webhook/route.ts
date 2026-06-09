@@ -22,7 +22,19 @@ export async function GET() {
       complete:
         Boolean(process.env.HOTMART_COMPLETE_OFFER_CODE) ||
         Boolean(process.env.HOTMART_COMPLETE_PLAN_ID) ||
-        Boolean(process.env.HOTMART_COMPLETE_PRODUCT_ID)
+        Boolean(process.env.HOTMART_COMPLETE_PRODUCT_ID),
+      mapping: {
+        basic: {
+          offer_code: Boolean(process.env.HOTMART_BASIC_OFFER_CODE),
+          plan_id: Boolean(process.env.HOTMART_BASIC_PLAN_ID),
+          product_id: Boolean(process.env.HOTMART_BASIC_PRODUCT_ID)
+        },
+        complete: {
+          offer_code: Boolean(process.env.HOTMART_COMPLETE_OFFER_CODE),
+          plan_id: Boolean(process.env.HOTMART_COMPLETE_PLAN_ID),
+          product_id: Boolean(process.env.HOTMART_COMPLETE_PRODUCT_ID)
+        }
+      }
     }
   });
 }

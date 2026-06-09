@@ -25,6 +25,11 @@ type SubscriptionRow = {
   suspended_at: string | null;
 };
 
+export type GenerationReservation = {
+  subscriptionId: string;
+  usage: BillingUsage;
+};
+
 const dayMs = 24 * 60 * 60 * 1000;
 
 export async function getBillingUsage(userId: string): Promise<BillingUsage> {
@@ -53,7 +58,7 @@ async function createUsageFromProfilePlan(userId: string) {
   const supabase = createSupabaseAdminClient();
   const { data: profile, error } = await supabase.from("profiles").select("plan, created_at").eq("id", userId).single();
 
-  if (error || !isPlanKey(profile?.plan)) {
+  if (error || profile?.plan !== "free") {
     return null;
   }
 
@@ -89,23 +94,36 @@ export async function assertCanGenerateActivity(userId: string) {
   return usage;
 }
 
-export async function incrementActivityGeneration(userId: string) {
+export async function reserveActivityGeneration(userId: string): Promise<GenerationReservation> {
+  await assertCanGenerateActivity(userId);
   const supabase = createSupabaseAdminClient();
-  const usage = await assertCanGenerateActivity(userId);
+  const { data, error } = await supabase.rpc("reserve_activity_generation", {
+    p_user_id: userId
+  });
 
-  const { data, error } = await supabase
-    .from("billing_subscriptions")
-    .update({
-      generated_count: usage.generated_count + 1,
-      updated_at: new Date().toISOString()
-    })
-    .eq("user_id", userId)
-    .eq("status", "active")
-    .select("*")
-    .single();
+  if (error) {
+    throw Object.assign(new Error(error.message), { status: 402 });
+  }
+
+  const subscription = normalizeRpcSubscription(data);
+  if (!subscription) {
+    throw Object.assign(new Error("Não foi possível reservar a geração da atividade."), { status: 500 });
+  }
+
+  return {
+    subscriptionId: subscription.id,
+    usage: subscriptionToUsage(subscription)
+  };
+}
+
+export async function releaseActivityGeneration(userId: string, subscriptionId: string) {
+  const supabase = createSupabaseAdminClient();
+  const { error } = await supabase.rpc("release_activity_generation", {
+    p_user_id: userId,
+    p_subscription_id: subscriptionId
+  });
 
   if (error) throw error;
-  return subscriptionToUsage(data as SubscriptionRow);
 }
 
 export async function reconcileLatestBillingGeneratedCount(userId: string) {
@@ -240,6 +258,14 @@ function subscriptionToUsage(subscription: SubscriptionRow): BillingUsage {
     can_upgrade: (planKey === "free" || planKey === "basic") && subscription.status === "active",
     message
   };
+}
+
+function normalizeRpcSubscription(data: unknown): SubscriptionRow | null {
+  if (Array.isArray(data)) {
+    return (data[0] as SubscriptionRow | undefined) || null;
+  }
+
+  return data && typeof data === "object" ? (data as SubscriptionRow) : null;
 }
 
 function usageMessage(status: SubscriptionStatus, remaining: number, periodEnd: Date, inactiveDeleteAfter: string | null) {

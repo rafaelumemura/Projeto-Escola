@@ -19,6 +19,7 @@ export type HotmartEventContext = {
   email: string | null;
   name: string | null;
   productId: string | null;
+  productName: string | null;
   offerCode: string | null;
   planId: string | null;
   planName: string | null;
@@ -45,16 +46,26 @@ export function parseHotmartPayload(payload: unknown, fallbackEventId: string): 
     ["data", "product", "id"],
     ["data", "product", "ucode"],
     ["data", "product", "code"],
+    ["data", "subscription", "product", "id"],
+    ["data", "subscription", "product", "ucode"],
+    ["data", "subscription", "product", "code"],
     ["product", "id"],
     ["product", "ucode"],
     ["product", "code"]
   ]);
-  const offerCode = extractFirstString(parsed, [
-    ["data", "purchase", "offer", "code"],
-    ["data", "offer", "code"],
-    ["purchase", "offer", "code"],
-    ["offer", "code"]
+  const productName = extractFirstString(parsed, [
+    ["data", "product", "name"],
+    ["data", "subscription", "product", "name"],
+    ["product", "name"]
   ]);
+  const offerCode =
+    selectedPlan?.offerCode ||
+    extractFirstString(parsed, [
+      ["data", "purchase", "offer", "code"],
+      ["data", "offer", "code"],
+      ["purchase", "offer", "code"],
+      ["offer", "code"]
+    ]);
   const planId =
     selectedPlan?.id ||
     extractFirstString(parsed, [
@@ -84,6 +95,7 @@ export function parseHotmartPayload(payload: unknown, fallbackEventId: string): 
     email,
     name,
     productId,
+    productName,
     offerCode,
     planId,
     planName,
@@ -122,6 +134,19 @@ export function parseHotmartPayload(payload: unknown, fallbackEventId: string): 
 
 export function isHandledHotmartEvent(eventType: string) {
   return Object.values(HOTMART_EVENTS).some((events) => events.has(eventType));
+}
+
+export function isSyntheticHotmartTest(context: HotmartEventContext) {
+  const productName = normalizeText(context.productName || "");
+  const planName = normalizeText(context.planName || "");
+  const offerCode = normalizeText(context.offerCode || "");
+
+  return (
+    context.productId === "0" &&
+    (offerCode === "test" ||
+      productName.includes("test postback") ||
+      planName.includes("plano de teste"))
+  );
 }
 
 export function requireBuyer(context: HotmartEventContext) {
@@ -237,9 +262,15 @@ function extractCurrentSwitchPlan(payload: HotmartPayload) {
   if (!currentPlan || typeof currentPlan !== "object") return null;
 
   const record = currentPlan as Record<string, unknown>;
+  const offer = record.offer;
   return {
     id: stringValue(record.id) || stringValue(record.code),
-    name: stringValue(record.name)
+    name: stringValue(record.name),
+    offerCode:
+      offer && typeof offer === "object"
+        ? stringValue((offer as Record<string, unknown>).key) ||
+          stringValue((offer as Record<string, unknown>).code)
+        : null
   };
 }
 

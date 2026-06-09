@@ -137,23 +137,14 @@ export default function ProfilePage() {
     setPasswordBusy(true);
     setPasswordMessage(null);
     try {
-      const email = profile?.email || user?.email;
-      if (!email) {
-        throw new Error("E-mail da conta não encontrado.");
-      }
-
-      const { error: signInError } = await supabase.auth.signInWithPassword({
-        email,
-        password: currentPassword
-      });
-      if (signInError) throw signInError;
-
-      const { error } = await supabase.auth.updateUser({ password: newPassword });
-      if (error) throw error;
-
       if (user) {
-        const { error: profileError } = await supabase.from("profiles").update({ password_must_change: false }).eq("id", user.id);
-        if (profileError) throw profileError;
+        await apiFetch(supabase, "/api/profile/password-changed", {
+          method: "POST",
+          body: {
+            current_password: currentPassword,
+            new_password: newPassword
+          }
+        });
         await refreshProfile();
       }
 

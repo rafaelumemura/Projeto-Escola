@@ -2,6 +2,7 @@ import { reconcileLatestBillingGeneratedCount } from "@/lib/billing/usage";
 import {
   HOTMART_EVENTS,
   isHandledHotmartEvent,
+  isSyntheticHotmartTest,
   requireBuyer,
   requirePaidPlan,
   type HotmartEventContext
@@ -90,6 +91,14 @@ async function dispatchEvent(
     };
   }
 
+  if (isSyntheticHotmartTest(context)) {
+    return {
+      action: "ignored",
+      reason:
+        "Postback sintético da Hotmart recebido. O teste genérico não possui uma oferta real para identificar o plano."
+    };
+  }
+
   if (HOTMART_EVENTS.activate.has(context.eventType)) {
     return activatePurchase(supabase, context);
   }
@@ -140,8 +149,8 @@ async function activatePurchase(
   context: HotmartEventContext
 ): Promise<ProcessingResult> {
   const buyer = requireBuyer(context);
-  const { userId, created } = await ensureHotmartUser(supabase, buyer.email, buyer.name);
   const planKey = requirePaidPlan(context);
+  const { userId, created } = await ensureHotmartUser(supabase, buyer.email, buyer.name);
 
   const { error } = await supabase.rpc("apply_hotmart_subscription_activation", {
     p_user_id: userId,
