@@ -13,7 +13,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const usage = await getBillingUsage(user.id);
 
     if (!canUsePrintableMaterial(usage.plan_key)) {
-      throw Object.assign(new Error("Material imprimível disponível apenas no plano Completo."), { status: 403 });
+      throw Object.assign(new Error("Material imprimível disponível nos planos Completo e Pro."), { status: 403 });
     }
 
     const { data: activity, error } = await supabase

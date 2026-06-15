@@ -1,7 +1,11 @@
 import { readFile } from "fs/promises";
 import { join } from "path";
 import { PDFDocument, PDFFont, PDFPage, RGB, StandardFonts, rgb } from "pdf-lib";
-import type { PrintableMaterialItem, PrintableMaterialPlan } from "@/lib/activities/printable-material";
+import type {
+  PrintableMaterialItem,
+  PrintableMaterialPage,
+  PrintableMaterialPlan
+} from "@/lib/activities/printable-material";
 import { normalizePlanningPdfSkill, type PlanningPdfSkillKey } from "@/lib/planning/pdf-skills";
 
 type PdfActivity = {
@@ -226,73 +230,205 @@ export async function buildActivityMaterialPdf(activity: PdfActivity, materialPl
     const items = materialPage.items.flatMap((item) =>
       Array.from({ length: item.quantity }, () => item)
     );
-    const chunks = chunk(items, 8);
+    const chunks = chunk(items, materialItemsPerPage(materialPage));
 
     chunks.forEach((itemChunk, chunkIndex) => {
       const page = pdf.addPage([pageWidth, pageHeight]);
       const pageTitle = materialPage.title || materialPlan.title || activity.title || "Material imprimivel";
-      const subtitle = [materialPage.instructions, materialPlan.teacher_note].filter(Boolean).join(" ");
+      const contentTop = drawMaterialPageHeader(
+        page,
+        pageTitle,
+        activity.title || "atividade",
+        materialPage.instructions,
+        regular,
+        bold
+      );
 
-      page.drawText(clean(pageTitle), {
-        x: margin,
-        y: pageHeight - 54,
-        size: 18,
-        font: bold,
-        color: rgb(0.12, 0.18, 0.15)
-      });
-
-      page.drawText(`Atividade: ${clean(activity.title || "atividade")}`, {
-        x: margin,
-        y: pageHeight - 76,
-        size: 9.5,
-        font: regular,
-        color: rgb(0.28, 0.31, 0.29)
-      });
-
-      if (subtitle && chunkIndex === 0 && pageIndex === 0) {
-        wrapText(subtitle, 96)
-          .slice(0, 3)
-          .forEach((line, lineIndex) => {
-            page.drawText(line, {
-              x: margin,
-              y: pageHeight - 96 - lineIndex * 12,
-              size: 9,
-              font: regular,
-              color: rgb(0.28, 0.31, 0.29)
-            });
-          });
-      }
-
-      drawMaterialItems(page, itemChunk, regular, bold);
+      drawMaterialItems(page, itemChunk, materialPage, contentTop, regular, bold);
+      drawMaterialFooter(
+        page,
+        materialPlan.teacher_note,
+        pageIndex === 0 && chunkIndex === 0,
+        regular,
+        pdf.getPageCount()
+      );
     });
   });
 
   return pdf.save();
 }
 
-function drawMaterialItems(page: PDFPage, items: PrintableMaterialItem[], regular: PDFFont, bold: PDFFont) {
-  const columns = 2;
-  const itemWidth = 226;
-  const itemHeight = 150;
-  const startX = 58;
-  const startY = pageHeight - 200;
-  const gapX = 255;
-  const gapY = 172;
+function drawMaterialPageHeader(
+  page: PDFPage,
+  title: string,
+  activityTitle: string,
+  instructions: string | null | undefined,
+  regular: PDFFont,
+  bold: PDFFont
+) {
+  const titleLines = wrapTextByWidth(title, pageWidth - margin * 2, bold, 18).slice(0, 2);
+  let y = pageHeight - 50;
+
+  titleLines.forEach((line) => {
+    page.drawText(line, {
+      x: margin,
+      y,
+      size: 18,
+      font: bold,
+      color: rgb(0.08, 0.2, 0.2)
+    });
+    y -= 21;
+  });
+
+  page.drawRectangle({ x: margin, y: y - 3, width: 86, height: 4, color: rgb(0, 0.7, 0.69) });
+  y -= 18;
+
+  wrapTextByWidth(`Atividade: ${clean(activityTitle)}`, pageWidth - margin * 2, regular, 8.5)
+    .slice(0, 2)
+    .forEach((line) => {
+      page.drawText(line, {
+        x: margin,
+        y,
+        size: 8.5,
+        font: regular,
+        color: rgb(0.34, 0.38, 0.37)
+      });
+      y -= 11;
+    });
+
+  const instructionLines = instructions
+    ? wrapTextByWidth(instructions, pageWidth - margin * 2 - 28, regular, 9.5).slice(0, 4)
+    : [];
+
+  if (instructionLines.length) {
+    const boxHeight = instructionLines.length * 13 + 20;
+    y -= 6;
+    page.drawRectangle({
+      x: margin,
+      y: y - boxHeight + 9,
+      width: pageWidth - margin * 2,
+      height: boxHeight,
+      color: rgb(0.94, 0.99, 0.98),
+      borderColor: rgb(0.72, 0.9, 0.88),
+      borderWidth: 0.8
+    });
+    instructionLines.forEach((line, index) => {
+      page.drawText(line, {
+        x: margin + 14,
+        y: y - 9 - index * 13,
+        size: 9.5,
+        font: index === 0 ? bold : regular,
+        color: rgb(0.12, 0.2, 0.19)
+      });
+    });
+    y -= boxHeight + 4;
+  }
+
+  return y - 12;
+}
+
+function drawMaterialFooter(
+  page: PDFPage,
+  teacherNote: string | null | undefined,
+  showTeacherNote: boolean,
+  regular: PDFFont,
+  pageNumber: number
+) {
+  page.drawLine({
+    start: { x: margin, y: 39 },
+    end: { x: pageWidth - margin, y: 39 },
+    thickness: 0.6,
+    color: rgb(0.86, 0.89, 0.88)
+  });
+
+  if (showTeacherNote && teacherNote) {
+    wrapTextByWidth(`Professor(a): ${clean(teacherNote)}`, pageWidth - margin * 2 - 50, regular, 7.5)
+      .slice(0, 2)
+      .forEach((line, index) => {
+        page.drawText(line, {
+          x: margin,
+          y: 26 - index * 9,
+          size: 7.5,
+          font: regular,
+          color: rgb(0.38, 0.42, 0.4)
+        });
+      });
+  }
+
+  page.drawText(String(pageNumber), {
+    x: pageWidth - margin - 8,
+    y: 24,
+    size: 8,
+    font: regular,
+    color: rgb(0.38, 0.42, 0.4)
+  });
+}
+
+function materialItemsPerPage(materialPage: PrintableMaterialPage) {
+  if (materialPage.layout === "tracing" || materialPage.layout === "observation") return 4;
+  if (materialPage.layout === "bingo") return 9;
+  if (materialPage.layout === "sequence" || materialPage.layout === "classification") return 6;
+  return Math.min(8, Math.max(4, materialPage.columns * 4));
+}
+
+function drawMaterialItems(
+  page: PDFPage,
+  items: PrintableMaterialItem[],
+  materialPage: PrintableMaterialPage,
+  contentTop: number,
+  regular: PDFFont,
+  bold: PDFFont
+) {
+  const columns =
+    materialPage.layout === "tracing" || materialPage.layout === "observation"
+      ? 1
+      : materialPage.layout === "bingo"
+        ? 3
+        : Math.min(materialPage.columns, Math.max(items.length, 1));
+  const rows = Math.max(1, Math.ceil(items.length / columns));
+  const gapX = 14;
+  const gapY = 14;
+  const contentBottom = 62;
+  const availableWidth = pageWidth - margin * 2;
+  const availableHeight = Math.max(180, contentTop - contentBottom);
+  const itemWidth = (availableWidth - gapX * (columns - 1)) / columns;
+  const itemHeight = (availableHeight - gapY * (rows - 1)) / rows;
 
   items.forEach((item, index) => {
     const column = index % columns;
     const row = Math.floor(index / columns);
-    const x = startX + column * gapX;
-    const y = startY - row * gapY;
-    drawMaterialItem(page, item, x, y, itemWidth, itemHeight, regular, bold);
+    const x = margin + column * (itemWidth + gapX);
+    const y = contentTop - (row + 1) * itemHeight - row * gapY;
+    drawMaterialItem(page, item, materialPage.layout, index, x, y, itemWidth, itemHeight, regular, bold);
   });
 }
 
-function drawMaterialItem(page: PDFPage, item: PrintableMaterialItem, x: number, y: number, width: number, height: number, regular: PDFFont, bold: PDFFont) {
+function drawMaterialItem(
+  page: PDFPage,
+  item: PrintableMaterialItem,
+  layout: PrintableMaterialPage["layout"],
+  index: number,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  regular: PDFFont,
+  bold: PDFFont
+) {
   const fill = hexToRgb(item.color, rgb(1, 1, 1));
   const accent = hexToRgb(item.accent_color, rgb(0.18, 0.49, 0.35));
   const borderColor = rgb(0.12, 0.14, 0.13);
   const textColor = rgb(0.12, 0.14, 0.13);
+
+  if (layout === "tracing") {
+    drawTracingItem(page, item, x, y, width, height, regular, bold, accent);
+    return;
+  }
+
+  if (layout === "observation") {
+    drawObservationItem(page, item, x, y, width, height, regular, bold, accent);
+    return;
+  }
 
   if (item.shape === "circle") {
     const size = Math.min(width, height) / 2 - 7;
@@ -312,14 +448,67 @@ function drawMaterialItem(page: PDFPage, item: PrintableMaterialItem, x: number,
     page.drawLine({ start: { x, y: y + 20 }, end: { x: x + width / 2, y }, thickness: 1.2, color: borderColor });
     page.drawLine({ start: { x: x + width, y: y + 20 }, end: { x: x + width / 2, y }, thickness: 1.2, color: borderColor });
   } else {
-    page.drawRectangle({ x, y, width, height, color: fill, borderColor: accent, borderWidth: 1.3 });
+    page.drawRectangle({
+      x,
+      y,
+      width,
+      height,
+      color: fill,
+      borderColor: accent,
+      borderWidth: 1.3,
+      borderDashArray: layout === "cut_and_paste" ? [5, 4] : undefined
+    });
+  }
+
+  if (layout === "sequence") {
+    page.drawCircle({ x: x + 15, y: y + height - 15, size: 10, color: accent });
+    const number = String(index + 1);
+    page.drawText(number, {
+      x: x + 15 - bold.widthOfTextAtSize(number, 9) / 2,
+      y: y + height - 18,
+      size: 9,
+      font: bold,
+      color: rgb(1, 1, 1)
+    });
+  }
+
+  const tag = layout === "classification" ? item.group : layout === "matching" ? item.pair_key : null;
+  if (tag) {
+    const tagText = clean(tag).slice(0, 22);
+    const tagWidth = Math.min(width - 20, regular.widthOfTextAtSize(tagText, 7.5) + 14);
+    page.drawRectangle({
+      x: x + width - tagWidth - 8,
+      y: y + height - 21,
+      width: tagWidth,
+      height: 14,
+      color: lighten(accent, 0.82)
+    });
+    page.drawText(tagText, {
+      x: x + width - tagWidth - 1,
+      y: y + height - 17,
+      size: 7.5,
+      font: regular,
+      color: rgb(0.12, 0.2, 0.19)
+    });
+  }
+
+  if (item.illustration) {
+    drawSimpleIllustration(
+      page,
+      item.illustration,
+      x + width / 2,
+      y + height * 0.68,
+      Math.min(width * 0.28, height * 0.3, 42),
+      accent
+    );
   }
 
   const maxMainChars = item.shape === "circle" || item.shape === "square" ? 18 : 25;
   const mainLines = wrapText(item.text, maxMainChars).slice(0, 3);
   const longestLine = mainLines.reduce((longest, line) => Math.max(longest, line.length), 0);
   const fontSize = longestLine > 16 ? 12 : longestLine > 9 ? 14 : 17;
-  const mainBlockY = y + height / 2 + (mainLines.length - 1) * (fontSize / 2);
+  const mainCenterY = item.illustration ? y + height * 0.28 : y + height * 0.5;
+  const mainBlockY = mainCenterY + (mainLines.length - 1) * (fontSize / 2);
   mainLines.forEach((line, lineIndex) => {
     const textWidth = bold.widthOfTextAtSize(line, fontSize);
     page.drawText(line, {
@@ -338,13 +527,269 @@ function drawMaterialItem(page: PDFPage, item: PrintableMaterialItem, x: number,
         const textWidth = regular.widthOfTextAtSize(line, 9);
         page.drawText(line, {
           x: x + Math.max(14, (width - textWidth) / 2),
-          y: y + 12 - lineIndex * 10,
+          y: y + 10 + (1 - lineIndex) * 10,
           size: 9,
           font: regular,
           color: rgb(0.28, 0.31, 0.29)
         });
       });
   }
+}
+
+function drawTracingItem(
+  page: PDFPage,
+  item: PrintableMaterialItem,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  regular: PDFFont,
+  bold: PDFFont,
+  accent: RGB
+) {
+  page.drawRectangle({
+    x,
+    y,
+    width,
+    height,
+    color: rgb(1, 1, 1),
+    borderColor: lighten(accent, 0.5),
+    borderWidth: 1
+  });
+  page.drawText(clean(item.text || item.detail || "Trace"), {
+    x: x + 14,
+    y: y + height - 23,
+    size: 10,
+    font: bold,
+    color: rgb(0.12, 0.2, 0.19)
+  });
+
+  const trace = clean(item.trace_text || item.text);
+  const traceSize = trace.length > 12 ? 25 : trace.length > 6 ? 32 : 40;
+  page.drawText(trace, {
+    x: x + Math.max(16, (width - bold.widthOfTextAtSize(trace, traceSize)) / 2),
+    y: y + height / 2 - traceSize * 0.2,
+    size: traceSize,
+    font: bold,
+    color: rgb(0.78, 0.8, 0.79),
+    opacity: 0.7
+  });
+
+  [y + 24, y + height / 2 - 15].forEach((lineY) => {
+    page.drawLine({
+      start: { x: x + 14, y: lineY },
+      end: { x: x + width - 14, y: lineY },
+      thickness: 0.8,
+      color: rgb(0.72, 0.75, 0.74),
+      dashArray: [2, 4]
+    });
+  });
+
+  if (item.illustration) {
+    drawSimpleIllustration(page, item.illustration, x + width - 31, y + height - 30, 18, accent);
+  }
+  if (item.detail) {
+    page.drawText(clean(item.detail).slice(0, 70), {
+      x: x + 14,
+      y: y + 9,
+      size: 7.5,
+      font: regular,
+      color: rgb(0.38, 0.42, 0.4)
+    });
+  }
+}
+
+function drawObservationItem(
+  page: PDFPage,
+  item: PrintableMaterialItem,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  regular: PDFFont,
+  bold: PDFFont,
+  accent: RGB
+) {
+  page.drawRectangle({
+    x,
+    y,
+    width,
+    height,
+    color: rgb(1, 1, 1),
+    borderColor: lighten(accent, 0.45),
+    borderWidth: 1
+  });
+  page.drawRectangle({ x: x + 14, y: y + height - 29, width: 12, height: 12, borderColor: accent, borderWidth: 1.2 });
+
+  wrapTextByWidth(item.text || item.detail || "Registro", width - 52, bold, 10)
+    .slice(0, 2)
+    .forEach((line, index) => {
+      page.drawText(line, {
+        x: x + 36,
+        y: y + height - 27 - index * 12,
+        size: 10,
+        font: bold,
+        color: rgb(0.12, 0.2, 0.19)
+      });
+    });
+
+  const lineStart = y + height - 58;
+  for (let lineIndex = 0; lineIndex < 3; lineIndex += 1) {
+    const lineY = lineStart - lineIndex * 22;
+    page.drawLine({
+      start: { x: x + 18, y: lineY },
+      end: { x: x + width - 18, y: lineY },
+      thickness: 0.65,
+      color: rgb(0.75, 0.78, 0.77)
+    });
+  }
+
+  if (item.illustration) {
+    drawSimpleIllustration(page, item.illustration, x + width - 29, y + 25, 20, accent);
+  }
+  if (item.detail) {
+    page.drawText(clean(item.detail).slice(0, 70), {
+      x: x + 18,
+      y: y + 10,
+      size: 7.5,
+      font: regular,
+      color: rgb(0.38, 0.42, 0.4)
+    });
+  }
+}
+
+function drawSimpleIllustration(
+  page: PDFPage,
+  illustration: NonNullable<PrintableMaterialItem["illustration"]>,
+  centerX: number,
+  centerY: number,
+  size: number,
+  accent: RGB
+) {
+  const light = lighten(accent, 0.58);
+  const dark = rgb(0.12, 0.2, 0.19);
+
+  if (illustration === "sun") {
+    page.drawCircle({ x: centerX, y: centerY, size: size * 0.34, color: light, borderColor: accent, borderWidth: 1 });
+    for (let ray = 0; ray < 8; ray += 1) {
+      const angle = (Math.PI * 2 * ray) / 8;
+      page.drawLine({
+        start: { x: centerX + Math.cos(angle) * size * 0.48, y: centerY + Math.sin(angle) * size * 0.48 },
+        end: { x: centerX + Math.cos(angle) * size * 0.66, y: centerY + Math.sin(angle) * size * 0.66 },
+        thickness: 1.2,
+        color: accent
+      });
+    }
+    return;
+  }
+
+  if (illustration === "flower") {
+    for (let petal = 0; petal < 6; petal += 1) {
+      const angle = (Math.PI * 2 * petal) / 6;
+      page.drawCircle({
+        x: centerX + Math.cos(angle) * size * 0.28,
+        y: centerY + Math.sin(angle) * size * 0.28,
+        size: size * 0.2,
+        color: light,
+        borderColor: accent,
+        borderWidth: 0.8
+      });
+    }
+    page.drawCircle({ x: centerX, y: centerY, size: size * 0.2, color: accent });
+    return;
+  }
+
+  if (illustration === "cloud") {
+    page.drawCircle({ x: centerX - size * 0.22, y: centerY, size: size * 0.27, color: light, borderColor: accent, borderWidth: 0.8 });
+    page.drawCircle({ x: centerX, y: centerY + size * 0.12, size: size * 0.34, color: light, borderColor: accent, borderWidth: 0.8 });
+    page.drawCircle({ x: centerX + size * 0.25, y: centerY, size: size * 0.25, color: light, borderColor: accent, borderWidth: 0.8 });
+    return;
+  }
+
+  if (illustration === "book") {
+    page.drawRectangle({ x: centerX - size * 0.52, y: centerY - size * 0.34, width: size * 0.48, height: size * 0.68, color: light, borderColor: accent, borderWidth: 1 });
+    page.drawRectangle({ x: centerX + size * 0.04, y: centerY - size * 0.34, width: size * 0.48, height: size * 0.68, color: light, borderColor: accent, borderWidth: 1 });
+    page.drawLine({ start: { x: centerX, y: centerY - size * 0.36 }, end: { x: centerX, y: centerY + size * 0.36 }, thickness: 1, color: accent });
+    return;
+  }
+
+  if (illustration === "house") {
+    page.drawRectangle({ x: centerX - size * 0.38, y: centerY - size * 0.4, width: size * 0.76, height: size * 0.58, color: light, borderColor: accent, borderWidth: 1 });
+    page.drawLine({ start: { x: centerX - size * 0.48, y: centerY + size * 0.18 }, end: { x: centerX, y: centerY + size * 0.55 }, thickness: 1.4, color: accent });
+    page.drawLine({ start: { x: centerX, y: centerY + size * 0.55 }, end: { x: centerX + size * 0.48, y: centerY + size * 0.18 }, thickness: 1.4, color: accent });
+    return;
+  }
+
+  if (illustration === "tree") {
+    page.drawRectangle({ x: centerX - size * 0.08, y: centerY - size * 0.45, width: size * 0.16, height: size * 0.48, color: dark });
+    page.drawCircle({ x: centerX, y: centerY + size * 0.2, size: size * 0.4, color: light, borderColor: accent, borderWidth: 1 });
+    return;
+  }
+
+  if (illustration === "pencil") {
+    page.drawRectangle({ x: centerX - size * 0.48, y: centerY - size * 0.11, width: size * 0.78, height: size * 0.22, color: light, borderColor: accent, borderWidth: 1 });
+    page.drawLine({ start: { x: centerX + size * 0.3, y: centerY - size * 0.11 }, end: { x: centerX + size * 0.5, y: centerY }, thickness: 1, color: dark });
+    page.drawLine({ start: { x: centerX + size * 0.3, y: centerY + size * 0.11 }, end: { x: centerX + size * 0.5, y: centerY }, thickness: 1, color: dark });
+    return;
+  }
+
+  if (illustration === "leaf") {
+    page.drawEllipse({ x: centerX, y: centerY, xScale: size * 0.42, yScale: size * 0.24, color: light, borderColor: accent, borderWidth: 1 });
+    page.drawLine({ start: { x: centerX - size * 0.36, y: centerY }, end: { x: centerX + size * 0.36, y: centerY }, thickness: 1, color: accent });
+    return;
+  }
+
+  if (illustration === "balloon") {
+    page.drawEllipse({ x: centerX, y: centerY + size * 0.12, xScale: size * 0.3, yScale: size * 0.4, color: light, borderColor: accent, borderWidth: 1 });
+    page.drawLine({ start: { x: centerX, y: centerY - size * 0.28 }, end: { x: centerX + size * 0.08, y: centerY - size * 0.58 }, thickness: 0.8, color: dark });
+    return;
+  }
+
+  if (illustration === "apple") {
+    page.drawCircle({ x: centerX - size * 0.14, y: centerY, size: size * 0.3, color: light, borderColor: accent, borderWidth: 1 });
+    page.drawCircle({ x: centerX + size * 0.14, y: centerY, size: size * 0.3, color: light, borderColor: accent, borderWidth: 1 });
+    page.drawLine({ start: { x: centerX, y: centerY + size * 0.26 }, end: { x: centerX + size * 0.04, y: centerY + size * 0.48 }, thickness: 1.2, color: dark });
+    return;
+  }
+
+  if (illustration === "heart") {
+    page.drawCircle({ x: centerX - size * 0.18, y: centerY + size * 0.12, size: size * 0.25, color: light, borderColor: accent, borderWidth: 0.8 });
+    page.drawCircle({ x: centerX + size * 0.18, y: centerY + size * 0.12, size: size * 0.25, color: light, borderColor: accent, borderWidth: 0.8 });
+    page.drawLine({ start: { x: centerX - size * 0.4, y: centerY + size * 0.06 }, end: { x: centerX, y: centerY - size * 0.45 }, thickness: 1.2, color: accent });
+    page.drawLine({ start: { x: centerX + size * 0.4, y: centerY + size * 0.06 }, end: { x: centerX, y: centerY - size * 0.45 }, thickness: 1.2, color: accent });
+    return;
+  }
+
+  drawStar(page, centerX, centerY, size * 0.5, illustration === "star" ? accent : light, accent);
+}
+
+function drawStar(page: PDFPage, centerX: number, centerY: number, radius: number, fill: RGB, border: RGB) {
+  const points = Array.from({ length: 10 }, (_, index) => {
+    const angle = Math.PI / 2 + (Math.PI * index) / 5;
+    const pointRadius = index % 2 === 0 ? radius : radius * 0.44;
+    return {
+      x: centerX + Math.cos(angle) * pointRadius,
+      y: centerY + Math.sin(angle) * pointRadius
+    };
+  });
+
+  for (let index = 0; index < points.length; index += 1) {
+    page.drawLine({
+      start: points[index],
+      end: points[(index + 1) % points.length],
+      thickness: 1.2,
+      color: border
+    });
+  }
+  page.drawCircle({ x: centerX, y: centerY, size: radius * 0.18, color: fill });
+}
+
+function lighten(color: RGB, amount: number) {
+  return rgb(
+    color.red + (1 - color.red) * amount,
+    color.green + (1 - color.green) * amount,
+    color.blue + (1 - color.blue) * amount
+  );
 }
 
 function hexToRgb(hex: string, fallback: RGB) {

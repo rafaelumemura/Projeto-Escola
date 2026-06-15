@@ -71,10 +71,10 @@ async function analyzePrintableMaterialForSave(
   try {
     return await analyzePrintableMaterialWithClaude(activity);
   } catch (error) {
-    const reason = error instanceof Error ? error.message : "Não foi possível analisar o material imprimível.";
+    console.error("Failed to prepare printable material", error);
     return {
       has_material: false,
-      reason,
+      reason: "Não foi possível preparar o material imprimível nesta geração. A atividade principal foi salva normalmente.",
       title: null,
       teacher_note: null,
       pages: []

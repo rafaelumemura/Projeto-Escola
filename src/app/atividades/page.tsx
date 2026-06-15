@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { ChevronLeft, ChevronRight, Eye, FileDown, Filter, FolderMinus, FolderPlus, Pencil, Plus, Printer, Save, Trash2, X } from "lucide-react";
 import { ProtectedPage } from "@/components/layout/ProtectedPage";
 import { ActivityView } from "@/components/ui/ActivityView";
@@ -50,6 +51,27 @@ function getSavedPrintableMaterialPlan(rawAiResponse: Json | null): PrintableMat
   if (typeof (material as { has_material?: unknown }).has_material !== "boolean") return null;
 
   return material as PrintableMaterialPlan;
+}
+
+function printableMaterialReason(material: PrintableMaterialPlan | null, fallback: string) {
+  const reason = material?.reason;
+  if (typeof reason !== "string" || !reason.trim() || isTechnicalMaterialReason(reason)) return fallback;
+  return reason.trim();
+}
+
+function isTechnicalMaterialReason(reason: string) {
+  const normalized = reason.toLowerCase();
+  return [
+    '"code":',
+    '"path":',
+    "too_small",
+    "invalid_type",
+    "zod",
+    "string must contain",
+    "claude api",
+    "anthropic",
+    "expected "
+  ].some((token) => normalized.includes(token));
 }
 
 export default function ActivitiesPage() {
@@ -323,20 +345,20 @@ export default function ActivitiesPage() {
 
   async function downloadPrintableMaterial(activity: ActivityWithCollections) {
     if (!canUsePrintableMaterial(usage?.plan_key)) {
-      setMessage("Material imprimível disponível apenas no plano Completo.");
+      setMessage("Material imprimível disponível nos planos Completo e Pro.");
       return;
     }
 
     const material = getSavedPrintableMaterialPlan(activity.raw_ai_response);
     if (!material?.has_material) {
-      setMessage(material?.reason || "Esta atividade ainda não possui material imprimível salvo.");
+      setMessage(printableMaterialReason(material, "Esta atividade não possui material imprimível disponível."));
       return;
     }
 
     await downloadPdf(
       supabase,
       "/api/pdf/activity-material",
-      { activity_id: activity.id, material_plan: material },
+      { activity_id: activity.id },
       materialPdfFileName(activity.title)
     );
   }
@@ -469,8 +491,8 @@ export default function ActivitiesPage() {
                 const materialReady = Boolean(material?.has_material);
                 const materialAllowed = canUsePrintableMaterial(usage?.plan_key);
                 const materialReason = !materialAllowed
-                  ? "Material imprimível disponível apenas no plano Completo."
-                  : material?.reason || "Esta atividade ainda não possui análise de material imprimível salva.";
+                  ? "Material imprimível disponível nos planos Completo e Pro."
+                  : printableMaterialReason(material, "Esta atividade ainda não possui análise de material imprimível salva.");
                 const canDownloadMaterial = materialAllowed && materialReady;
 
                 return (
@@ -508,13 +530,19 @@ export default function ActivitiesPage() {
 
               {selected && usage && !canUsePrintableMaterial(usage.plan_key) ? (
                 <p className="rounded-lg border border-ink/10 bg-white px-4 py-3 text-sm text-ink/65">
-                  Material imprimível disponível apenas no plano Completo.
+                  Material imprimível disponível nos planos Completo e Pro.{" "}
+                  <Link href="/planos" className="font-bold text-leaf underline decoration-leaf/35 underline-offset-2">
+                    Fazer upgrade do plano
+                  </Link>
                 </p>
               ) : null}
 
               {selected && canUsePrintableMaterial(usage?.plan_key) && getSavedPrintableMaterialPlan(selected.raw_ai_response)?.has_material === false ? (
                 <p className="rounded-lg border border-ink/10 bg-white px-4 py-3 text-sm text-ink/65">
-                  {getSavedPrintableMaterialPlan(selected.raw_ai_response)?.reason || "A IA avaliou que esta atividade não precisa de material imprimível."}
+                  {printableMaterialReason(
+                    getSavedPrintableMaterialPlan(selected.raw_ai_response),
+                    "Não foi possível preparar um material imprimível funcional para esta atividade."
+                  )}
                 </p>
               ) : null}
 

@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { fail, readJson } from "@/lib/api/http";
-import { getSavedPrintableMaterialPlan, printableMaterialPlanSchema } from "@/lib/activities/printable-material";
+import { getSavedPrintableMaterialPlan } from "@/lib/activities/printable-material";
 import { canUsePrintableMaterial } from "@/lib/billing/plans";
 import { getBillingUsage } from "@/lib/billing/usage";
 import { buildActivityMaterialPdf } from "@/lib/pdf/builders";
@@ -9,8 +9,7 @@ import { getAuthenticatedUser } from "@/lib/supabase/server";
 export const runtime = "nodejs";
 
 const payloadSchema = z.object({
-  activity_id: z.string().uuid(),
-  material_plan: printableMaterialPlanSchema.optional()
+  activity_id: z.string().uuid()
 });
 
 export async function POST(request: Request) {
@@ -19,7 +18,7 @@ export async function POST(request: Request) {
     const usage = await getBillingUsage(user.id);
 
     if (!canUsePrintableMaterial(usage.plan_key)) {
-      throw Object.assign(new Error("Material imprimível disponível apenas no plano Completo."), { status: 403 });
+      throw Object.assign(new Error("Material imprimível disponível nos planos Completo e Pro."), { status: 403 });
     }
 
     const payload = payloadSchema.parse(await readJson<unknown>(request));
@@ -32,7 +31,7 @@ export async function POST(request: Request) {
 
     if (error) throw error;
 
-    const materialPlan = payload.material_plan || getSavedPrintableMaterialPlan(activity.raw_ai_response);
+    const materialPlan = getSavedPrintableMaterialPlan(activity.raw_ai_response);
 
     if (!materialPlan) {
       throw Object.assign(new Error("Esta atividade ainda não possui material imprimível salvo."), { status: 422 });
