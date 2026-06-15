@@ -8,6 +8,10 @@ import { apiFetch } from "@/lib/api/client";
 import { PLAN_DEFINITIONS, type BillingUsage, type PaidPlanKey } from "@/lib/billing/plans";
 
 const plans = [PLAN_DEFINITIONS.basic, PLAN_DEFINITIONS.complete];
+const planPrices: Record<(typeof plans)[number]["key"], string> = {
+  basic: "R$ 27,90",
+  complete: "R$ 54,90"
+};
 const planFeatures: Record<(typeof plans)[number]["key"], string[]> = {
   basic: [
     "Geração de até 25 atividades",
@@ -76,8 +80,8 @@ export default function PlansPage() {
                 </span>
               </div>
 
-              <p className="mt-5 text-4xl font-bold text-ink">{plan.activityLimit}</p>
-              <p className="mt-1 text-sm font-semibold text-ink/60">atividades por ciclo de {plan.periodDays} dias</p>
+              <p className="mt-5 text-4xl font-bold text-ink">{planPrices[plan.key]}</p>
+              <p className="mt-1 text-sm font-semibold text-ink/60">por ciclo de {plan.periodDays} dias</p>
 
               <div className="mt-5 space-y-2 text-sm text-ink/70">
                 {planFeatures[plan.key].map((feature) => (

@@ -7,6 +7,11 @@ const payloadSchema = z.object({
   mode: z.enum(["new", "upgrade"]).default("new")
 });
 
+const hotmartCheckoutUrls = {
+  basic: "https://pay.hotmart.com/I106020573B?off=o99tu81i&checkoutMode=10",
+  complete: "https://pay.hotmart.com/I106020573B?off=mmngye6e&checkoutMode=10"
+} as const;
+
 export async function POST(request: Request) {
   try {
     const { user } = await getAuthenticatedUser(request, { allowInactive: true });
@@ -43,7 +48,6 @@ function withCheckoutParams(url: string, params: Record<string, string>) {
 }
 
 function hotmartUrl(planKey: "basic" | "complete", mode: "new" | "upgrade") {
-  if (mode === "upgrade") return process.env.HOTMART_UPGRADE_URL || process.env.HOTMART_COMPLETE_URL || "";
-  if (planKey === "basic") return process.env.HOTMART_BASIC_URL || "";
-  return process.env.HOTMART_COMPLETE_URL || "";
+  if (mode === "upgrade") return process.env.HOTMART_UPGRADE_URL || hotmartCheckoutUrls.complete;
+  return hotmartCheckoutUrls[planKey];
 }
