@@ -271,7 +271,7 @@ function normalizeRpcSubscription(data: unknown): SubscriptionRow | null {
 function usageMessage(status: SubscriptionStatus, remaining: number, periodEnd: Date, inactiveDeleteAfter: string | null) {
   if (status === "suspended") {
     return inactiveDeleteAfter
-      ? `Plano suspenso. Seus dados ficam disponíveis até ${new Date(inactiveDeleteAfter).toLocaleDateString("pt-BR")}.`
+      ? `Plano suspenso. Reative seu plano até ${new Date(inactiveDeleteAfter).toLocaleDateString("pt-BR")} para acessar seus dados. Após esse período seus dados serão excluídos definitivamente.`
       : "Plano suspenso.";
   }
 
