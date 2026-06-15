@@ -37,6 +37,22 @@ export async function getAuthenticatedUser(request: Request): Promise<{
   user: User;
   accessToken: string;
   supabase: ReturnType<typeof createSupabaseUserClient>;
+}>;
+export async function getAuthenticatedUser(
+  request: Request,
+  options: { allowInactive?: boolean }
+): Promise<{
+  user: User;
+  accessToken: string;
+  supabase: ReturnType<typeof createSupabaseUserClient>;
+}>;
+export async function getAuthenticatedUser(
+  request: Request,
+  options: { allowInactive?: boolean } = {}
+): Promise<{
+  user: User;
+  accessToken: string;
+  supabase: ReturnType<typeof createSupabaseUserClient>;
 }> {
   const header = request.headers.get("authorization") || "";
   const accessToken = header.startsWith("Bearer ") ? header.slice(7) : "";
@@ -52,9 +68,51 @@ export async function getAuthenticatedUser(request: Request): Promise<{
     throw Object.assign(new Error("Sessao invalida ou expirada."), { status: 401 });
   }
 
+  if (!options.allowInactive) {
+    await assertUserHasAppAccess(data.user.id);
+  }
+
   return {
     user: data.user,
     accessToken,
     supabase: authClient
   };
+}
+
+async function assertUserHasAppAccess(userId: string) {
+  const admin = createSupabaseAdminClient();
+  const { data, error } = await admin
+    .from("billing_subscriptions")
+    .select("status, current_period_end, grace_ends_at, cancel_at_period_end")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) throw error;
+  if (!data || !hasCurrentAccess(data)) {
+    throw Object.assign(
+      new Error("Acesso suspenso. Consulte seu plano para regularizar a conta."),
+      { status: 403, code: "BILLING_ACCESS_SUSPENDED" }
+    );
+  }
+}
+
+function hasCurrentAccess(subscription: {
+  status: string;
+  current_period_end: string;
+  grace_ends_at: string | null;
+  cancel_at_period_end: boolean;
+}) {
+  const now = Date.now();
+  const periodEnd = new Date(subscription.current_period_end).getTime();
+  const graceEnd = subscription.grace_ends_at
+    ? new Date(subscription.grace_ends_at).getTime()
+    : periodEnd + 24 * 60 * 60 * 1000;
+
+  if (subscription.status === "active") {
+    return now <= (subscription.cancel_at_period_end ? periodEnd : graceEnd);
+  }
+
+  return subscription.status === "past_due" && now <= graceEnd;
 }

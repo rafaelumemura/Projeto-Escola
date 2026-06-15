@@ -42,7 +42,12 @@ export function ProtectedPage({
 
   if (!user) return null;
 
-  if (usage?.status === "suspended" && pathname !== "/perfil" && pathname !== "/planos") {
+  const accessBlocked =
+    usage?.status === "suspended" ||
+    usage?.status === "canceled" ||
+    usage?.status === "inactive";
+
+  if (accessBlocked && pathname !== "/perfil" && pathname !== "/planos") {
     return (
       <AppShell>
         <div className="mx-auto max-w-xl rounded-lg border border-clay/25 bg-white p-6 text-center shadow-soft">

@@ -1034,6 +1034,104 @@ grant execute on function public.release_activity_generation(uuid, uuid) to serv
 revoke all on table public.hotmart_events from public, anon, authenticated;
 grant all on table public.hotmart_events to service_role;
 
+create or replace function public.has_current_app_access()
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $pe_has_current_app_access$
+  select exists (
+    select 1
+    from public.billing_subscriptions subscription
+    where subscription.user_id = auth.uid()
+      and (
+        (
+          subscription.status = 'active'
+          and now() <= case
+            when subscription.cancel_at_period_end then subscription.current_period_end
+            else coalesce(subscription.grace_ends_at, subscription.current_period_end + interval '1 day')
+          end
+        )
+        or (
+          subscription.status = 'past_due'
+          and now() <= coalesce(subscription.grace_ends_at, subscription.current_period_end + interval '1 day')
+        )
+      )
+  );
+$pe_has_current_app_access$;
+
+revoke execute on function public.has_current_app_access() from public, anon;
+grant execute on function public.has_current_app_access() to authenticated, service_role;
+
+create or replace function public.prevent_terminal_subscription_reactivation()
+returns trigger
+language plpgsql
+set search_path = public
+as $pe_prevent_terminal_reactivation$
+begin
+  if old.status = 'suspended'
+    and old.status_reason in ('purchase_protest', 'purchase_refunded', 'purchase_chargeback')
+    and new.status = 'active'
+    and new.current_period_start <= coalesce(old.suspended_at, old.updated_at)
+  then
+    return old;
+  end if;
+
+  return new;
+end;
+$pe_prevent_terminal_reactivation$;
+
+drop trigger if exists prevent_terminal_subscription_reactivation on public.billing_subscriptions;
+create trigger prevent_terminal_subscription_reactivation
+before update on public.billing_subscriptions
+for each row execute function public.prevent_terminal_subscription_reactivation();
+
+drop policy if exists "active_subscription_required" on public.activities;
+create policy "active_subscription_required"
+on public.activities
+as restrictive
+for all
+to authenticated
+using (public.has_current_app_access())
+with check (public.has_current_app_access());
+
+drop policy if exists "active_subscription_required" on public.collections;
+create policy "active_subscription_required"
+on public.collections
+as restrictive
+for all
+to authenticated
+using (public.has_current_app_access())
+with check (public.has_current_app_access());
+
+drop policy if exists "active_subscription_required" on public.collection_activities;
+create policy "active_subscription_required"
+on public.collection_activities
+as restrictive
+for all
+to authenticated
+using (public.has_current_app_access())
+with check (public.has_current_app_access());
+
+drop policy if exists "active_subscription_required" on public.weekly_plans;
+create policy "active_subscription_required"
+on public.weekly_plans
+as restrictive
+for all
+to authenticated
+using (public.has_current_app_access())
+with check (public.has_current_app_access());
+
+drop policy if exists "active_subscription_required" on public.weekly_plan_items;
+create policy "active_subscription_required"
+on public.weekly_plan_items
+as restrictive
+for all
+to authenticated
+using (public.has_current_app_access())
+with check (public.has_current_app_access());
+
 do $$
 declare
   admin_id uuid;

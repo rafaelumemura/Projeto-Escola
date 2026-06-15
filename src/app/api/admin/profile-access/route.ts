@@ -16,7 +16,7 @@ const accessSchema = z.object({
 
 export async function PUT(request: Request) {
   try {
-    const { user } = await getAuthenticatedUser(request);
+    const { user } = await getAuthenticatedUser(request, { allowInactive: true });
     const payload = accessSchema.parse(await readJson<unknown>(request));
     const supabase = createSupabaseAdminClient();
     const { data: profile, error: profileError } = await supabase

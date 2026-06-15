@@ -4,7 +4,7 @@ import { getAuthenticatedUser } from "@/lib/supabase/server";
 
 export async function GET(request: Request) {
   try {
-    const { user } = await getAuthenticatedUser(request);
+    const { user } = await getAuthenticatedUser(request, { allowInactive: true });
     const usage = await getBillingUsage(user.id);
 
     return ok({ usage });

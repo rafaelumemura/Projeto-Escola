@@ -9,7 +9,7 @@ const payloadSchema = z.object({
 
 export async function POST(request: Request) {
   try {
-    const { user } = await getAuthenticatedUser(request);
+    const { user } = await getAuthenticatedUser(request, { allowInactive: true });
     const payload = payloadSchema.parse(await readJson<unknown>(request));
     const redirectUrl = hotmartUrl(payload.plan_key, payload.mode);
 

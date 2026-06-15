@@ -119,7 +119,7 @@ Eventos tratados:
 
 - `PURCHASE_APPROVED` e `PURCHASE_COMPLETE`: criam ou atualizam o usuário, ativam o plano e iniciam o ciclo.
 - `PURCHASE_DELAYED`, `PURCHASE_EXPIRED` e `PURCHASE_CANCELED`: marcam pagamento pendente.
-- `PURCHASE_REFUNDED` e `PURCHASE_CHARGEBACK`: suspendem o acesso.
+- `PURCHASE_PROTEST`, `PURCHASE_REFUNDED` e `PURCHASE_CHARGEBACK`: suspendem o acesso imediatamente e iniciam a retenção de dados por 30 dias.
 - `SUBSCRIPTION_CANCELLATION`: agenda o cancelamento para o final do período já pago.
 - `SWITCH_PLAN`: altera o plano sem duplicar o usuário.
 - `UPDATE_SUBSCRIPTION_CHARGE_DATE`: atualiza a próxima cobrança.

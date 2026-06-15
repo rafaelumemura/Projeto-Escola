@@ -29,9 +29,14 @@ require.extensions[".ts"] = function transpileTypeScript(module, filename) {
 };
 
 const {
+  HOTMART_EVENTS,
   isSyntheticHotmartTest,
   parseHotmartPayload
 } = require("../src/lib/hotmart/payload.ts");
+
+test("suspende o acesso quando a Hotmart envia pedido de reembolso", () => {
+  assert.equal(HOTMART_EVENTS.suspend.has("PURCHASE_PROTEST"), true);
+});
 
 test("identifica plano básico pelo código da oferta", () => {
   process.env.HOTMART_BASIC_OFFER_CODE = "BASIC-2026";

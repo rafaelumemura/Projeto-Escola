@@ -79,6 +79,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let mounted = true;
+    const syncBillingAccess = () => {
+      refreshUsage().catch(() => setUsage(null));
+    };
+    const syncWhenVisible = () => {
+      if (document.visibilityState === "visible") syncBillingAccess();
+    };
 
     supabase.auth.getSession().then(async ({ data }) => {
       if (!mounted) return;
@@ -101,10 +107,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
 
     window.addEventListener("billing-usage-changed", refreshUsage);
+    window.addEventListener("billing-access-changed", refreshUsage);
+    window.addEventListener("focus", syncBillingAccess);
+    document.addEventListener("visibilitychange", syncWhenVisible);
+    const accessInterval = window.setInterval(syncBillingAccess, 30_000);
 
     return () => {
       mounted = false;
       window.removeEventListener("billing-usage-changed", refreshUsage);
+      window.removeEventListener("billing-access-changed", refreshUsage);
+      window.removeEventListener("focus", syncBillingAccess);
+      document.removeEventListener("visibilitychange", syncWhenVisible);
+      window.clearInterval(accessInterval);
       subscription.unsubscribe();
     };
   }, [refreshProfile, refreshUsage, supabase]);

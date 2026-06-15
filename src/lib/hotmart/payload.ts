@@ -6,7 +6,7 @@ export type HotmartPayload = Record<string, unknown>;
 export const HOTMART_EVENTS = {
   activate: new Set<string>(["PURCHASE_APPROVED", "PURCHASE_COMPLETE"]),
   pastDue: new Set<string>(["PURCHASE_DELAYED", "PURCHASE_EXPIRED", "PURCHASE_CANCELED"]),
-  suspend: new Set<string>(["PURCHASE_REFUNDED", "PURCHASE_CHARGEBACK"]),
+  suspend: new Set<string>(["PURCHASE_PROTEST", "PURCHASE_REFUNDED", "PURCHASE_CHARGEBACK"]),
   cancelAtPeriodEnd: new Set<string>(["SUBSCRIPTION_CANCELLATION"]),
   switchPlan: new Set<string>(["SWITCH_PLAN"]),
   updateChargeDate: new Set<string>(["UPDATE_SUBSCRIPTION_CHARGE_DATE"])

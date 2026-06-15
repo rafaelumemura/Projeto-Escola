@@ -11,7 +11,7 @@ const passwordChangeSchema = z.object({
 
 export async function POST(request: Request) {
   try {
-    const { user } = await getAuthenticatedUser(request);
+    const { user } = await getAuthenticatedUser(request, { allowInactive: true });
     const email = user.email;
     if (!email) {
       throw Object.assign(new Error("E-mail da conta não encontrado."), { status: 400 });

@@ -152,7 +152,7 @@ async function activatePurchase(
   const planKey = requirePaidPlan(context);
   const { userId, created } = await ensureHotmartUser(supabase, buyer.email, buyer.name);
 
-  const { error } = await supabase.rpc("apply_hotmart_subscription_activation", {
+  const { data: subscription, error } = await supabase.rpc("apply_hotmart_subscription_activation", {
     p_user_id: userId,
     p_plan_key: planKey,
     p_provider_customer_id: buyer.email,
@@ -166,6 +166,14 @@ async function activatePurchase(
   });
 
   if (error) throw error;
+  if (subscriptionStatus(subscription) === "suspended") {
+    return {
+      action: "ignored",
+      user_id: userId,
+      plan_key: planKey,
+      reason: "Evento de ativação anterior ou igual à suspensão por reembolso/chargeback."
+    };
+  }
   await reconcileLatestBillingGeneratedCount(userId);
 
   return {
@@ -191,7 +199,7 @@ async function switchSubscriptionPlan(
     };
   }
 
-  const { error } = await supabase.rpc("apply_hotmart_subscription_activation", {
+  const { data: subscription, error } = await supabase.rpc("apply_hotmart_subscription_activation", {
     p_user_id: userId,
     p_plan_key: planKey,
     p_provider_customer_id: context.email,
@@ -205,6 +213,14 @@ async function switchSubscriptionPlan(
   });
 
   if (error) throw error;
+  if (subscriptionStatus(subscription) === "suspended") {
+    return {
+      action: "ignored",
+      user_id: userId,
+      plan_key: planKey,
+      reason: "Troca de plano anterior ou igual à suspensão por reembolso/chargeback."
+    };
+  }
   await reconcileLatestBillingGeneratedCount(userId);
 
   return {
@@ -384,4 +400,10 @@ function addDays(value: string, days: number) {
 
 function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : String(error);
+}
+
+function subscriptionStatus(data: unknown) {
+  const subscription = Array.isArray(data) ? data[0] : data;
+  if (!subscription || typeof subscription !== "object" || !("status" in subscription)) return null;
+  return String((subscription as { status?: unknown }).status || "");
 }

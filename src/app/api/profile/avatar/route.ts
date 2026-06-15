@@ -15,7 +15,7 @@ type UploadFile = {
 
 export async function POST(request: Request) {
   try {
-    const { user } = await getAuthenticatedUser(request);
+    const { user } = await getAuthenticatedUser(request, { allowInactive: true });
     const formData = await request.formData();
     const file = formData.get("avatar");
 

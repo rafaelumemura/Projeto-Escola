@@ -29,6 +29,9 @@ export async function apiFetch<T>(
 
   if (!response.ok) {
     const data = await response.json().catch(() => null);
+    if (response.status === 403 && typeof window !== "undefined") {
+      window.dispatchEvent(new Event("billing-access-changed"));
+    }
     throw new Error(data?.error || "Erro ao chamar API.");
   }
 
@@ -60,6 +63,9 @@ export async function downloadPdf(
 
   if (!response.ok) {
     const data = await response.json().catch(() => null);
+    if (response.status === 403 && typeof window !== "undefined") {
+      window.dispatchEvent(new Event("billing-access-changed"));
+    }
     throw new Error(data?.error || "Nao foi possivel gerar o PDF.");
   }
 
