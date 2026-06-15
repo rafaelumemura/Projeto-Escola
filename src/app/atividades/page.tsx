@@ -494,8 +494,28 @@ export default function ActivitiesPage() {
                   ? "Material imprimível disponível nos planos Completo e Pro."
                   : printableMaterialReason(material, "Esta atividade ainda não possui análise de material imprimível salva.");
                 const canDownloadMaterial = materialAllowed && materialReady;
+                const summary = material?.usage_summary;
+                const pageCount = summary?.page_count || material?.pages.length || 0;
 
                 return (
+              <>
+              {canDownloadMaterial ? (
+                <div className="rounded-lg border border-leaf/20 bg-mint/35 p-4">
+                  <p className="font-bold text-ink">Material imprimível gerado</p>
+                  <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm font-semibold text-ink/65">
+                    <span>{pageCount} {pageCount === 1 ? "página" : "páginas"}</span>
+                    <span>{summary?.color_mode || "colorido"}</span>
+                    <span>Formato {summary?.paper_size || "A4"}</span>
+                    {summary?.techniques?.length ? <span>Inclui {summary.techniques.join(", ")}</span> : null}
+                    {summary?.ideal_for ? <span>Ideal para {summary.ideal_for}</span> : null}
+                  </div>
+                  {summary?.suggestion ? (
+                    <p className="mt-3 text-sm text-ink/65">
+                      <strong className="text-ink">Sugestão de uso:</strong> {summary.suggestion}
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
               <div className="grid grid-cols-2 gap-2 rounded-lg border border-ink/10 bg-white p-3 shadow-soft sm:flex sm:flex-wrap sm:border-0 sm:bg-transparent sm:p-0 sm:shadow-none">
                 <button onClick={() => startEdit(selected)} className="btn-secondary">
                   <Pencil size={16} />
@@ -525,6 +545,7 @@ export default function ActivitiesPage() {
                   {pendingDeleteId === selected.id ? "Confirmar exclusão" : "Excluir"}
                 </button>
               </div>
+              </>
                 );
               })()}
 

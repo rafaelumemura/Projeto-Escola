@@ -262,7 +262,11 @@ function materialPalette(materialPage: PrintableMaterialPage): MaterialPalette {
     sky: ["#3185fc", "#ffcc4d", "#f7fbff"],
     celebration: ["#ee4266", "#7c4dff", "#fff8fc"],
     discovery: ["#ff8a34", "#00a7c4", "#fffaf4"],
-    story: ["#7652b5", "#f05d8b", "#fbf8ff"]
+    story: ["#7652b5", "#f05d8b", "#fbf8ff"],
+    festival: ["#e53e55", "#f5a623", "#fffaf2"],
+    ocean: ["#118ab2", "#06d6a0", "#f3fcff"],
+    space: ["#5941a9", "#f7b801", "#f8f6ff"],
+    farm: ["#5a9f4d", "#f2a541", "#fffaf2"]
   };
   const [defaultPrimary, defaultSecondary, defaultBackground] = themeDefaults[materialPage.theme];
   const primaryHex =
@@ -299,6 +303,7 @@ function drawPremiumPageBackground(
   page.drawRectangle({ x: 0, y: 0, width: pageWidth, height: pageHeight, color: palette.background });
   drawRoundedRectangle(page, 18, 18, pageWidth - 36, pageHeight - 36, 24, palette.softPrimary);
   drawRoundedRectangle(page, 23, 23, pageWidth - 46, pageHeight - 46, 21, palette.background);
+  drawThemedBorder(page, materialPage.border_style, palette);
 
   const decorations = materialPage.decorations.length
     ? materialPage.decorations
@@ -330,9 +335,100 @@ function defaultThemeDecorations(theme: PrintableMaterialPage["theme"]): NonNull
     sky: ["cloud", "sun", "star", "balloon"],
     celebration: ["balloon", "star", "heart", "flower"],
     discovery: ["pencil", "book", "star", "sun"],
-    story: ["book", "star", "cloud", "heart"]
+    story: ["book", "star", "cloud", "heart"],
+    festival: ["pennant", "bonfire", "corn", "lantern"],
+    ocean: ["fish", "cloud", "sun", "rainbow"],
+    space: ["rocket", "planet", "moon", "star"],
+    farm: ["corn", "animal", "tree", "straw_hat"]
   };
   return decorations[theme];
+}
+
+function drawThemedBorder(
+  page: PDFPage,
+  style: PrintableMaterialPage["border_style"],
+  palette: MaterialPalette
+) {
+  if (style === "soft") return;
+
+  if (style === "pennants") {
+    const startX = 82;
+    const endX = pageWidth - 82;
+    const topY = pageHeight - 33;
+    page.drawLine({
+      start: { x: startX, y: topY },
+      end: { x: endX, y: topY },
+      thickness: 1.1,
+      color: palette.primary
+    });
+    for (let index = 0; index < 11; index += 1) {
+      const x = startX + index * ((endX - startX) / 10);
+      const color = index % 2 === 0 ? palette.primary : palette.secondary;
+      page.drawLine({ start: { x: x - 8, y: topY - 1 }, end: { x, y: topY - 14 }, thickness: 1.2, color });
+      page.drawLine({ start: { x: x + 8, y: topY - 1 }, end: { x, y: topY - 14 }, thickness: 1.2, color });
+      page.drawLine({ start: { x: x - 8, y: topY - 1 }, end: { x: x + 8, y: topY - 1 }, thickness: 1.2, color });
+    }
+    return;
+  }
+
+  if (style === "gingham") {
+    const positions = [31, 39, 47];
+    positions.forEach((offset, index) => {
+      const color = index % 2 === 0 ? palette.primary : palette.secondary;
+      page.drawLine({
+        start: { x: offset, y: 74 },
+        end: { x: offset, y: pageHeight - 74 },
+        thickness: 2.3,
+        color,
+        opacity: 0.22
+      });
+      page.drawLine({
+        start: { x: pageWidth - offset, y: 74 },
+        end: { x: pageWidth - offset, y: pageHeight - 74 },
+        thickness: 2.3,
+        color,
+        opacity: 0.22
+      });
+    });
+    return;
+  }
+
+  if (style === "waves") {
+    for (let index = 0; index < 12; index += 1) {
+      const x = 45 + index * 46;
+      page.drawCircle({
+        x,
+        y: 32,
+        size: 8,
+        color: index % 2 === 0 ? palette.softPrimary : palette.softSecondary,
+        borderColor: index % 2 === 0 ? palette.primary : palette.secondary,
+        borderWidth: 0.7
+      });
+    }
+    return;
+  }
+
+  const illustration = style === "leaves" ? "leaf" : style === "stars" ? "star" : null;
+  for (let index = 0; index < 10; index += 1) {
+    const y = 95 + index * 66;
+    if (illustration) {
+      drawSimpleIllustration(
+        page,
+        illustration,
+        index % 2 === 0 ? 34 : pageWidth - 34,
+        y,
+        8,
+        index % 2 === 0 ? palette.primary : palette.secondary
+      );
+    } else {
+      page.drawCircle({
+        x: index % 2 === 0 ? 34 : pageWidth - 34,
+        y,
+        size: 3.4,
+        color: index % 2 === 0 ? palette.primary : palette.secondary
+      });
+    }
+  }
 }
 
 function drawRoundedRectangle(
@@ -854,6 +950,203 @@ function drawSimpleIllustration(
     page.drawCircle({ x: centerX + size * 0.18, y: centerY + size * 0.12, size: size * 0.25, color: light, borderColor: accent, borderWidth: 0.8 });
     page.drawLine({ start: { x: centerX - size * 0.4, y: centerY + size * 0.06 }, end: { x: centerX, y: centerY - size * 0.45 }, thickness: 1.2, color: accent });
     page.drawLine({ start: { x: centerX + size * 0.4, y: centerY + size * 0.06 }, end: { x: centerX, y: centerY - size * 0.45 }, thickness: 1.2, color: accent });
+    return;
+  }
+
+  if (illustration === "pennant") {
+    page.drawLine({
+      start: { x: centerX - size * 0.58, y: centerY + size * 0.36 },
+      end: { x: centerX + size * 0.58, y: centerY + size * 0.36 },
+      thickness: 1.2,
+      color: dark
+    });
+    [-0.38, 0, 0.38].forEach((offset, index) => {
+      const flagColor = index % 2 === 0 ? accent : light;
+      const x = centerX + size * offset;
+      page.drawLine({ start: { x: x - size * 0.16, y: centerY + size * 0.33 }, end: { x, y: centerY - size * 0.26 }, thickness: 2, color: flagColor });
+      page.drawLine({ start: { x: x + size * 0.16, y: centerY + size * 0.33 }, end: { x, y: centerY - size * 0.26 }, thickness: 2, color: flagColor });
+      page.drawLine({ start: { x: x - size * 0.16, y: centerY + size * 0.33 }, end: { x: x + size * 0.16, y: centerY + size * 0.33 }, thickness: 2, color: flagColor });
+    });
+    return;
+  }
+
+  if (illustration === "bonfire") {
+    const wood = rgb(0.48, 0.25, 0.12);
+    page.drawLine({ start: { x: centerX - size * 0.42, y: centerY - size * 0.38 }, end: { x: centerX + size * 0.42, y: centerY - size * 0.2 }, thickness: size * 0.16, color: wood });
+    page.drawLine({ start: { x: centerX + size * 0.42, y: centerY - size * 0.38 }, end: { x: centerX - size * 0.42, y: centerY - size * 0.2 }, thickness: size * 0.16, color: wood });
+    page.drawCircle({ x: centerX, y: centerY + size * 0.02, size: size * 0.28, color: outlineOnly ? light : rgb(1, 0.45, 0.12), borderColor: accent, borderWidth: 1 });
+    page.drawCircle({ x: centerX - size * 0.13, y: centerY - size * 0.03, size: size * 0.18, color: outlineOnly ? light : rgb(1, 0.75, 0.12), borderColor: accent, borderWidth: 0.7 });
+    page.drawLine({ start: { x: centerX - size * 0.26, y: centerY + size * 0.08 }, end: { x: centerX, y: centerY + size * 0.58 }, thickness: 2, color: accent });
+    page.drawLine({ start: { x: centerX + size * 0.26, y: centerY + size * 0.08 }, end: { x: centerX, y: centerY + size * 0.58 }, thickness: 2, color: accent });
+    return;
+  }
+
+  if (illustration === "corn") {
+    const yellow = outlineOnly ? light : rgb(1, 0.79, 0.16);
+    const green = outlineOnly ? accent : rgb(0.22, 0.58, 0.25);
+    page.drawEllipse({ x: centerX, y: centerY + size * 0.05, xScale: size * 0.24, yScale: size * 0.5, color: yellow, borderColor: accent, borderWidth: 1 });
+    for (let row = -2; row <= 2; row += 1) {
+      for (let column = -1; column <= 1; column += 1) {
+        page.drawCircle({ x: centerX + column * size * 0.11, y: centerY + row * size * 0.16, size: size * 0.035, color: accent });
+      }
+    }
+    page.drawLine({ start: { x: centerX - size * 0.18, y: centerY - size * 0.45 }, end: { x: centerX - size * 0.42, y: centerY + size * 0.18 }, thickness: size * 0.12, color: green });
+    page.drawLine({ start: { x: centerX + size * 0.18, y: centerY - size * 0.45 }, end: { x: centerX + size * 0.42, y: centerY + size * 0.18 }, thickness: size * 0.12, color: green });
+    return;
+  }
+
+  if (illustration === "popcorn") {
+    page.drawRectangle({ x: centerX - size * 0.35, y: centerY - size * 0.48, width: size * 0.7, height: size * 0.66, color: light, borderColor: accent, borderWidth: 1 });
+    [-0.2, 0, 0.2].forEach((offset) => {
+      page.drawRectangle({ x: centerX + size * offset - size * 0.055, y: centerY - size * 0.46, width: size * 0.11, height: size * 0.61, color: outlineOnly ? light : accent, opacity: outlineOnly ? 1 : 0.65 });
+    });
+    [-0.28, -0.08, 0.12, 0.3].forEach((offset, index) => {
+      page.drawCircle({ x: centerX + size * offset, y: centerY + size * (0.27 + (index % 2) * 0.1), size: size * 0.18, color: rgb(1, 1, 1), borderColor: accent, borderWidth: 0.8 });
+    });
+    return;
+  }
+
+  if (illustration === "straw_hat") {
+    const straw = outlineOnly ? light : rgb(0.94, 0.72, 0.27);
+    page.drawEllipse({ x: centerX, y: centerY - size * 0.2, xScale: size * 0.56, yScale: size * 0.18, color: straw, borderColor: accent, borderWidth: 1 });
+    page.drawRectangle({ x: centerX - size * 0.28, y: centerY - size * 0.16, width: size * 0.56, height: size * 0.48, color: straw, borderColor: accent, borderWidth: 1 });
+    page.drawRectangle({ x: centerX - size * 0.29, y: centerY - size * 0.03, width: size * 0.58, height: size * 0.11, color: outlineOnly ? light : accent });
+    return;
+  }
+
+  if (illustration === "festival_stall") {
+    page.drawRectangle({ x: centerX - size * 0.43, y: centerY - size * 0.45, width: size * 0.86, height: size * 0.62, color: light, borderColor: accent, borderWidth: 1 });
+    page.drawLine({ start: { x: centerX - size * 0.52, y: centerY + size * 0.16 }, end: { x: centerX - size * 0.38, y: centerY + size * 0.48 }, thickness: 2, color: accent });
+    page.drawLine({ start: { x: centerX - size * 0.38, y: centerY + size * 0.48 }, end: { x: centerX + size * 0.38, y: centerY + size * 0.48 }, thickness: 2, color: accent });
+    page.drawLine({ start: { x: centerX + size * 0.38, y: centerY + size * 0.48 }, end: { x: centerX + size * 0.52, y: centerY + size * 0.16 }, thickness: 2, color: accent });
+    for (let index = 0; index < 5; index += 1) {
+      page.drawLine({ start: { x: centerX - size * 0.38 + index * size * 0.19, y: centerY + size * 0.46 }, end: { x: centerX - size * 0.32 + index * size * 0.16, y: centerY + size * 0.18 }, thickness: 3, color: index % 2 === 0 ? accent : light });
+    }
+    page.drawRectangle({ x: centerX - size * 0.35, y: centerY - size * 0.12, width: size * 0.7, height: size * 0.13, color: accent });
+    return;
+  }
+
+  if (illustration === "fishing_game") {
+    page.drawLine({ start: { x: centerX - size * 0.42, y: centerY + size * 0.48 }, end: { x: centerX + size * 0.06, y: centerY - size * 0.12 }, thickness: 2, color: dark });
+    page.drawLine({ start: { x: centerX - size * 0.42, y: centerY + size * 0.48 }, end: { x: centerX + size * 0.38, y: centerY + size * 0.2 }, thickness: 0.8, color: accent });
+    drawSimpleIllustration(page, "fish", centerX + size * 0.18, centerY - size * 0.28, size * 0.65, accent, outlineOnly);
+    return;
+  }
+
+  if (illustration === "love_letter") {
+    page.drawRectangle({ x: centerX - size * 0.48, y: centerY - size * 0.3, width: size * 0.96, height: size * 0.62, color: light, borderColor: accent, borderWidth: 1 });
+    page.drawLine({ start: { x: centerX - size * 0.48, y: centerY + size * 0.3 }, end: { x: centerX, y: centerY - size * 0.02 }, thickness: 1, color: accent });
+    page.drawLine({ start: { x: centerX + size * 0.48, y: centerY + size * 0.3 }, end: { x: centerX, y: centerY - size * 0.02 }, thickness: 1, color: accent });
+    drawSimpleIllustration(page, "heart", centerX, centerY + size * 0.29, size * 0.42, accent, outlineOnly);
+    return;
+  }
+
+  if (illustration === "gingham") {
+    page.drawRectangle({ x: centerX - size * 0.45, y: centerY - size * 0.45, width: size * 0.9, height: size * 0.9, color: light, borderColor: accent, borderWidth: 1 });
+    for (let index = 1; index < 4; index += 1) {
+      const offset = -size * 0.45 + index * size * 0.225;
+      page.drawLine({ start: { x: centerX + offset, y: centerY - size * 0.45 }, end: { x: centerX + offset, y: centerY + size * 0.45 }, thickness: 2.2, color: accent, opacity: 0.35 });
+      page.drawLine({ start: { x: centerX - size * 0.45, y: centerY + offset }, end: { x: centerX + size * 0.45, y: centerY + offset }, thickness: 2.2, color: accent, opacity: 0.35 });
+    }
+    return;
+  }
+
+  if (illustration === "accordion") {
+    page.drawRectangle({ x: centerX - size * 0.52, y: centerY - size * 0.36, width: size * 0.23, height: size * 0.72, color: light, borderColor: accent, borderWidth: 1 });
+    page.drawRectangle({ x: centerX + size * 0.29, y: centerY - size * 0.36, width: size * 0.23, height: size * 0.72, color: light, borderColor: accent, borderWidth: 1 });
+    for (let index = 0; index < 6; index += 1) {
+      const x = centerX - size * 0.27 + index * size * 0.11;
+      page.drawLine({ start: { x, y: centerY - size * 0.3 }, end: { x: x + size * 0.07, y: centerY + size * 0.3 }, thickness: 1.2, color: accent });
+    }
+    return;
+  }
+
+  if (illustration === "lantern") {
+    page.drawLine({ start: { x: centerX - size * 0.24, y: centerY + size * 0.3 }, end: { x: centerX, y: centerY + size * 0.56 }, thickness: 1.2, color: accent });
+    page.drawLine({ start: { x: centerX + size * 0.24, y: centerY + size * 0.3 }, end: { x: centerX, y: centerY + size * 0.56 }, thickness: 1.2, color: accent });
+    page.drawEllipse({ x: centerX, y: centerY, xScale: size * 0.32, yScale: size * 0.4, color: light, borderColor: accent, borderWidth: 1 });
+    [-0.14, 0, 0.14].forEach((offset) => page.drawLine({ start: { x: centerX + size * offset, y: centerY - size * 0.34 }, end: { x: centerX + size * offset, y: centerY + size * 0.34 }, thickness: 0.8, color: accent }));
+    return;
+  }
+
+  if (illustration === "fish") {
+    page.drawEllipse({ x: centerX, y: centerY, xScale: size * 0.38, yScale: size * 0.24, color: light, borderColor: accent, borderWidth: 1 });
+    page.drawLine({ start: { x: centerX - size * 0.36, y: centerY }, end: { x: centerX - size * 0.58, y: centerY + size * 0.25 }, thickness: 1.4, color: accent });
+    page.drawLine({ start: { x: centerX - size * 0.36, y: centerY }, end: { x: centerX - size * 0.58, y: centerY - size * 0.25 }, thickness: 1.4, color: accent });
+    page.drawLine({ start: { x: centerX - size * 0.58, y: centerY + size * 0.25 }, end: { x: centerX - size * 0.58, y: centerY - size * 0.25 }, thickness: 1.4, color: accent });
+    page.drawCircle({ x: centerX + size * 0.2, y: centerY + size * 0.06, size: size * 0.035, color: dark });
+    return;
+  }
+
+  if (illustration === "rocket") {
+    page.drawEllipse({ x: centerX, y: centerY + size * 0.05, xScale: size * 0.25, yScale: size * 0.48, color: light, borderColor: accent, borderWidth: 1 });
+    page.drawCircle({ x: centerX, y: centerY + size * 0.15, size: size * 0.1, color: outlineOnly ? light : accent });
+    page.drawLine({ start: { x: centerX - size * 0.21, y: centerY - size * 0.2 }, end: { x: centerX - size * 0.42, y: centerY - size * 0.42 }, thickness: 2, color: accent });
+    page.drawLine({ start: { x: centerX + size * 0.21, y: centerY - size * 0.2 }, end: { x: centerX + size * 0.42, y: centerY - size * 0.42 }, thickness: 2, color: accent });
+    page.drawLine({ start: { x: centerX, y: centerY - size * 0.43 }, end: { x: centerX, y: centerY - size * 0.65 }, thickness: 3, color: outlineOnly ? accent : rgb(1, 0.5, 0.12) });
+    return;
+  }
+
+  if (illustration === "planet") {
+    page.drawCircle({ x: centerX, y: centerY, size: size * 0.32, color: light, borderColor: accent, borderWidth: 1 });
+    page.drawEllipse({ x: centerX, y: centerY, xScale: size * 0.58, yScale: size * 0.16, borderColor: accent, borderWidth: 1.5 });
+    return;
+  }
+
+  if (illustration === "moon") {
+    page.drawCircle({ x: centerX, y: centerY, size: size * 0.42, color: light, borderColor: accent, borderWidth: 1 });
+    page.drawCircle({ x: centerX + size * 0.2, y: centerY + size * 0.12, size: size * 0.38, color: rgb(1, 1, 1) });
+    return;
+  }
+
+  if (illustration === "rainbow") {
+    [0.52, 0.39, 0.26].forEach((radius, index) => {
+      const color = outlineOnly ? accent : [rgb(0.94, 0.27, 0.33), rgb(1, 0.69, 0.16), rgb(0.12, 0.67, 0.56)][index];
+      page.drawEllipse({ x: centerX, y: centerY - size * 0.16, xScale: size * radius, yScale: size * radius * 0.62, borderColor: color, borderWidth: size * 0.1 });
+    });
+    return;
+  }
+
+  if (illustration === "child") {
+    page.drawCircle({ x: centerX, y: centerY + size * 0.24, size: size * 0.22, color: light, borderColor: accent, borderWidth: 1 });
+    page.drawCircle({ x: centerX, y: centerY + size * 0.36, size: size * 0.2, color: outlineOnly ? light : dark });
+    page.drawLine({ start: { x: centerX, y: centerY + size * 0.02 }, end: { x: centerX, y: centerY - size * 0.38 }, thickness: size * 0.22, color: accent });
+    page.drawLine({ start: { x: centerX - size * 0.35, y: centerY - size * 0.04 }, end: { x: centerX + size * 0.35, y: centerY - size * 0.04 }, thickness: 2, color: accent });
+    return;
+  }
+
+  if (illustration === "animal") {
+    page.drawCircle({ x: centerX, y: centerY, size: size * 0.36, color: light, borderColor: accent, borderWidth: 1 });
+    page.drawCircle({ x: centerX - size * 0.25, y: centerY + size * 0.3, size: size * 0.15, color: light, borderColor: accent, borderWidth: 1 });
+    page.drawCircle({ x: centerX + size * 0.25, y: centerY + size * 0.3, size: size * 0.15, color: light, borderColor: accent, borderWidth: 1 });
+    page.drawCircle({ x: centerX - size * 0.12, y: centerY + size * 0.07, size: size * 0.035, color: dark });
+    page.drawCircle({ x: centerX + size * 0.12, y: centerY + size * 0.07, size: size * 0.035, color: dark });
+    page.drawCircle({ x: centerX, y: centerY - size * 0.12, size: size * 0.06, color: accent });
+    return;
+  }
+
+  if (illustration === "bee") {
+    page.drawEllipse({ x: centerX, y: centerY, xScale: size * 0.34, yScale: size * 0.24, color: outlineOnly ? light : rgb(1, 0.78, 0.16), borderColor: accent, borderWidth: 1 });
+    [-0.12, 0.08].forEach((offset) => page.drawLine({ start: { x: centerX + size * offset, y: centerY - size * 0.2 }, end: { x: centerX + size * offset, y: centerY + size * 0.2 }, thickness: 2, color: dark }));
+    page.drawEllipse({ x: centerX - size * 0.14, y: centerY + size * 0.28, xScale: size * 0.18, yScale: size * 0.12, color: light, borderColor: accent, borderWidth: 0.8 });
+    page.drawEllipse({ x: centerX + size * 0.14, y: centerY + size * 0.28, xScale: size * 0.18, yScale: size * 0.12, color: light, borderColor: accent, borderWidth: 0.8 });
+    return;
+  }
+
+  if (illustration === "bird") {
+    page.drawEllipse({ x: centerX, y: centerY, xScale: size * 0.36, yScale: size * 0.27, color: light, borderColor: accent, borderWidth: 1 });
+    page.drawEllipse({ x: centerX - size * 0.06, y: centerY, xScale: size * 0.2, yScale: size * 0.13, color: outlineOnly ? light : accent });
+    page.drawLine({ start: { x: centerX + size * 0.34, y: centerY + size * 0.04 }, end: { x: centerX + size * 0.53, y: centerY + size * 0.13 }, thickness: 1.2, color: accent });
+    page.drawLine({ start: { x: centerX + size * 0.34, y: centerY + size * 0.04 }, end: { x: centerX + size * 0.53, y: centerY - size * 0.03 }, thickness: 1.2, color: accent });
+    return;
+  }
+
+  if (illustration === "butterfly") {
+    page.drawEllipse({ x: centerX - size * 0.24, y: centerY + size * 0.16, xScale: size * 0.25, yScale: size * 0.34, color: light, borderColor: accent, borderWidth: 1 });
+    page.drawEllipse({ x: centerX + size * 0.24, y: centerY + size * 0.16, xScale: size * 0.25, yScale: size * 0.34, color: light, borderColor: accent, borderWidth: 1 });
+    page.drawEllipse({ x: centerX - size * 0.2, y: centerY - size * 0.22, xScale: size * 0.2, yScale: size * 0.24, color: light, borderColor: accent, borderWidth: 1 });
+    page.drawEllipse({ x: centerX + size * 0.2, y: centerY - size * 0.22, xScale: size * 0.2, yScale: size * 0.24, color: light, borderColor: accent, borderWidth: 1 });
+    page.drawLine({ start: { x: centerX, y: centerY - size * 0.4 }, end: { x: centerX, y: centerY + size * 0.42 }, thickness: 2.5, color: dark });
     return;
   }
 

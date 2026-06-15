@@ -77,6 +77,22 @@ async function analyzePrintableMaterialForSave(
       reason: "Não foi possível preparar o material imprimível nesta geração. A atividade principal foi salva normalmente.",
       title: null,
       teacher_note: null,
+      art_direction: {
+        theme_name: null,
+        theme_strength: "subtle",
+        visual_elements: [],
+        avoided_elements: [],
+        mechanics_summary: null
+      },
+      usage_summary: {
+        page_count: 0,
+        color_mode: "colorido",
+        paper_size: "A4",
+        techniques: [],
+        ideal_for: null,
+        suggestion: null
+      },
+      quality: null,
       pages: []
     };
   }
