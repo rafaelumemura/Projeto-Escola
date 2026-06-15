@@ -1,7 +1,12 @@
 import { fail, ok } from "@/lib/api/http";
-import { getSavedPrintableMaterialPlan } from "@/lib/activities/printable-material";
+import {
+  analyzePrintableMaterialWithClaude,
+  attachPrintableMaterialPlan,
+  getSavedPrintableMaterialPlan
+} from "@/lib/activities/printable-material";
 import { canUsePrintableMaterial } from "@/lib/billing/plans";
 import { getBillingUsage } from "@/lib/billing/usage";
+import type { Json } from "@/lib/database.types";
 import { getAuthenticatedUser } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -27,11 +32,22 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
     const material = getSavedPrintableMaterialPlan(activity.raw_ai_response);
 
-    if (!material) {
-      throw Object.assign(new Error("Esta atividade ainda não possui análise de material imprimível salva."), { status: 404 });
-    }
+    if (material?.has_material) return ok({ material });
 
-    return ok({ material });
+    const regeneratedMaterial = await analyzePrintableMaterialWithClaude(activity);
+    const rawAiResponse = attachPrintableMaterialPlan(
+      activity.raw_ai_response ?? activity,
+      regeneratedMaterial
+    );
+    const { error: updateError } = await supabase
+      .from("activities")
+      .update({ raw_ai_response: rawAiResponse as Json })
+      .eq("id", id)
+      .eq("user_id", user.id);
+
+    if (updateError) throw updateError;
+
+    return ok({ material: regeneratedMaterial });
   } catch (error) {
     return fail(error);
   }

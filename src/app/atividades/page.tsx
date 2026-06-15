@@ -55,8 +55,8 @@ function getSavedPrintableMaterialPlan(rawAiResponse: Json | null): PrintableMat
 
 function printableMaterialReason(material: PrintableMaterialPlan | null, fallback: string) {
   const reason = material?.reason;
-  if (typeof reason !== "string" || !reason.trim() || isTechnicalMaterialReason(reason)) return fallback;
-  return reason.trim();
+  const text = typeof reason !== "string" || !reason.trim() || isTechnicalMaterialReason(reason) ? fallback : reason;
+  return /[.!?…]$/.test(text.trim()) ? text.trim() : `${text.trim()}.`;
 }
 
 function isTechnicalMaterialReason(reason: string) {
@@ -70,8 +70,16 @@ function isTechnicalMaterialReason(reason: string) {
     "string must contain",
     "claude api",
     "anthropic",
-    "expected "
+    "expected ",
+    "precisa de uma nova composição",
+    "precisa de uma nova composicao"
   ].some((token) => normalized.includes(token));
+}
+
+function printableMaterialNeedsRetry(material: PrintableMaterialPlan | null) {
+  if (!material) return true;
+  if (material.has_material) return false;
+  return !material.reason || isTechnicalMaterialReason(material.reason);
 }
 
 export default function ActivitiesPage() {
@@ -349,18 +357,37 @@ export default function ActivitiesPage() {
       return;
     }
 
-    const material = getSavedPrintableMaterialPlan(activity.raw_ai_response);
-    if (!material?.has_material) {
-      setMessage(printableMaterialReason(material, "Esta atividade não possui material imprimível disponível."));
-      return;
-    }
+    setBusy(true);
+    setMessage(null);
+    try {
+      let material = getSavedPrintableMaterialPlan(activity.raw_ai_response);
 
-    await downloadPdf(
-      supabase,
-      "/api/pdf/activity-material",
-      { activity_id: activity.id },
-      materialPdfFileName(activity.title)
-    );
+      if (!material?.has_material && printableMaterialNeedsRetry(material)) {
+        const result = await apiFetch<{ material: PrintableMaterialPlan }>(
+          supabase,
+          `/api/activities/${activity.id}/printable-material`,
+          { method: "POST" }
+        );
+        material = result.material;
+        await loadActivities();
+      }
+
+      if (!material?.has_material) {
+        setMessage(printableMaterialReason(material, "Esta atividade não possui material imprimível disponível."));
+        return;
+      }
+
+      await downloadPdf(
+        supabase,
+        "/api/pdf/activity-material",
+        { activity_id: activity.id },
+        materialPdfFileName(activity.title)
+      );
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Não foi possível preparar o material imprimível.");
+    } finally {
+      setBusy(false);
+    }
   }
 
   function activityCollections(activity: ActivityWithCollections) {
@@ -493,7 +520,8 @@ export default function ActivitiesPage() {
                 const materialReason = !materialAllowed
                   ? "Material imprimível disponível nos planos Completo e Pro."
                   : printableMaterialReason(material, "Esta atividade ainda não possui análise de material imprimível salva.");
-                const canDownloadMaterial = materialAllowed && materialReady;
+                const materialRetryable = materialAllowed && printableMaterialNeedsRetry(material);
+                const canDownloadMaterial = materialAllowed && (materialReady || materialRetryable);
                 const summary = material?.usage_summary;
                 const pageCount = summary?.page_count || material?.pages.length || 0;
 
@@ -532,7 +560,7 @@ export default function ActivitiesPage() {
                   title={canDownloadMaterial ? "Baixar material imprimível desta atividade." : materialReason}
                 >
                   <Printer size={16} />
-                  Material imprimível
+                  {materialReady ? "Material imprimível" : "Preparar material imprimível"}
                 </button>
                 <button
                   disabled={busy}
@@ -558,7 +586,10 @@ export default function ActivitiesPage() {
                 </p>
               ) : null}
 
-              {selected && canUsePrintableMaterial(usage?.plan_key) && getSavedPrintableMaterialPlan(selected.raw_ai_response)?.has_material === false ? (
+              {selected &&
+              canUsePrintableMaterial(usage?.plan_key) &&
+              getSavedPrintableMaterialPlan(selected.raw_ai_response)?.has_material === false &&
+              !printableMaterialNeedsRetry(getSavedPrintableMaterialPlan(selected.raw_ai_response)) ? (
                 <p className="rounded-lg border border-ink/10 bg-white px-4 py-3 text-sm text-ink/65">
                   {printableMaterialReason(
                     getSavedPrintableMaterialPlan(selected.raw_ai_response),
@@ -569,7 +600,7 @@ export default function ActivitiesPage() {
 
               {selected && canUsePrintableMaterial(usage?.plan_key) && !getSavedPrintableMaterialPlan(selected.raw_ai_response) ? (
                 <p className="rounded-lg border border-ink/10 bg-white px-4 py-3 text-sm text-ink/65">
-                  Esta atividade foi criada antes da análise automática de material imprimível. As novas atividades já salvam essa análise no momento da geração.
+                  Esta atividade ainda não possui material salvo. Use o botão “Preparar material imprimível” para gerar e baixar sem consumir uma nova atividade do plano.
                 </p>
               ) : null}
 

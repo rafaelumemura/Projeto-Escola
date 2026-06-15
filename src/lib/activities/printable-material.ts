@@ -455,8 +455,8 @@ export function getSavedPrintableMaterialPlan(rawAiResponse: unknown): Printable
 }
 
 export function publicPrintableMaterialReason(reason: unknown, fallback: string) {
-  if (typeof reason !== "string" || !reason.trim() || isTechnicalReason(reason)) return fallback;
-  return reason.trim();
+  if (typeof reason !== "string" || !reason.trim() || isTechnicalReason(reason)) return ensureSentence(fallback);
+  return ensureSentence(reason);
 }
 
 export function attachPrintableMaterialPlan(rawAiResponse: unknown, material: PrintableMaterialPlan) {
@@ -484,38 +484,97 @@ export async function analyzePrintableMaterialWithClaude(activity: ActivityForMa
 
   if (!draft.has_material) return draft;
 
+  try {
+    const firstEvaluation = await reviewPrintableCandidate(activity, draft);
+    let bestCandidate = firstEvaluation.plan;
+    let bestQuality = firstEvaluation.quality;
+
+    if (firstEvaluation.quality.passed) {
+      return normalizePrintableMaterial({
+        ...firstEvaluation.plan,
+        quality: firstEvaluation.quality
+      });
+    }
+
+    const refinedCandidate = await refinePrintableCandidate(
+      activity,
+      firstEvaluation.plan,
+      firstEvaluation.quality
+    );
+
+    if (refinedCandidate.has_material) {
+      const finalEvaluation = await reviewPrintableCandidate(activity, refinedCandidate);
+
+      if (finalEvaluation.quality.total >= bestQuality.total) {
+        bestCandidate = finalEvaluation.plan;
+        bestQuality = finalEvaluation.quality;
+      }
+
+      if (finalEvaluation.quality.passed) {
+        return normalizePrintableMaterial({
+          ...finalEvaluation.plan,
+          quality: finalEvaluation.quality
+        });
+      }
+    }
+
+    console.warn("Printable material remained below the internal quality target after refinement", {
+      score: bestQuality.total,
+      title: activity.title
+    });
+
+    return normalizePrintableMaterial({
+      ...bestCandidate,
+      has_material: true,
+      reason: bestCandidate.reason || "Material imprimível preparado e refinado para esta atividade.",
+      quality: bestQuality
+    });
+  } catch (error) {
+    console.error("Printable material quality review failed; preserving generated material", error);
+    return normalizePrintableMaterial({
+      ...draft,
+      has_material: true,
+      reason: draft.reason || "Material imprimível preparado para esta atividade."
+    });
+  }
+}
+
+async function reviewPrintableCandidate(activity: ActivityForMaterial, candidate: PrintableMaterialPlan) {
   const review = printableQualityReviewSchema.parse(
     await callClaudeForJson(
-      buildQualityReviewPrompt(activity, draft),
+      buildQualityReviewPrompt(activity, candidate),
       "Voce e a diretora de qualidade editorial do Projeto Escola. Avalie com rigor comercial e pedagogico. Um material generico, repetitivo, pouco tematico, visualmente pobre ou com objetos mal representados nunca pode receber 85 pontos. Quando necessario, devolva o plano inteiro revisado no mesmo formato, pronto para renderizacao, sem incluir orientacoes para professor no PDF.",
       8200
     )
   );
-  const reviewedPlan = review.revised_plan ? normalizePrintableMaterial(review.revised_plan) : draft;
+  const reviewedPlan = review.revised_plan ? normalizePrintableMaterial(review.revised_plan) : candidate;
   const finalTotal = Math.round(
     Object.values(review.final_scores).reduce((total, score) => total + score, 0)
   );
-  const quality = {
-    scores: review.final_scores,
-    total: finalTotal,
-    passed: finalTotal >= 85,
-    review_notes: review.review_notes.slice(0, 8)
+
+  return {
+    plan: reviewedPlan.has_material ? reviewedPlan : candidate,
+    quality: {
+      scores: review.final_scores,
+      total: finalTotal,
+      passed: finalTotal >= 85,
+      review_notes: review.review_notes.slice(0, 8)
+    }
   };
+}
 
-  if (!quality.passed || !reviewedPlan.has_material) {
-    return normalizePrintableMaterial({
-      ...reviewedPlan,
-      has_material: false,
-      reason: "O material precisa de uma nova composicao antes de ficar disponivel para impressao.",
-      quality,
-      pages: []
-    });
-  }
-
-  return normalizePrintableMaterial({
-    ...reviewedPlan,
-    quality
-  });
+async function refinePrintableCandidate(
+  activity: ActivityForMaterial,
+  candidate: PrintableMaterialPlan,
+  quality: NonNullable<PrintableMaterialPlan["quality"]>
+) {
+  return normalizePrintableMaterial(
+    await callClaudeForJson(
+      buildRefinementPrompt(activity, candidate, quality),
+      "Voce e a diretora criativa do Projeto Escola. Recrie o kit pedagogico completo corrigindo todos os pontos fracos apontados pela avaliacao. Entregue somente o plano JSON final, mais tematico, variado, reconhecivel e pronto para impressao. Preserve a finalidade pedagogica e nunca inclua orientacoes para professor dentro das paginas.",
+      8200
+    )
+  );
 }
 
 async function callClaudeForJson(prompt: string, system: string, maxTokens: number) {
@@ -619,6 +678,42 @@ Se a primeira versao ja obtiver 85 ou mais, revised_plan pode ser null. Caso con
 `;
 }
 
+function buildRefinementPrompt(
+  activity: ActivityForMaterial,
+  candidate: PrintableMaterialPlan,
+  quality: NonNullable<PrintableMaterialPlan["quality"]>
+) {
+  return `
+Recrie e refine integralmente o plano de material imprimivel abaixo para superar 85 pontos no Pinterest Score.
+
+Atividade original:
+${JSON.stringify(activity, null, 2)}
+
+Plano atual:
+${JSON.stringify(candidate, null, 2)}
+
+Avaliacao atual:
+${JSON.stringify(quality, null, 2)}
+
+Correcao obrigatoria:
+- Ataque diretamente os criterios com menor nota e cada observacao da avaliacao.
+- Preserve o objetivo pedagogico, a idade e o conteudo correto.
+- Faca o tema participar da mecanica das paginas, nao apenas do titulo ou dos cantos.
+- Use objetos tematicos reconheciveis e coerentes.
+- Gere de duas a seis paginas variadas quando isso agregar valor.
+- Evite repetir a mesma grade ou a mesma mecanica.
+- Mantenha comandos curtos para a crianca.
+- Nao inclua Professor(a), dicas, objetivos, materiais, tempo, orientacoes, observacoes, avaliacao ou explicacoes nas paginas.
+- instructions e teacher_note devem ser null.
+- quality deve ser null; a qualidade sera medida novamente em uma etapa separada.
+- Use somente estes layouts: ${printableMaterialLayouts.join(", ")}.
+- Use somente estes temas: ${printableMaterialThemes.join(", ")}.
+- Use somente estes border_style: ${printableBorderStyles.join(", ")}.
+- Use somente estas ilustracoes: ${materialIllustrations.join(", ")}.
+- Responda somente com o plano JSON completo no mesmo formato de Plano atual, sem markdown e sem comentarios.
+`;
+}
+
 function hasPrintableContent(item: PrintableMaterialItem) {
   return Boolean(item.text || item.detail || item.illustration || item.trace_text);
 }
@@ -672,6 +767,14 @@ function isTechnicalReason(reason: string) {
     "claude api",
     "anthropic",
     "string must contain",
-    "expected "
+    "expected ",
+    "precisa de uma nova composicao",
+    "precisa de uma nova composição"
   ].some((token) => normalized.includes(token));
+}
+
+function ensureSentence(value: string) {
+  const text = value.trim();
+  if (!text) return text;
+  return /[.!?…]$/.test(text) ? text : `${text}.`;
 }
