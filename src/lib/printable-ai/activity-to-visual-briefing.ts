@@ -12,7 +12,7 @@ type AnthropicResponse = {
   content?: Array<AnthropicTextBlock | { type: string; [key: string]: unknown }>;
 };
 
-export const PRINTABLE_AI_PROMPT_VERSION = "printable-system-prompt-v1";
+export const PRINTABLE_AI_PROMPT_VERSION = "printable-system-prompt-v2";
 export const PRINTABLE_AI_MONTHLY_LIMIT = 50;
 
 export type ActivityForVisualBriefing = {
@@ -62,7 +62,7 @@ export async function logPrintableAiGeneration(input: {
   briefing: PrintableVisualBriefing | null;
   generationTime: number;
   status: "success" | "failed";
-  eventType?: "generation" | "download" | "blocked";
+  eventType?: "generation" | "download" | "blocked" | "cache_reuse";
   storageBucket?: string | null;
   storagePath?: string | null;
   errorMessage?: string | null;
@@ -128,6 +128,8 @@ Crie um briefing visual para a atividade abaixo.
 Regras:
 - A idade e o fator principal da direcao de arte.
 - A instrucao deve ser curta e infantil.
+- O titulo deve ser generico, pedagogico e reutilizavel. Nunca copie o nome completo da atividade.
+- O titulo deve funcionar para outras atividades equivalentes. Exemplo: use "Pares e Impares", nao "Danca dos Numeros: Pares e Impares".
 - Nao escreva orientacoes para professor.
 - Nao crie a atividade de novo; extraia e organize a direcao visual.
 
@@ -141,7 +143,7 @@ JSON obrigatorio:
   "objetivo_pedagogico": "objetivo curto",
   "area": "area",
   "tipo_visual_recomendado": "folha de coordenação motora | recorte e colagem | pareamento | contagem | completar",
-  "titulo": "titulo da folha",
+  "titulo": "titulo pedagogico curto e generico",
   "instrucao": "instrucao curta para a crianca",
   "conceitos_principais": ["conceito 1", "conceito 2"],
   "complexidade_visual": "baixa | media | alta",
@@ -228,7 +230,7 @@ function normalizeBriefing(value: Record<string, unknown>, activity: ActivityFor
     objetivo_pedagogico: clean(value.objetivo_pedagogico || fallback.objetivo_pedagogico),
     area: clean(value.area || fallback.area),
     tipo_visual_recomendado: clean(value.tipo_visual_recomendado || fallback.tipo_visual_recomendado),
-    titulo: clean(value.titulo || fallback.titulo),
+    titulo: genericPrintableTitle(clean(value.titulo || fallback.titulo), activity),
     instrucao: clean(value.instrucao || fallback.instrucao),
     conceitos_principais: conceitos.length ? conceitos : fallback.conceitos_principais,
     complexidade_visual: normalizeComplexity(value.complexidade_visual, idade),
@@ -254,7 +256,7 @@ function fallbackBriefing(activity: ActivityForVisualBriefing): PrintableVisualB
     objetivo_pedagogico: clean(activity.objective || activity.description || activity.title || "Desenvolver a proposta pedagogica da atividade."),
     area: clean(activity.development_area || "Area pedagogica"),
     tipo_visual_recomendado: detectVisualType(text),
-    titulo: clean(activity.title || "Material imprimivel"),
+    titulo: genericPrintableTitle(detectGenericTitle(text, tema), activity),
     instrucao: idade <= 5 ? "Vamos brincar e completar!" : "Complete a atividade com atencao.",
     conceitos_principais: extractConcepts(text),
     complexidade_visual: idade <= 5 ? "baixa" : idade <= 7 ? "media" : "alta",
@@ -270,6 +272,39 @@ function detectTheme(text: string, activity: ActivityForVisualBriefing) {
   if (/numero|numeros|matematica|contagem|pares|impares/.test(normalized)) return "numeros";
   if (/silaba|letra|historia|palavra|linguagem/.test(normalized)) return "linguagem";
   return clean(activity.development_area || "tema pedagogico");
+}
+
+function detectGenericTitle(text: string, theme: string) {
+  const normalized = text.toLowerCase();
+  if (/par(es)?|impar(es)?|ímpar(es)?/.test(normalized)) return "Pares e Impares";
+  if (/contagem|contar|quantidade|numero|numeros/.test(normalized)) return "Contagem";
+  if (/silaba|silabas|sílaba|sílabas/.test(normalized)) return "Silabas";
+  if (/letra|alfabeto/.test(normalized)) return "Letras";
+  if (/coordena[cç][aã]o|caminho|trajeto|pontilhado/.test(normalized)) return "Caminhos";
+  if (/classificar|classificacao|categoria/.test(normalized)) return "Classificacao";
+  if (/parear|ligar|associar|relacionar/.test(normalized)) return "Associe";
+  if (theme === "festa-junina") return "Atividade Junina";
+  if (theme === "natureza") return "Natureza";
+  if (theme === "linguagem") return "Linguagem";
+  if (theme === "numeros") return "Numeros";
+  return "Atividade";
+}
+
+function genericPrintableTitle(value: string, activity: ActivityForVisualBriefing) {
+  const title = clean(value || "Atividade");
+  const activityTitle = clean(activity.title || "");
+  if (!activityTitle) return limitTitle(title);
+
+  const normalizedTitle = normalizeText(title);
+  const normalizedActivityTitle = normalizeText(activityTitle);
+  if (normalizedTitle && normalizedTitle !== normalizedActivityTitle && !normalizedActivityTitle.includes(normalizedTitle)) {
+    return limitTitle(title);
+  }
+
+  const text = [activity.development_area, activity.objective, activity.description, activity.materials, stringify(activity.steps)]
+    .filter(Boolean)
+    .join(" ");
+  return limitTitle(detectGenericTitle(`${activityTitle} ${text}`, detectTheme(`${activityTitle} ${text}`, activity)));
 }
 
 function detectVisualType(text: string) {
@@ -309,7 +344,26 @@ function extractJson(text: string) {
 }
 
 function parseAge(value: unknown) {
-  const match = String(value || "").match(/\d+/);
+  const text = normalizeText(String(value || ""));
+  const wordAges: Record<string, number> = {
+    zero: 0,
+    um: 1,
+    uma: 1,
+    dois: 2,
+    duas: 2,
+    tres: 3,
+    três: 3,
+    quatro: 4,
+    cinco: 5,
+    seis: 6,
+    sete: 7,
+    oito: 8,
+    nove: 9,
+    dez: 10
+  };
+  const word = Object.entries(wordAges).find(([key]) => new RegExp(`\\b${key}\\b`).test(text));
+  if (word) return clampAge(word[1]);
+  const match = text.match(/\d+/);
   return clampAge(match ? Number(match[0]) : 5);
 }
 
@@ -320,6 +374,18 @@ function clampAge(value: number) {
 
 function clean(value: unknown) {
   return String(value || "").replace(/\s+/g, " ").trim();
+}
+
+function normalizeText(value: unknown) {
+  return clean(value)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+}
+
+function limitTitle(value: string) {
+  const title = clean(value);
+  return title.length > 42 ? `${title.slice(0, 39).trim()}...` : title;
 }
 
 function stringify(value: unknown) {

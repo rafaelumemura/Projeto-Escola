@@ -17,6 +17,7 @@ Reforce:
 - idade: ${briefing.idade} anos, isto deve dominar a direcao de arte;
 - tema: ${briefing.tema};
 - titulo: ${briefing.titulo};
+- o titulo deve ser generico e pedagogico; nao use o nome completo da atividade original;
 - instrucao curta: ${briefing.instrucao};
 - incluir no topo os campos Nome e Turma de forma natural no design;
 - manter textos grandes, legiveis e em portugues brasileiro;
@@ -33,7 +34,7 @@ export function printableImagePromptVersion() {
 
 async function readSystemPrompt() {
   try {
-    return await readFile(join(process.cwd(), "prompts/printable-system-prompt-v1.md"), "utf8");
+    return await readFile(join(process.cwd(), `prompts/${PRINTABLE_AI_PROMPT_VERSION}.md`), "utf8");
   } catch {
     return "Crie uma pagina A4 vertical premium de material pedagogico infantil, com hierarquia Nome, Turma, titulo, instrucao curta, atividade e decoracao.";
   }

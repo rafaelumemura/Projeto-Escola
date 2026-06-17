@@ -14,11 +14,13 @@ import {
   activityToVisualBriefing,
   createPrintableAiMaterialMarker,
   getPrintableAiMonthlyUsage,
-  logPrintableAiGeneration
+  logPrintableAiGeneration,
+  type PrintableVisualBriefing
 } from "@/lib/printable-ai/activity-to-visual-briefing";
 import { generatePrintableImage } from "@/lib/printable-ai/image-generator";
 import { buildPrintableImagePrompt } from "@/lib/printable-ai/image-prompt-builder";
 import { imageToA4Pdf } from "@/lib/printable-ai/image-to-pdf";
+import { findSimilarPrintableMaterial } from "@/lib/printable-ai/similar-material-cache";
 import { createSupabaseAdminClient, getAuthenticatedUser } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -28,6 +30,8 @@ const payloadSchema = z.object({
 });
 
 const printableMaterialsBucket = "printable-materials";
+type PrintableGeneratedFile = NonNullable<PrintableMaterialPlan["generated_file"]>;
+type ActivityForPrintableMarker = Parameters<typeof createPrintableAiMaterialMarker>[0];
 
 export async function POST(request: Request) {
   try {
@@ -91,6 +95,42 @@ export async function POST(request: Request) {
 
       try {
         briefing = await activityToVisualBriefing(activity);
+        const cachedMaterial = await findSimilarPrintableMaterial(briefing, activity.id);
+
+        if (cachedMaterial) {
+          const generatedFile = {
+            storage_bucket: cachedMaterial.storageBucket,
+            storage_path: cachedMaterial.storagePath,
+            content_type: "application/pdf" as const,
+            generated_at: new Date().toISOString(),
+            provider: "similar-cache",
+            model: cachedMaterial.promptVersion
+          };
+          const bytes = await downloadStoredPrintablePdf(generatedFile.storage_bucket, generatedFile.storage_path);
+          const printableMaterial = createCachedPrintableMaterialPlan(activity, materialPlan, briefing, generatedFile);
+          const rawAiResponse = attachPrintableMaterialPlan(activity.raw_ai_response ?? activity, printableMaterial);
+          const { error: updateError } = await supabase
+            .from("activities")
+            .update({ raw_ai_response: rawAiResponse as Json })
+            .eq("id", activity.id)
+            .eq("user_id", user.id);
+
+          if (updateError) throw updateError;
+
+          await logPrintableAiGeneration({
+            userId: user.id,
+            activityId: activity.id,
+            briefing,
+            generationTime: Date.now() - startedAt,
+            status: "success",
+            eventType: "cache_reuse",
+            storageBucket: generatedFile.storage_bucket,
+            storagePath: generatedFile.storage_path
+          });
+
+          return pdfResponse(bytes, activity.title);
+        }
+
         const prompt = await buildPrintableImagePrompt(briefing);
         const image = await generatePrintableImage(prompt);
         const bytes = await imageToA4Pdf(image.bytes);
@@ -103,6 +143,7 @@ export async function POST(request: Request) {
         });
         const printableMaterial = {
           ...(materialPlan || createPrintableAiMaterialMarker(activity)),
+          title: briefing.titulo,
           has_material: true,
           generated_file: generatedFile
         } satisfies PrintableMaterialPlan;
@@ -164,6 +205,32 @@ function getGeneratedPrintableFile(materialPlan: PrintableMaterialPlan | null) {
   return {
     storage_bucket: file.storage_bucket || printableMaterialsBucket,
     storage_path: file.storage_path
+  };
+}
+
+function createCachedPrintableMaterialPlan(
+  activity: ActivityForPrintableMarker,
+  materialPlan: PrintableMaterialPlan | null,
+  briefing: PrintableVisualBriefing,
+  generatedFile: PrintableGeneratedFile
+): PrintableMaterialPlan {
+  const base = materialPlan || createPrintableAiMaterialMarker(activity);
+
+  return {
+    ...base,
+    title: briefing.titulo,
+    has_material: true,
+    reason: "Material imprimivel reutilizado por similaridade pedagogica.",
+    generated_file: generatedFile,
+    editorial: {
+      ...base.editorial,
+      theme: briefing.tema,
+      age: briefing.idade,
+      objective: briefing.objetivo_pedagogico,
+      area: briefing.area,
+      keywords: briefing.conceitos_principais,
+      printable_type: "gpt-image-v2-cache"
+    }
   };
 }
 

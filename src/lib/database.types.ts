@@ -324,7 +324,7 @@ export type Database = {
           generated_at: string;
           generation_time: number | null;
           status: "success" | "failed";
-          event_type: "generation" | "download" | "blocked";
+          event_type: "generation" | "download" | "blocked" | "cache_reuse";
           storage_bucket: string | null;
           storage_path: string | null;
           error_message: string | null;
@@ -338,7 +338,7 @@ export type Database = {
           generated_at?: string;
           generation_time?: number | null;
           status: "success" | "failed";
-          event_type?: "generation" | "download" | "blocked";
+          event_type?: "generation" | "download" | "blocked" | "cache_reuse";
           storage_bucket?: string | null;
           storage_path?: string | null;
           error_message?: string | null;
@@ -351,7 +351,7 @@ export type Database = {
           generated_at?: string;
           generation_time?: number | null;
           status?: "success" | "failed";
-          event_type?: "generation" | "download" | "blocked";
+          event_type?: "generation" | "download" | "blocked" | "cache_reuse";
           storage_bucket?: string | null;
           storage_path?: string | null;
           error_message?: string | null;
