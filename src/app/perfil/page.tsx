@@ -245,7 +245,7 @@ export default function ProfilePage() {
             ) : null}
             <ThemeSelector theme={theme} onThemeChange={setTheme} />
             <Info label="Uso do ciclo" value={`${usage?.generated_count || 0}/${usage?.activity_limit || 0} atividades geradas`} />
-            <Info label="Material imprimível IA" value={printableMaterialUsageLabel(usage)} />
+            <Info label="MATERIAL GERADO" value={printableMaterialUsageLabel(usage)} />
             <Info label="Vencimento" value={usage?.current_period_end ? new Date(usage.current_period_end).toLocaleDateString("pt-BR") : "-"} />
             <Info label="Acesso" value={profile?.is_admin ? "Admin" : "Usuário"} />
             <Info label="Data de cadastro" value={profile?.created_at ? new Date(profile.created_at).toLocaleDateString("pt-BR") : "-"} />
