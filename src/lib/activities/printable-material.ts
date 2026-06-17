@@ -317,6 +317,7 @@ export function normalizePrintableMaterial(raw: unknown): PrintableMaterialPlan 
 
   if (!pages.length) {
     return {
+      mode: parsed.mode,
       has_material: false,
       reason: "Nao foi possivel montar um recurso imprimivel funcional para esta atividade.",
       title: parsed.title || null,
@@ -324,6 +325,7 @@ export function normalizePrintableMaterial(raw: unknown): PrintableMaterialPlan 
       art_direction: parsed.art_direction,
       usage_summary: parsed.usage_summary,
       quality: parsed.quality,
+      editorial: parsed.editorial,
       pages: []
     };
   }
