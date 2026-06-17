@@ -83,7 +83,7 @@ function printableMaterialNeedsRetry(material: PrintableMaterialPlan | null) {
 }
 
 export default function ActivitiesPage() {
-  const { supabase, usage } = useAuth();
+  const { supabase, usage, profile } = useAuth();
   const [highlightedActivityId, setHighlightedActivityId] = useState<string | null>(null);
   const [activities, setActivities] = useState<ActivityWithCollections[]>([]);
   const [collections, setCollections] = useState<Collection[]>([]);
@@ -360,9 +360,10 @@ export default function ActivitiesPage() {
     setBusy(true);
     setMessage(null);
     try {
+      const materialV2Enabled = profile?.material_printable_v2 === true;
       let material = getSavedPrintableMaterialPlan(activity.raw_ai_response);
 
-      if (!material?.has_material && printableMaterialNeedsRetry(material)) {
+      if (!material?.has_material && (materialV2Enabled || printableMaterialNeedsRetry(material))) {
         const result = await apiFetch<{ material: PrintableMaterialPlan }>(
           supabase,
           `/api/activities/${activity.id}/printable-material`,
@@ -515,15 +516,16 @@ export default function ActivitiesPage() {
 
               {(() => {
                 const material = getSavedPrintableMaterialPlan(selected.raw_ai_response);
+                const materialV2Enabled = profile?.material_printable_v2 === true;
                 const materialReady = Boolean(material?.has_material);
                 const materialAllowed = canUsePrintableMaterial(usage?.plan_key);
                 const materialReason = !materialAllowed
                   ? "Material imprimível disponível nos planos Completo e Pro."
                   : printableMaterialReason(material, "Esta atividade ainda não possui análise de material imprimível salva.");
-                const materialRetryable = materialAllowed && printableMaterialNeedsRetry(material);
-                const canDownloadMaterial = materialAllowed && (materialReady || materialRetryable);
+                const materialRetryable = materialAllowed && (materialV2Enabled || printableMaterialNeedsRetry(material));
+                const canDownloadMaterial = materialAllowed && (materialV2Enabled || materialReady || materialRetryable);
                 const summary = material?.usage_summary;
-                const pageCount = summary?.page_count || material?.pages.length || 0;
+                const pageCount = materialV2Enabled ? summary?.page_count || 1 : summary?.page_count || material?.pages.length || 0;
 
                 return (
               <>
@@ -560,7 +562,7 @@ export default function ActivitiesPage() {
                   title={canDownloadMaterial ? "Baixar material imprimível desta atividade." : materialReason}
                 >
                   <Printer size={16} />
-                  {materialReady ? "Material imprimível" : "Preparar material imprimível"}
+                  {materialReady || materialV2Enabled ? "Material imprimível" : "Preparar material imprimível"}
                 </button>
                 <button
                   disabled={busy}
@@ -588,6 +590,7 @@ export default function ActivitiesPage() {
 
               {selected &&
               canUsePrintableMaterial(usage?.plan_key) &&
+              profile?.material_printable_v2 !== true &&
               getSavedPrintableMaterialPlan(selected.raw_ai_response)?.has_material === false &&
               !printableMaterialNeedsRetry(getSavedPrintableMaterialPlan(selected.raw_ai_response)) ? (
                 <p className="rounded-lg border border-ink/10 bg-white px-4 py-3 text-sm text-ink/65">

@@ -92,6 +92,7 @@ export type Database = {
           planning_pdf_skill: PlanningPdfSkill;
           theme_preference: ThemePreference;
           password_must_change: boolean;
+          material_printable_v2: boolean;
           created_at: string;
         };
         Insert: {
@@ -104,6 +105,7 @@ export type Database = {
           planning_pdf_skill?: PlanningPdfSkill;
           theme_preference?: ThemePreference;
           password_must_change?: boolean;
+          material_printable_v2?: boolean;
           created_at?: string;
         };
         Update: {
@@ -115,6 +117,7 @@ export type Database = {
           planning_pdf_skill?: PlanningPdfSkill;
           theme_preference?: ThemePreference;
           password_must_change?: boolean;
+          material_printable_v2?: boolean;
         };
       };
       activities: {
@@ -216,6 +219,133 @@ export type Database = {
           start_time?: string | null;
           end_time?: string | null;
           notes?: string | null;
+        };
+      };
+      printable_assets: {
+        Row: {
+          id: string;
+          theme: string;
+          asset_type:
+            | "background"
+            | "frame"
+            | "header"
+            | "footer"
+            | "character"
+            | "decorations"
+            | "stickers"
+            | "object"
+            | "animal"
+            | "food"
+            | "school_object"
+            | "nature"
+            | "shape"
+            | "theme_element";
+          style: string;
+          age_min: number;
+          age_max: number;
+          tags: string[];
+          storage_bucket: string;
+          storage_path: string;
+          public_url: string | null;
+          prompt: string | null;
+          provider: string;
+          usage_count: number;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          theme: string;
+          asset_type:
+            | "background"
+            | "frame"
+            | "header"
+            | "footer"
+            | "character"
+            | "decorations"
+            | "stickers"
+            | "object"
+            | "animal"
+            | "food"
+            | "school_object"
+            | "nature"
+            | "shape"
+            | "theme_element";
+          style?: string;
+          age_min?: number;
+          age_max?: number;
+          tags?: string[];
+          storage_bucket?: string;
+          storage_path: string;
+          public_url?: string | null;
+          prompt?: string | null;
+          provider?: string;
+          usage_count?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          theme?: string;
+          asset_type?:
+            | "background"
+            | "frame"
+            | "header"
+            | "footer"
+            | "character"
+            | "decorations"
+            | "stickers"
+            | "object"
+            | "animal"
+            | "food"
+            | "school_object"
+            | "nature"
+            | "shape"
+            | "theme_element";
+          style?: string;
+          age_min?: number;
+          age_max?: number;
+          tags?: string[];
+          storage_bucket?: string;
+          storage_path?: string;
+          public_url?: string | null;
+          prompt?: string | null;
+          provider?: string;
+          usage_count?: number;
+          updated_at?: string;
+        };
+      };
+      printable_ai_generations: {
+        Row: {
+          id: string;
+          user_id: string;
+          activity_id: string | null;
+          briefing_json: Json;
+          prompt_version: string;
+          generated_at: string;
+          generation_time: number | null;
+          status: "success" | "failed";
+          error_message: string | null;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          activity_id?: string | null;
+          briefing_json?: Json;
+          prompt_version: string;
+          generated_at?: string;
+          generation_time?: number | null;
+          status: "success" | "failed";
+          error_message?: string | null;
+        };
+        Update: {
+          user_id?: string;
+          activity_id?: string | null;
+          briefing_json?: Json;
+          prompt_version?: string;
+          generated_at?: string;
+          generation_time?: number | null;
+          status?: "success" | "failed";
+          error_message?: string | null;
         };
       };
       billing_subscriptions: {

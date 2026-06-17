@@ -161,7 +161,48 @@ const printableQualitySchema = z.object({
   review_notes: z.array(materialTextSchema).catch([]).default([])
 });
 
+export const editorialAssetTypeSchema = z
+  .enum([
+    "background",
+    "frame",
+    "header",
+    "footer",
+    "character",
+    "decorations",
+    "stickers",
+    "object",
+    "animal",
+    "food",
+    "school_object",
+    "nature",
+    "shape",
+    "theme_element"
+  ])
+  .catch("decorations");
+
+const printableEditorialAssetSchema = z.object({
+  type: editorialAssetTypeSchema,
+  id: nullableMaterialTextSchema.default(null),
+  path: nullableMaterialTextSchema.default(null),
+  public_url: nullableMaterialTextSchema.default(null),
+  tags: z.array(materialTextSchema).catch([]).default([])
+});
+
+const printableEditorialSchema = z.object({
+  theme: nullableMaterialTextSchema.default(null),
+  age: z.coerce.number().int().min(0).max(12).catch(5).default(5),
+  objective: nullableMaterialTextSchema.default(null),
+  area: nullableMaterialTextSchema.default(null),
+  keywords: z.array(materialTextSchema).catch([]).default([]),
+  printable_type: nullableMaterialTextSchema.default(null),
+  required_asset_types: z.array(editorialAssetTypeSchema).catch([]).default([]),
+  assets: z.array(printableEditorialAssetSchema).catch([]).default([]),
+  html: nullableMaterialTextSchema.default(null),
+  composition: z.unknown().nullable().catch(null).default(null)
+});
+
 export const printableMaterialPlanSchema = z.object({
+  mode: z.enum(["legacy_pages", "editorial_html"]).catch("legacy_pages").default("legacy_pages"),
   has_material: z
     .preprocess((value) => value === true || value === "true", z.boolean())
     .catch(false),
@@ -171,12 +212,14 @@ export const printableMaterialPlanSchema = z.object({
   art_direction: printableArtDirectionSchema.default({}),
   usage_summary: printableUsageSummarySchema.default({}),
   quality: printableQualitySchema.nullable().catch(null).default(null),
+  editorial: printableEditorialSchema.nullable().catch(null).default(null),
   pages: z.array(printableMaterialPageSchema).catch([]).default([])
 });
 
 export type PrintableMaterialPlan = z.infer<typeof printableMaterialPlanSchema>;
 export type PrintableMaterialPage = z.infer<typeof printableMaterialPageSchema>;
 export type PrintableMaterialItem = z.infer<typeof printableMaterialItemSchema>;
+export type EditorialAssetType = z.infer<typeof editorialAssetTypeSchema>;
 
 const printableQualityReviewSchema = z.object({
   final_scores: printableQualityScoresSchema.default({}),
@@ -222,6 +265,41 @@ export function normalizePrintableMaterial(raw: unknown): PrintableMaterialPlan 
     return {
       ...parsed,
       reason: publicPrintableMaterialReason(parsed.reason, "A atividade nao precisa de um recurso impresso complementar."),
+      pages: []
+    };
+  }
+
+  if (parsed.mode === "editorial_html") {
+    const requiredTypes = parsed.editorial?.required_asset_types?.length
+      ? parsed.editorial.required_asset_types
+      : ([
+          "background",
+          "frame",
+          "header",
+          "footer",
+          "character",
+          "decorations",
+          "stickers"
+        ] as EditorialAssetType[]);
+    const usageSummary = {
+      ...parsed.usage_summary,
+      page_count: parsed.usage_summary.page_count || 1,
+      techniques: parsed.usage_summary.techniques.length
+        ? parsed.usage_summary.techniques.slice(0, 8)
+        : [parsed.editorial?.printable_type || "material personalizado"].filter(Boolean)
+    };
+
+    return {
+      ...parsed,
+      reason: publicPrintableMaterialReason(parsed.reason, "Material imprimivel editorial preparado para esta atividade."),
+      teacher_note: null,
+      usage_summary: usageSummary,
+      editorial: parsed.editorial
+        ? {
+            ...parsed.editorial,
+            required_asset_types: requiredTypes
+          }
+        : null,
       pages: []
     };
   }

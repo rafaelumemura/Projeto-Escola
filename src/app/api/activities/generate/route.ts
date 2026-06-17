@@ -13,6 +13,10 @@ import {
   type GenerationReservation
 } from "@/lib/billing/usage";
 import type { Json } from "@/lib/database.types";
+import {
+  createPrintableAiMaterialMarker,
+  isMaterialPrintableV2Enabled
+} from "@/lib/printable-ai/activity-to-visual-briefing";
 import { getAuthenticatedUser } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -29,8 +33,11 @@ export async function POST(request: Request) {
     const input = activityGenerationInputSchema.parse(body);
     reservation = await reserveActivityGeneration(user.id);
     const activity = await generateActivityWithClaude(input);
+    const usePrintableV2 = await isMaterialPrintableV2Enabled(user.id);
     const printableMaterial = canUsePrintableMaterial(reservation.usage.plan_key)
-      ? await analyzePrintableMaterialForSave(activity)
+      ? usePrintableV2
+        ? createPrintableAiMaterialMarker(activity)
+        : await analyzePrintableMaterialForSave(activity)
       : null;
     const rawAiResponse = printableMaterial
       ? attachPrintableMaterialPlan(activity.raw_ai_response ?? activity, printableMaterial)
@@ -73,6 +80,7 @@ async function analyzePrintableMaterialForSave(
   } catch (error) {
     console.error("Failed to prepare printable material", error);
     return {
+      mode: "legacy_pages",
       has_material: false,
       reason: "Não foi possível preparar o material imprimível nesta geração. A atividade principal foi salva normalmente.",
       title: null,
@@ -93,6 +101,7 @@ async function analyzePrintableMaterialForSave(
         suggestion: null
       },
       quality: null,
+      editorial: null,
       pages: []
     };
   }

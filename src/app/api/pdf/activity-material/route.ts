@@ -4,6 +4,14 @@ import { getSavedPrintableMaterialPlan } from "@/lib/activities/printable-materi
 import { canUsePrintableMaterial } from "@/lib/billing/plans";
 import { getBillingUsage } from "@/lib/billing/usage";
 import { buildActivityMaterialPdf } from "@/lib/pdf/builders";
+import {
+  activityToVisualBriefing,
+  isMaterialPrintableV2Enabled,
+  logPrintableAiGeneration
+} from "@/lib/printable-ai/activity-to-visual-briefing";
+import { generatePrintableImage } from "@/lib/printable-ai/image-generator";
+import { buildPrintableImagePrompt } from "@/lib/printable-ai/image-prompt-builder";
+import { imageToA4Pdf } from "@/lib/printable-ai/image-to-pdf";
 import { getAuthenticatedUser } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -31,6 +39,38 @@ export async function POST(request: Request) {
 
     if (error) throw error;
 
+    if (await isMaterialPrintableV2Enabled(user.id)) {
+      const startedAt = Date.now();
+      let briefing: Awaited<ReturnType<typeof activityToVisualBriefing>> | null = null;
+
+      try {
+        briefing = await activityToVisualBriefing(activity);
+        const prompt = await buildPrintableImagePrompt(briefing);
+        const image = await generatePrintableImage(prompt);
+        const bytes = await imageToA4Pdf(image.bytes);
+        await logPrintableAiGeneration({
+          userId: user.id,
+          activityId: activity.id,
+          briefing,
+          generationTime: Date.now() - startedAt,
+          status: "success"
+        });
+
+        return pdfResponse(bytes, activity.title);
+      } catch (v2Error) {
+        const message = v2Error instanceof Error ? v2Error.message : "Falha desconhecida no Material Imprimivel V2.";
+        console.error("Material Imprimivel V2 failed; falling back to legacy material", v2Error);
+        await logPrintableAiGeneration({
+          userId: user.id,
+          activityId: activity.id,
+          briefing,
+          generationTime: Date.now() - startedAt,
+          status: "failed",
+          errorMessage: message.slice(0, 1000)
+        });
+      }
+    }
+
     const materialPlan = getSavedPrintableMaterialPlan(activity.raw_ai_response);
 
     if (!materialPlan) {
@@ -42,23 +82,27 @@ export async function POST(request: Request) {
     }
 
     const bytes = await buildActivityMaterialPdf(activity as Parameters<typeof buildActivityMaterialPdf>[0], materialPlan);
-    const title = typeof activity.title === "string" && activity.title.trim() ? activity.title.trim() : "atividade";
-    const filename = `${title.replace(/[\\/]/g, "-")}-material.pdf`;
-    const fallbackFilename =
-      filename
-        .normalize("NFD")
-        .replace(/[\u0300-\u036f]/g, "")
-        .replace(/[^\x20-\x7E]/g, "")
-        .replace(/"/g, "")
-        .trim() || "atividade-material.pdf";
-
-    return new Response(Buffer.from(bytes), {
-      headers: {
-        "content-type": "application/pdf",
-        "content-disposition": `attachment; filename="${fallbackFilename}"; filename*=UTF-8''${encodeURIComponent(filename)}`
-      }
-    });
+    return pdfResponse(bytes, activity.title);
   } catch (error) {
     return fail(error);
   }
+}
+
+function pdfResponse(bytes: Uint8Array, titleValue?: string | null) {
+  const title = typeof titleValue === "string" && titleValue.trim() ? titleValue.trim() : "atividade";
+  const filename = `${title.replace(/[\\/]/g, "-")}-material.pdf`;
+  const fallbackFilename =
+    filename
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^\x20-\x7E]/g, "")
+      .replace(/"/g, "")
+      .trim() || "atividade-material.pdf";
+
+  return new Response(Buffer.from(bytes), {
+    headers: {
+      "content-type": "application/pdf",
+      "content-disposition": `attachment; filename="${fallbackFilename}"; filename*=UTF-8''${encodeURIComponent(filename)}`
+    }
+  });
 }
