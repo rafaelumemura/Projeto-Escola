@@ -2,6 +2,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/server";
 import type { Json } from "@/lib/database.types";
 import {
   emptyBillingUsage,
+  canUsePrintableMaterial,
   isPlanKey,
   planLimit,
   planName,
@@ -10,6 +11,10 @@ import {
   type PaidPlanKey,
   type SubscriptionStatus
 } from "@/lib/billing/plans";
+import {
+  PRINTABLE_AI_MONTHLY_LIMIT,
+  getPrintableAiMonthlyUsage
+} from "@/lib/printable-ai/activity-to-visual-briefing";
 
 type SubscriptionRow = {
   id: string;
@@ -110,9 +115,11 @@ export async function reserveActivityGeneration(userId: string): Promise<Generat
     throw Object.assign(new Error("Não foi possível reservar a geração da atividade."), { status: 500 });
   }
 
+  const usage = await subscriptionToUsage(subscription);
+
   return {
     subscriptionId: subscription.id,
-    usage: subscriptionToUsage(subscription)
+    usage
   };
 }
 
@@ -233,11 +240,16 @@ async function updateSubscriptionStatus(subscription: SubscriptionRow, status: "
   return data as SubscriptionRow;
 }
 
-function subscriptionToUsage(subscription: SubscriptionRow): BillingUsage {
+async function subscriptionToUsage(subscription: SubscriptionRow): Promise<BillingUsage> {
   const planKey = isPlanKey(subscription.plan_key) ? subscription.plan_key : null;
   const limit = subscription.activity_limit || planLimit(planKey);
   const generated = Math.max(0, subscription.generated_count || 0);
   const remaining = Math.max(0, limit - generated);
+  const printableMaterialEnabled = canUsePrintableMaterial(planKey);
+  const printableMaterialGenerated = printableMaterialEnabled
+    ? await getPrintableAiMonthlyUsage(subscription.user_id, subscription.current_period_start)
+    : 0;
+  const printableMaterialLimit = printableMaterialEnabled ? PRINTABLE_AI_MONTHLY_LIMIT : 0;
   const now = new Date();
   const periodEnd = new Date(subscription.current_period_end);
   const canGenerate = subscription.status === "active" && remaining > 0 && now <= periodEnd;
@@ -250,6 +262,10 @@ function subscriptionToUsage(subscription: SubscriptionRow): BillingUsage {
     generated_count: generated,
     activity_limit: limit,
     remaining,
+    printable_material_generated_count: printableMaterialGenerated,
+    printable_material_limit: printableMaterialLimit,
+    printable_material_remaining: Math.max(0, printableMaterialLimit - printableMaterialGenerated),
+    printable_material_enabled: printableMaterialEnabled,
     current_period_start: subscription.current_period_start,
     current_period_end: subscription.current_period_end,
     grace_ends_at: subscription.grace_ends_at,

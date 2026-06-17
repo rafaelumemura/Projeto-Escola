@@ -1,16 +1,12 @@
 import { fail, ok } from "@/lib/api/http";
 import {
-  analyzePrintableMaterialWithClaude,
   attachPrintableMaterialPlan,
   getSavedPrintableMaterialPlan
 } from "@/lib/activities/printable-material";
 import { canUsePrintableMaterial } from "@/lib/billing/plans";
 import { getBillingUsage } from "@/lib/billing/usage";
 import type { Json } from "@/lib/database.types";
-import {
-  createPrintableAiMaterialMarker,
-  isMaterialPrintableV2Enabled
-} from "@/lib/printable-ai/activity-to-visual-briefing";
+import { createPrintableAiMaterialMarker } from "@/lib/printable-ai/activity-to-visual-briefing";
 import { getAuthenticatedUser } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -38,9 +34,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
     if (material?.has_material) return ok({ material });
 
-    const regeneratedMaterial = (await isMaterialPrintableV2Enabled(user.id))
-      ? createPrintableAiMaterialMarker(activity)
-      : await analyzePrintableMaterialWithClaude(activity);
+    const regeneratedMaterial = createPrintableAiMaterialMarker(activity);
     const rawAiResponse = attachPrintableMaterialPlan(
       activity.raw_ai_response ?? activity,
       regeneratedMaterial

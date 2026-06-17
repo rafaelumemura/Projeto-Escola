@@ -32,11 +32,12 @@ type EditState = Partial<Activity> & {
 
 const pageSize = 10;
 const printableProgressMessages = [
-  "analisando atividade...",
-  "pensando no material...",
-  "gerando atividade...",
-  "disponibilizando material..."
+  "Analisando atividade...",
+  "Pensando no material...",
+  "Gerando atividade...",
+  "Disponibilizando material..."
 ];
+const printableProgressDurations = [30_000, 40_000, 60_000];
 
 function arrayText(value: Json | null | undefined) {
   return Array.isArray(value) ? value.map(String).join("\n") : typeof value === "string" ? value : "";
@@ -93,7 +94,7 @@ function hasGeneratedPrintableFile(material: PrintableMaterialPlan | null) {
 }
 
 export default function ActivitiesPage() {
-  const { supabase, usage, profile } = useAuth();
+  const { supabase, usage } = useAuth();
   const [highlightedActivityId, setHighlightedActivityId] = useState<string | null>(null);
   const [activities, setActivities] = useState<ActivityWithCollections[]>([]);
   const [collections, setCollections] = useState<Collection[]>([]);
@@ -209,11 +210,13 @@ export default function ActivitiesPage() {
   function startPrintableProgress(activityId: string) {
     clearPrintableProgress();
     setPrintableProgress({ activityId, step: 0 });
-    printableProgressTimers.current = printableProgressMessages.slice(1).map((_, index) =>
-      window.setTimeout(() => {
+    let elapsed = 0;
+    printableProgressTimers.current = printableProgressDurations.map((duration, index) => {
+      elapsed += duration;
+      return window.setTimeout(() => {
         setPrintableProgress((current) => current?.activityId === activityId ? { activityId, step: index + 1 } : current);
-      }, (index + 1) * 1400)
-    );
+      }, elapsed);
+    });
   }
 
   function openManualModal() {
@@ -392,10 +395,10 @@ export default function ActivitiesPage() {
 
     setBusy(true);
     setMessage(null);
-    const materialV2Enabled = profile?.material_printable_v2 === true;
+    const materialV2Enabled = canUsePrintableMaterial(usage?.plan_key);
     const savedMaterial = getSavedPrintableMaterialPlan(activity.raw_ai_response);
     const willGenerateV2Material = materialV2Enabled && !hasGeneratedPrintableFile(savedMaterial);
-    const minimumProgressMs = printableProgressMessages.length * 1400;
+    const minimumProgressMs = printableProgressDurations.reduce((total, duration) => total + duration, 0) + 1500;
     const progressStartedAt = Date.now();
     if (willGenerateV2Material) startPrintableProgress(activity.id);
 
@@ -423,6 +426,7 @@ export default function ActivitiesPage() {
         { activity_id: activity.id },
         materialPdfFileName(activity.title)
       );
+      window.dispatchEvent(new Event("billing-usage-changed"));
       if (willGenerateV2Material) {
         const elapsed = Date.now() - progressStartedAt;
         if (elapsed < minimumProgressMs) {
@@ -563,7 +567,7 @@ export default function ActivitiesPage() {
 
               {(() => {
                 const material = getSavedPrintableMaterialPlan(selected.raw_ai_response);
-                const materialV2Enabled = profile?.material_printable_v2 === true;
+                const materialV2Enabled = canUsePrintableMaterial(usage?.plan_key);
                 const materialGenerated = materialV2Enabled ? hasGeneratedPrintableFile(material) : Boolean(material?.has_material);
                 const materialAllowed = canUsePrintableMaterial(usage?.plan_key);
                 const materialReason = !materialAllowed
@@ -619,19 +623,6 @@ export default function ActivitiesPage() {
                   <Link href="/planos" className="font-bold text-leaf underline decoration-leaf/35 underline-offset-2">
                     Fazer upgrade do plano
                   </Link>
-                </p>
-              ) : null}
-
-              {selected &&
-              canUsePrintableMaterial(usage?.plan_key) &&
-              profile?.material_printable_v2 !== true &&
-              getSavedPrintableMaterialPlan(selected.raw_ai_response)?.has_material === false &&
-              !printableMaterialNeedsRetry(getSavedPrintableMaterialPlan(selected.raw_ai_response)) ? (
-                <p className="rounded-lg border border-ink/10 bg-white px-4 py-3 text-sm text-ink/65">
-                  {printableMaterialReason(
-                    getSavedPrintableMaterialPlan(selected.raw_ai_response),
-                    "Não foi possível preparar um material imprimível funcional para esta atividade."
-                  )}
                 </p>
               ) : null}
 

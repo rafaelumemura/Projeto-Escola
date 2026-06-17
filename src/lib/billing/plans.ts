@@ -35,6 +35,10 @@ export type BillingUsage = {
   generated_count: number;
   activity_limit: number;
   remaining: number;
+  printable_material_generated_count: number;
+  printable_material_limit: number;
+  printable_material_remaining: number;
+  printable_material_enabled: boolean;
   current_period_start: string | null;
   current_period_end: string | null;
   grace_ends_at: string | null;
@@ -84,6 +88,10 @@ export function emptyBillingUsage(message = "Nenhum plano ativo."): BillingUsage
     generated_count: 0,
     activity_limit: 0,
     remaining: 0,
+    printable_material_generated_count: 0,
+    printable_material_limit: 0,
+    printable_material_remaining: 0,
+    printable_material_enabled: false,
     current_period_start: null,
     current_period_end: null,
     grace_ends_at: null,

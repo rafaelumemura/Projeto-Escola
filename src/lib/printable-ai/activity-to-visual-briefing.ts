@@ -86,7 +86,7 @@ export async function logPrintableAiGeneration(input: {
   }
 }
 
-export async function getPrintableAiMonthlyUsage(userId: string) {
+export async function getPrintableAiMonthlyUsage(userId: string, since?: string | null) {
   const admin = createSupabaseAdminClient();
   const { count, error } = await admin
     .from("printable_ai_generations")
@@ -94,7 +94,7 @@ export async function getPrintableAiMonthlyUsage(userId: string) {
     .eq("user_id", userId)
     .eq("event_type", "generation")
     .eq("status", "success")
-    .gte("generated_at", monthStartInSaoPaulo());
+    .gte("generated_at", since || monthStartInSaoPaulo());
 
   if (error) {
     console.error("Failed to read printable AI monthly usage", error);

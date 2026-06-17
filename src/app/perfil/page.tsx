@@ -9,7 +9,7 @@ import { useAuth } from "@/components/auth/AuthProvider";
 import { useTheme } from "@/components/theme/ThemeProvider";
 import type { ThemeMode } from "@/components/theme/ThemeProvider";
 import { apiFetch } from "@/lib/api/client";
-import { PLAN_DEFINITIONS, canUsePlanningSkins, planName, type PaidPlanKey } from "@/lib/billing/plans";
+import { PLAN_DEFINITIONS, canUsePlanningSkins, planName, type BillingUsage, type PaidPlanKey } from "@/lib/billing/plans";
 import { normalizePlanningPdfSkill, planningPdfSkills, type PlanningPdfSkillKey } from "@/lib/planning/pdf-skills";
 
 type AccessRole = "admin" | "user";
@@ -245,6 +245,7 @@ export default function ProfilePage() {
             ) : null}
             <ThemeSelector theme={theme} onThemeChange={setTheme} />
             <Info label="Uso do ciclo" value={`${usage?.generated_count || 0}/${usage?.activity_limit || 0} atividades geradas`} />
+            <Info label="Material imprimível IA" value={printableMaterialUsageLabel(usage)} />
             <Info label="Vencimento" value={usage?.current_period_end ? new Date(usage.current_period_end).toLocaleDateString("pt-BR") : "-"} />
             <Info label="Acesso" value={profile?.is_admin ? "Admin" : "Usuário"} />
             <Info label="Data de cadastro" value={profile?.created_at ? new Date(profile.created_at).toLocaleDateString("pt-BR") : "-"} />
@@ -456,6 +457,12 @@ function Info({ label, value }: { label: string; value: string }) {
       <p className="mt-1 text-sm font-semibold text-ink">{value}</p>
     </div>
   );
+}
+
+function printableMaterialUsageLabel(usage: BillingUsage | null) {
+  if (!usage?.printable_material_enabled) return "Disponível no plano Completo";
+
+  return `${usage.printable_material_generated_count}/${usage.printable_material_limit} materiais gerados`;
 }
 
 function OwnerAccessPanel({

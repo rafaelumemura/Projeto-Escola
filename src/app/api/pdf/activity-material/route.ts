@@ -14,7 +14,6 @@ import {
   activityToVisualBriefing,
   createPrintableAiMaterialMarker,
   getPrintableAiMonthlyUsage,
-  isMaterialPrintableV2Enabled,
   logPrintableAiGeneration
 } from "@/lib/printable-ai/activity-to-visual-briefing";
 import { generatePrintableImage } from "@/lib/printable-ai/image-generator";
@@ -51,7 +50,7 @@ export async function POST(request: Request) {
 
     const materialPlan = getSavedPrintableMaterialPlan(activity.raw_ai_response);
 
-    if (await isMaterialPrintableV2Enabled(user.id)) {
+    if (canUsePrintableMaterial(usage.plan_key)) {
       const existingFile = getGeneratedPrintableFile(materialPlan);
 
       if (existingFile) {
@@ -70,7 +69,7 @@ export async function POST(request: Request) {
         return pdfResponse(bytes, activity.title);
       }
 
-      const monthlyUsage = await getPrintableAiMonthlyUsage(user.id);
+      const monthlyUsage = await getPrintableAiMonthlyUsage(user.id, usage.current_period_start);
       if (monthlyUsage >= PRINTABLE_AI_MONTHLY_LIMIT) {
         await logPrintableAiGeneration({
           userId: user.id,
