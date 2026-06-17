@@ -324,6 +324,9 @@ export type Database = {
           generated_at: string;
           generation_time: number | null;
           status: "success" | "failed";
+          event_type: "generation" | "download" | "blocked";
+          storage_bucket: string | null;
+          storage_path: string | null;
           error_message: string | null;
         };
         Insert: {
@@ -335,6 +338,9 @@ export type Database = {
           generated_at?: string;
           generation_time?: number | null;
           status: "success" | "failed";
+          event_type?: "generation" | "download" | "blocked";
+          storage_bucket?: string | null;
+          storage_path?: string | null;
           error_message?: string | null;
         };
         Update: {
@@ -345,6 +351,9 @@ export type Database = {
           generated_at?: string;
           generation_time?: number | null;
           status?: "success" | "failed";
+          event_type?: "generation" | "download" | "blocked";
+          storage_bucket?: string | null;
+          storage_path?: string | null;
           error_message?: string | null;
         };
       };

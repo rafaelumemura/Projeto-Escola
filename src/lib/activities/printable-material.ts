@@ -141,6 +141,19 @@ const printableUsageSummarySchema = z.object({
   suggestion: nullableMaterialTextSchema.default(null)
 });
 
+const printableGeneratedFileSchema = z
+  .object({
+    storage_bucket: materialTextSchema.default("printable-materials"),
+    storage_path: materialTextSchema.default(""),
+    content_type: z.literal("application/pdf").catch("application/pdf").default("application/pdf"),
+    generated_at: materialTextSchema.default(""),
+    provider: nullableMaterialTextSchema.default(null),
+    model: nullableMaterialTextSchema.default(null)
+  })
+  .nullable()
+  .catch(null)
+  .default(null);
+
 const printableQualityScoresSchema = z.object({
   visual_identity: z.coerce.number().min(0).max(10).catch(0).default(0),
   theme_fit: z.coerce.number().min(0).max(10).catch(0).default(0),
@@ -213,6 +226,7 @@ export const printableMaterialPlanSchema = z.object({
   usage_summary: printableUsageSummarySchema.default({}),
   quality: printableQualitySchema.nullable().catch(null).default(null),
   editorial: printableEditorialSchema.nullable().catch(null).default(null),
+  generated_file: printableGeneratedFileSchema,
   pages: z.array(printableMaterialPageSchema).catch([]).default([])
 });
 
@@ -326,6 +340,7 @@ export function normalizePrintableMaterial(raw: unknown): PrintableMaterialPlan 
       usage_summary: parsed.usage_summary,
       quality: parsed.quality,
       editorial: parsed.editorial,
+      generated_file: parsed.generated_file,
       pages: []
     };
   }

@@ -1,8 +1,8 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { ChevronLeft, ChevronRight, Eye, FileDown, Filter, FolderMinus, FolderPlus, Pencil, Plus, Printer, Save, Trash2, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Eye, FileDown, Filter, FolderMinus, FolderPlus, Loader2, Pencil, Plus, Printer, Save, Trash2, X } from "lucide-react";
 import { ProtectedPage } from "@/components/layout/ProtectedPage";
 import { ActivityView } from "@/components/ui/ActivityView";
 import {
@@ -31,6 +31,12 @@ type EditState = Partial<Activity> & {
 };
 
 const pageSize = 10;
+const printableProgressMessages = [
+  "analisando atividade...",
+  "pensando no material...",
+  "gerando atividade...",
+  "disponibilizando material..."
+];
 
 function arrayText(value: Json | null | undefined) {
   return Array.isArray(value) ? value.map(String).join("\n") : typeof value === "string" ? value : "";
@@ -82,6 +88,10 @@ function printableMaterialNeedsRetry(material: PrintableMaterialPlan | null) {
   return !material.reason || isTechnicalMaterialReason(material.reason);
 }
 
+function hasGeneratedPrintableFile(material: PrintableMaterialPlan | null) {
+  return Boolean(material?.generated_file?.storage_path);
+}
+
 export default function ActivitiesPage() {
   const { supabase, usage, profile } = useAuth();
   const [highlightedActivityId, setHighlightedActivityId] = useState<string | null>(null);
@@ -104,6 +114,8 @@ export default function ActivitiesPage() {
   const [actionCollectionId, setActionCollectionId] = useState("");
   const [manualModalOpen, setManualModalOpen] = useState(false);
   const [manualForm, setManualForm] = useState<ManualActivityForm>(initialManualActivityForm);
+  const [printableProgress, setPrintableProgress] = useState<{ activityId: string; step: number } | null>(null);
+  const printableProgressTimers = useRef<number[]>([]);
 
   useEffect(() => {
     setHighlightedActivityId(new URLSearchParams(window.location.search).get("atividade"));
@@ -182,6 +194,27 @@ export default function ActivitiesPage() {
     setActionCollectionId(selected?.primary_collection_id || selected?.collection_ids?.[0] || "");
     setPendingDeleteId(null);
   }, [selected?.id, selected?.primary_collection_id, selected?.collection_ids]);
+
+  useEffect(() => () => {
+    printableProgressTimers.current.forEach((timer) => window.clearTimeout(timer));
+    printableProgressTimers.current = [];
+  }, []);
+
+  function clearPrintableProgress() {
+    printableProgressTimers.current.forEach((timer) => window.clearTimeout(timer));
+    printableProgressTimers.current = [];
+    setPrintableProgress(null);
+  }
+
+  function startPrintableProgress(activityId: string) {
+    clearPrintableProgress();
+    setPrintableProgress({ activityId, step: 0 });
+    printableProgressTimers.current = printableProgressMessages.slice(1).map((_, index) =>
+      window.setTimeout(() => {
+        setPrintableProgress((current) => current?.activityId === activityId ? { activityId, step: index + 1 } : current);
+      }, (index + 1) * 1400)
+    );
+  }
 
   function openManualModal() {
     setManualForm(initialManualActivityForm);
@@ -359,11 +392,17 @@ export default function ActivitiesPage() {
 
     setBusy(true);
     setMessage(null);
-    try {
-      const materialV2Enabled = profile?.material_printable_v2 === true;
-      let material = getSavedPrintableMaterialPlan(activity.raw_ai_response);
+    const materialV2Enabled = profile?.material_printable_v2 === true;
+    const savedMaterial = getSavedPrintableMaterialPlan(activity.raw_ai_response);
+    const willGenerateV2Material = materialV2Enabled && !hasGeneratedPrintableFile(savedMaterial);
+    const minimumProgressMs = printableProgressMessages.length * 1400;
+    const progressStartedAt = Date.now();
+    if (willGenerateV2Material) startPrintableProgress(activity.id);
 
-      if (!material?.has_material && (materialV2Enabled || printableMaterialNeedsRetry(material))) {
+    try {
+      let material = savedMaterial;
+
+      if (!materialV2Enabled && !material?.has_material && printableMaterialNeedsRetry(material)) {
         const result = await apiFetch<{ material: PrintableMaterialPlan }>(
           supabase,
           `/api/activities/${activity.id}/printable-material`,
@@ -373,7 +412,7 @@ export default function ActivitiesPage() {
         await loadActivities();
       }
 
-      if (!material?.has_material) {
+      if (!materialV2Enabled && !material?.has_material) {
         setMessage(printableMaterialReason(material, "Esta atividade não possui material imprimível disponível."));
         return;
       }
@@ -384,9 +423,17 @@ export default function ActivitiesPage() {
         { activity_id: activity.id },
         materialPdfFileName(activity.title)
       );
+      if (willGenerateV2Material) {
+        const elapsed = Date.now() - progressStartedAt;
+        if (elapsed < minimumProgressMs) {
+          await new Promise((resolve) => window.setTimeout(resolve, minimumProgressMs - elapsed));
+        }
+      }
+      await loadActivities();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Não foi possível preparar o material imprimível.");
     } finally {
+      clearPrintableProgress();
       setBusy(false);
     }
   }
@@ -517,35 +564,22 @@ export default function ActivitiesPage() {
               {(() => {
                 const material = getSavedPrintableMaterialPlan(selected.raw_ai_response);
                 const materialV2Enabled = profile?.material_printable_v2 === true;
-                const materialReady = Boolean(material?.has_material);
+                const materialGenerated = materialV2Enabled ? hasGeneratedPrintableFile(material) : Boolean(material?.has_material);
                 const materialAllowed = canUsePrintableMaterial(usage?.plan_key);
                 const materialReason = !materialAllowed
                   ? "Material imprimível disponível nos planos Completo e Pro."
                   : printableMaterialReason(material, "Esta atividade ainda não possui análise de material imprimível salva.");
-                const materialRetryable = materialAllowed && (materialV2Enabled || printableMaterialNeedsRetry(material));
-                const canDownloadMaterial = materialAllowed && (materialV2Enabled || materialReady || materialRetryable);
-                const summary = material?.usage_summary;
-                const pageCount = materialV2Enabled ? summary?.page_count || 1 : summary?.page_count || material?.pages.length || 0;
+                const materialRetryable = materialAllowed && !materialV2Enabled && printableMaterialNeedsRetry(material);
+                const canDownloadMaterial = materialAllowed && (materialV2Enabled || materialGenerated || materialRetryable);
+                const isGeneratingMaterial = printableProgress?.activityId === selected.id;
+                const printableButtonText = isGeneratingMaterial
+                  ? printableProgressMessages[printableProgress.step] || printableProgressMessages[printableProgressMessages.length - 1]
+                  : materialGenerated
+                    ? "Baixar material"
+                    : "Gerar material";
 
                 return (
               <>
-              {canDownloadMaterial ? (
-                <div className="rounded-lg border border-leaf/20 bg-mint/35 p-4">
-                  <p className="font-bold text-ink">Material imprimível gerado</p>
-                  <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm font-semibold text-ink/65">
-                    <span>{pageCount} {pageCount === 1 ? "página" : "páginas"}</span>
-                    <span>{summary?.color_mode || "colorido"}</span>
-                    <span>Formato {summary?.paper_size || "A4"}</span>
-                    {summary?.techniques?.length ? <span>Inclui {summary.techniques.join(", ")}</span> : null}
-                    {summary?.ideal_for ? <span>Ideal para {summary.ideal_for}</span> : null}
-                  </div>
-                  {summary?.suggestion ? (
-                    <p className="mt-3 text-sm text-ink/65">
-                      <strong className="text-ink">Sugestão de uso:</strong> {summary.suggestion}
-                    </p>
-                  ) : null}
-                </div>
-              ) : null}
               <div className="grid grid-cols-2 gap-2 rounded-lg border border-ink/10 bg-white p-3 shadow-soft sm:flex sm:flex-wrap sm:border-0 sm:bg-transparent sm:p-0 sm:shadow-none">
                 <button onClick={() => startEdit(selected)} className="btn-secondary">
                   <Pencil size={16} />
@@ -556,13 +590,13 @@ export default function ActivitiesPage() {
                   PDF
                 </button>
                 <button
-                  disabled={busy || !canDownloadMaterial}
+                  disabled={busy || isGeneratingMaterial || !canDownloadMaterial}
                   onClick={() => downloadPrintableMaterial(selected)}
                   className="btn-secondary col-span-2 sm:col-span-1 disabled:cursor-not-allowed disabled:opacity-50"
                   title={canDownloadMaterial ? "Baixar material imprimível desta atividade." : materialReason}
                 >
-                  <Printer size={16} />
-                  {materialReady || materialV2Enabled ? "Material imprimível" : "Preparar material imprimível"}
+                  {isGeneratingMaterial ? <Loader2 size={16} className="animate-spin" /> : <Printer size={16} />}
+                  {printableButtonText}
                 </button>
                 <button
                   disabled={busy}
@@ -603,7 +637,7 @@ export default function ActivitiesPage() {
 
               {selected && canUsePrintableMaterial(usage?.plan_key) && !getSavedPrintableMaterialPlan(selected.raw_ai_response) ? (
                 <p className="rounded-lg border border-ink/10 bg-white px-4 py-3 text-sm text-ink/65">
-                  Esta atividade ainda não possui material salvo. Use o botão “Preparar material imprimível” para gerar e baixar sem consumir uma nova atividade do plano.
+                  Esta atividade ainda não possui material salvo. Use o botão “Gerar material” para criar o arquivo imprimível.
                 </p>
               ) : null}
 

@@ -13,6 +13,7 @@ type AnthropicResponse = {
 };
 
 export const PRINTABLE_AI_PROMPT_VERSION = "printable-system-prompt-v1";
+export const PRINTABLE_AI_MONTHLY_LIMIT = 50;
 
 export type ActivityForVisualBriefing = {
   id?: string | null;
@@ -61,6 +62,9 @@ export async function logPrintableAiGeneration(input: {
   briefing: PrintableVisualBriefing | null;
   generationTime: number;
   status: "success" | "failed";
+  eventType?: "generation" | "download" | "blocked";
+  storageBucket?: string | null;
+  storagePath?: string | null;
   errorMessage?: string | null;
 }) {
   const admin = createSupabaseAdminClient();
@@ -71,12 +75,33 @@ export async function logPrintableAiGeneration(input: {
     prompt_version: PRINTABLE_AI_PROMPT_VERSION,
     generation_time: input.generationTime,
     status: input.status,
+    event_type: input.eventType || "generation",
+    storage_bucket: input.storageBucket || null,
+    storage_path: input.storagePath || null,
     error_message: input.errorMessage || null
   });
 
   if (error) {
     console.error("Failed to log printable AI generation", error);
   }
+}
+
+export async function getPrintableAiMonthlyUsage(userId: string) {
+  const admin = createSupabaseAdminClient();
+  const { count, error } = await admin
+    .from("printable_ai_generations")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", userId)
+    .eq("event_type", "generation")
+    .eq("status", "success")
+    .gte("generated_at", monthStartInSaoPaulo());
+
+  if (error) {
+    console.error("Failed to read printable AI monthly usage", error);
+    throw error;
+  }
+
+  return count || 0;
 }
 
 export async function activityToVisualBriefing(activity: ActivityForVisualBriefing): Promise<PrintableVisualBriefing> {
@@ -161,6 +186,7 @@ export function createPrintableAiMaterialMarker(activity: ActivityForVisualBrief
       suggestion: "Baixe o PDF para imprimir a folha A4 colorida."
     },
     quality: null,
+    generated_file: null,
     editorial: {
       theme: null,
       age: parseAge(activity.age_range),
@@ -175,6 +201,18 @@ export function createPrintableAiMaterialMarker(activity: ActivityForVisualBrief
     },
     pages: []
   };
+}
+
+function monthStartInSaoPaulo(now = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit"
+  }).formatToParts(now);
+  const year = parts.find((part) => part.type === "year")?.value || String(now.getUTCFullYear());
+  const month = parts.find((part) => part.type === "month")?.value || String(now.getUTCMonth() + 1).padStart(2, "0");
+
+  return new Date(`${year}-${month}-01T03:00:00.000Z`).toISOString();
 }
 
 function normalizeBriefing(value: Record<string, unknown>, activity: ActivityForVisualBriefing): PrintableVisualBriefing {

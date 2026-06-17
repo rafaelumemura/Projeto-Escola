@@ -1,24 +1,34 @@
 import { z } from "zod";
 import { fail, readJson } from "@/lib/api/http";
-import { getSavedPrintableMaterialPlan } from "@/lib/activities/printable-material";
+import {
+  attachPrintableMaterialPlan,
+  getSavedPrintableMaterialPlan,
+  type PrintableMaterialPlan
+} from "@/lib/activities/printable-material";
 import { canUsePrintableMaterial } from "@/lib/billing/plans";
 import { getBillingUsage } from "@/lib/billing/usage";
+import type { Json } from "@/lib/database.types";
 import { buildActivityMaterialPdf } from "@/lib/pdf/builders";
 import {
+  PRINTABLE_AI_MONTHLY_LIMIT,
   activityToVisualBriefing,
+  createPrintableAiMaterialMarker,
+  getPrintableAiMonthlyUsage,
   isMaterialPrintableV2Enabled,
   logPrintableAiGeneration
 } from "@/lib/printable-ai/activity-to-visual-briefing";
 import { generatePrintableImage } from "@/lib/printable-ai/image-generator";
 import { buildPrintableImagePrompt } from "@/lib/printable-ai/image-prompt-builder";
 import { imageToA4Pdf } from "@/lib/printable-ai/image-to-pdf";
-import { getAuthenticatedUser } from "@/lib/supabase/server";
+import { createSupabaseAdminClient, getAuthenticatedUser } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 
 const payloadSchema = z.object({
   activity_id: z.string().uuid()
 });
+
+const printableMaterialsBucket = "printable-materials";
 
 export async function POST(request: Request) {
   try {
@@ -39,7 +49,44 @@ export async function POST(request: Request) {
 
     if (error) throw error;
 
+    const materialPlan = getSavedPrintableMaterialPlan(activity.raw_ai_response);
+
     if (await isMaterialPrintableV2Enabled(user.id)) {
+      const existingFile = getGeneratedPrintableFile(materialPlan);
+
+      if (existingFile) {
+        const bytes = await downloadStoredPrintablePdf(existingFile.storage_bucket, existingFile.storage_path);
+        await logPrintableAiGeneration({
+          userId: user.id,
+          activityId: activity.id,
+          briefing: null,
+          generationTime: 0,
+          status: "success",
+          eventType: "download",
+          storageBucket: existingFile.storage_bucket,
+          storagePath: existingFile.storage_path
+        });
+
+        return pdfResponse(bytes, activity.title);
+      }
+
+      const monthlyUsage = await getPrintableAiMonthlyUsage(user.id);
+      if (monthlyUsage >= PRINTABLE_AI_MONTHLY_LIMIT) {
+        await logPrintableAiGeneration({
+          userId: user.id,
+          activityId: activity.id,
+          briefing: null,
+          generationTime: 0,
+          status: "failed",
+          eventType: "blocked",
+          errorMessage: `Limite mensal de ${PRINTABLE_AI_MONTHLY_LIMIT} materiais imprimiveis atingido.`
+        });
+        throw Object.assign(
+          new Error(`Você atingiu o limite mensal de ${PRINTABLE_AI_MONTHLY_LIMIT} materiais imprimíveis. Os materiais já gerados continuam disponíveis para download.`),
+          { status: 429 }
+        );
+      }
+
       const startedAt = Date.now();
       let briefing: Awaited<ReturnType<typeof activityToVisualBriefing>> | null = null;
 
@@ -48,12 +95,36 @@ export async function POST(request: Request) {
         const prompt = await buildPrintableImagePrompt(briefing);
         const image = await generatePrintableImage(prompt);
         const bytes = await imageToA4Pdf(image.bytes);
+        const generatedFile = await uploadGeneratedPrintablePdf({
+          userId: user.id,
+          activityId: activity.id,
+          bytes,
+          provider: image.provider,
+          model: image.model
+        });
+        const printableMaterial = {
+          ...(materialPlan || createPrintableAiMaterialMarker(activity)),
+          has_material: true,
+          generated_file: generatedFile
+        } satisfies PrintableMaterialPlan;
+        const rawAiResponse = attachPrintableMaterialPlan(activity.raw_ai_response ?? activity, printableMaterial);
+        const { error: updateError } = await supabase
+          .from("activities")
+          .update({ raw_ai_response: rawAiResponse as Json })
+          .eq("id", activity.id)
+          .eq("user_id", user.id);
+
+        if (updateError) throw updateError;
+
         await logPrintableAiGeneration({
           userId: user.id,
           activityId: activity.id,
           briefing,
           generationTime: Date.now() - startedAt,
-          status: "success"
+          status: "success",
+          eventType: "generation",
+          storageBucket: generatedFile.storage_bucket,
+          storagePath: generatedFile.storage_path
         });
 
         return pdfResponse(bytes, activity.title);
@@ -66,12 +137,11 @@ export async function POST(request: Request) {
           briefing,
           generationTime: Date.now() - startedAt,
           status: "failed",
+          eventType: "generation",
           errorMessage: message.slice(0, 1000)
         });
       }
     }
-
-    const materialPlan = getSavedPrintableMaterialPlan(activity.raw_ai_response);
 
     if (!materialPlan) {
       throw Object.assign(new Error("Esta atividade ainda não possui material imprimível salvo."), { status: 422 });
@@ -86,6 +156,69 @@ export async function POST(request: Request) {
   } catch (error) {
     return fail(error);
   }
+}
+
+function getGeneratedPrintableFile(materialPlan: PrintableMaterialPlan | null) {
+  const file = materialPlan?.generated_file;
+  if (!file?.storage_path) return null;
+
+  return {
+    storage_bucket: file.storage_bucket || printableMaterialsBucket,
+    storage_path: file.storage_path
+  };
+}
+
+async function downloadStoredPrintablePdf(bucket: string, path: string) {
+  const admin = createSupabaseAdminClient();
+  const { data, error } = await admin.storage.from(bucket).download(path);
+
+  if (error || !data) {
+    throw Object.assign(new Error("Não foi possível baixar o material imprimível salvo."), { status: 502 });
+  }
+
+  return new Uint8Array(await data.arrayBuffer());
+}
+
+async function uploadGeneratedPrintablePdf(input: {
+  userId: string;
+  activityId: string;
+  bytes: Uint8Array;
+  provider: string;
+  model: string;
+}) {
+  const admin = createSupabaseAdminClient();
+  await ensurePrintableMaterialsBucket(admin);
+  const storagePath = `${input.userId}/${input.activityId}/material-${Date.now()}.pdf`;
+  const { error } = await admin.storage.from(printableMaterialsBucket).upload(storagePath, Buffer.from(input.bytes), {
+    contentType: "application/pdf",
+    upsert: false
+  });
+
+  if (error) throw error;
+
+  return {
+    storage_bucket: printableMaterialsBucket,
+    storage_path: storagePath,
+    content_type: "application/pdf" as const,
+    generated_at: new Date().toISOString(),
+    provider: input.provider,
+    model: input.model
+  };
+}
+
+async function ensurePrintableMaterialsBucket(admin: ReturnType<typeof createSupabaseAdminClient>) {
+  const { data: buckets, error: listError } = await admin.storage.listBuckets();
+  if (listError) throw listError;
+
+  if (buckets?.some((bucket) => bucket.name === printableMaterialsBucket)) return;
+
+  const { error: createError } = await admin.storage.createBucket(printableMaterialsBucket, {
+    public: false,
+    fileSizeLimit: 10 * 1024 * 1024,
+    allowedMimeTypes: ["application/pdf"]
+  });
+
+  if (createError) throw createError;
 }
 
 function pdfResponse(bytes: Uint8Array, titleValue?: string | null) {

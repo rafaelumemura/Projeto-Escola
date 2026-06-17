@@ -102,6 +102,7 @@ async function analyzePrintableMaterialForSave(
       },
       quality: null,
       editorial: null,
+      generated_file: null,
       pages: []
     };
   }
