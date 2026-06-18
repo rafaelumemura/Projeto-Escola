@@ -214,7 +214,13 @@ function createCachedPrintableMaterialPlan(
   briefing: PrintableVisualBriefing,
   generatedFile: PrintableGeneratedFile
 ): PrintableMaterialPlan {
-  const base = materialPlan || createPrintableAiMaterialMarker(activity);
+  const fallback = createPrintableAiMaterialMarker(activity);
+  const fallbackEditorial = fallback.editorial;
+  if (!fallbackEditorial) {
+    throw new Error("Nao foi possivel preparar os metadados editoriais do material imprimivel.");
+  }
+  const base = materialPlan || fallback;
+  const baseEditorial = base.editorial || fallbackEditorial;
 
   return {
     ...base,
@@ -223,17 +229,17 @@ function createCachedPrintableMaterialPlan(
     reason: "Material imprimivel reutilizado por similaridade pedagogica.",
     generated_file: generatedFile,
     editorial: {
-      ...base.editorial,
+      ...baseEditorial,
       theme: briefing.tema,
       age: briefing.idade,
       objective: briefing.objetivo_pedagogico,
       area: briefing.area,
       keywords: briefing.conceitos_principais,
       printable_type: "gpt-image-v2-cache",
-      required_asset_types: base.editorial.required_asset_types || [],
-      assets: base.editorial.assets || [],
-      html: base.editorial.html || null,
-      composition: base.editorial.composition ?? null
+      required_asset_types: baseEditorial.required_asset_types || [],
+      assets: baseEditorial.assets || [],
+      html: baseEditorial.html || null,
+      composition: baseEditorial.composition ?? null
     }
   };
 }
