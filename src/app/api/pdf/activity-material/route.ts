@@ -229,7 +229,11 @@ function createCachedPrintableMaterialPlan(
       objective: briefing.objetivo_pedagogico,
       area: briefing.area,
       keywords: briefing.conceitos_principais,
-      printable_type: "gpt-image-v2-cache"
+      printable_type: "gpt-image-v2-cache",
+      required_asset_types: base.editorial.required_asset_types || [],
+      assets: base.editorial.assets || [],
+      html: base.editorial.html || null,
+      composition: base.editorial.composition ?? null
     }
   };
 }
