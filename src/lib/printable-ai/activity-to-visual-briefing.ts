@@ -12,7 +12,7 @@ type AnthropicResponse = {
   content?: Array<AnthropicTextBlock | { type: string; [key: string]: unknown }>;
 };
 
-export const PRINTABLE_AI_PROMPT_VERSION = "printable-system-prompt-v2";
+export const PRINTABLE_AI_PROMPT_VERSION = "printable-system-prompt-v3";
 export const PRINTABLE_AI_MONTHLY_LIMIT = 50;
 
 export type ActivityForVisualBriefing = {

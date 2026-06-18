@@ -24,6 +24,8 @@ Reforce:
 - nao inserir texto pequeno demais;
 - nao inserir explicacoes para professor;
 - nao inserir marcas d'agua;
+- elementos que a crianca deve pintar, contar, ligar, recortar, colar, completar, classificar ou ordenar devem ser em outline preto/cinza com preenchimento branco;
+- use cores nos elementos decorativos, moldura, titulo e ambientacao, mas nao nos itens que fazem parte da resposta da atividade;
 - a atividade deve ocupar bem a pagina.
 `;
 }
