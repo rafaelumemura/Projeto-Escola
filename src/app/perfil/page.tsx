@@ -414,6 +414,18 @@ export default function ProfilePage() {
               com o seu e-mail de cadastro no assunto.
               <br />
               *Nosso prazo de retorno é de até 48h úteis.
+              <br />
+              <br />
+              Ou se preferir, entre em contato conosco pelo WhatsApp através do número{" "}
+              <a
+                href="https://wa.me/5511962751539"
+                target="_blank"
+                rel="noreferrer"
+                className="font-bold text-leaf underline underline-offset-4"
+              >
+                (11) 96275-1539
+              </a>{" "}
+              (Obs: Apenas mensagens de texto)
             </p>
           </section>
         </section>
