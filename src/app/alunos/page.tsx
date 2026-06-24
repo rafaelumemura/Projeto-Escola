@@ -61,11 +61,12 @@ export default function StudentsPage() {
   const [editingStudent, setEditingStudent] = useState<StudentRow | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [confirmDeleteClassId, setConfirmDeleteClassId] = useState<string | null>(null);
   const [confirmInactiveStudentId, setConfirmInactiveStudentId] = useState<string | null>(null);
 
   const [classForm, setClassForm] = useState({ name: "", shift: "", school_year: "", description: "" });
-  const [studentForm, setStudentForm] = useState({ name: "", birth_date: "", general_notes: "", status: "active" as "active" | "inactive" });
+  const [studentForm, setStudentForm] = useState({ name: "", birth_date: "", general_notes: "" });
   const [observationForm, setObservationForm] = useState({
     observation_type: "class" as ObservationRow["observation_type"],
     applies_to: "all_class" as ObservationRow["applies_to"],
@@ -78,24 +79,57 @@ export default function StudentsPage() {
     student_ids: [] as string[]
   });
 
-  const selectedClass = classes.find((classItem) => classItem.id === selectedClassId) || null;
+  const years = useMemo(
+    () => buildYearOptions([
+      ...classes.map((item) => item.created_at),
+      ...classes.map((item) => item.school_year),
+      ...students.map((item) => item.created_at),
+      ...observations.map((item) => item.date),
+      ...reports.map((item) => item.generated_at)
+    ]),
+    [classes, observations, reports, students]
+  );
+  const filteredClassIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const classItem of classes) {
+      if (recordYear(classItem.created_at) === selectedYear || classItem.school_year?.includes(String(selectedYear))) {
+        ids.add(classItem.id);
+      }
+    }
+    for (const student of students) {
+      if (recordYear(student.created_at) === selectedYear) ids.add(student.class_id);
+    }
+    for (const observation of observations) {
+      if (recordYear(observation.date) === selectedYear) ids.add(observation.class_id);
+    }
+    for (const report of reports) {
+      if (recordYear(report.generated_at) === selectedYear) ids.add(report.class_id);
+    }
+    return ids;
+  }, [classes, observations, reports, selectedYear, students]);
+  const filteredClasses = useMemo(
+    () => classes.filter((classItem) => filteredClassIds.has(classItem.id)),
+    [classes, filteredClassIds]
+  );
+  const selectedClass = filteredClasses.find((classItem) => classItem.id === selectedClassId) || null;
   const classStudents = useMemo(
-    () => students.filter((student) => student.class_id === selectedClassId).sort((a, b) => a.name.localeCompare(b.name)),
+    () => students.filter((student) => student.class_id === selectedClassId && student.status === "active").sort((a, b) => a.name.localeCompare(b.name)),
     [selectedClassId, students]
   );
-  const activeClassStudents = classStudents.filter((student) => student.status === "active");
+  const activeClassStudents = classStudents;
   const classObservations = useMemo(
-    () => observations.filter((observation) => observation.class_id === selectedClassId).slice(0, 12),
-    [observations, selectedClassId]
+    () => observations.filter((observation) => observation.class_id === selectedClassId && recordYear(observation.date) === selectedYear).slice(0, 12),
+    [observations, selectedClassId, selectedYear]
   );
   const selectedStudentObservationIds = new Set(
     links.filter((link) => link.student_id === selectedStudent?.id).map((link) => link.observation_id)
   );
   const selectedStudentObservations = observations.filter((observation) =>
     observation.class_id === selectedStudent?.class_id &&
+    recordYear(observation.date) === selectedYear &&
     (observation.applies_to === "all_class" || selectedStudentObservationIds.has(observation.id))
   );
-  const selectedStudentReports = reports.filter((report) => report.student_id === selectedStudent?.id);
+  const selectedStudentReports = reports.filter((report) => report.student_id === selectedStudent?.id && recordYear(report.generated_at) === selectedYear);
 
   useEffect(() => {
     loadAll().catch((error) => setMessage(error instanceof Error ? error.message : "Não foi possível carregar alunos."));
@@ -103,8 +137,20 @@ export default function StudentsPage() {
   }, [supabase]);
 
   useEffect(() => {
-    if (!selectedClassId && classes[0]) setSelectedClassId(classes[0].id);
-  }, [classes, selectedClassId]);
+    if (!years.includes(selectedYear)) setSelectedYear(years[0] || new Date().getFullYear());
+  }, [selectedYear, years]);
+
+  useEffect(() => {
+    if (!filteredClasses.length) {
+      setSelectedClassId("");
+      setSelectedStudent(null);
+      return;
+    }
+    if (!selectedClassId || !filteredClasses.some((classItem) => classItem.id === selectedClassId)) {
+      setSelectedClassId(filteredClasses[0].id);
+      setSelectedStudent(null);
+    }
+  }, [filteredClasses, selectedClassId]);
 
   async function loadAll() {
     const [classesResponse, studentsResponse, observationsResponse, reportsResponse] = await Promise.all([
@@ -153,8 +199,7 @@ export default function StudentsPage() {
     setStudentForm({
       name: student?.name || "",
       birth_date: student?.birth_date || "",
-      general_notes: student?.general_notes || "",
-      status: student?.status || "active"
+      general_notes: student?.general_notes || ""
     });
     setModal("student");
   }
@@ -249,7 +294,7 @@ export default function StudentsPage() {
         name: studentForm.name.trim(),
         birth_date: studentForm.birth_date || null,
         general_notes: studentForm.general_notes.trim() || null,
-        status: studentForm.status
+        status: "active" as const
       };
 
       if (editingStudent) {
@@ -275,13 +320,12 @@ export default function StudentsPage() {
     setBusy(true);
     setMessage(null);
     try {
-      const nextStatus = student.status === "active" ? "inactive" : "active";
-      const { error } = await supabase.from("students").update({ status: nextStatus }).eq("id", student.id);
+      const { error } = await supabase.from("students").update({ status: "inactive" }).eq("id", student.id);
       if (error) throw error;
       setConfirmInactiveStudentId(null);
       await loadAll();
-      setSelectedStudent((current) => current?.id === student.id ? { ...student, status: nextStatus } : current);
-      setMessage(nextStatus === "active" ? "Aluno reativado." : "Aluno inativado.");
+      setSelectedStudent((current) => current?.id === student.id ? null : current);
+      setMessage("Aluno inativado.");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Não foi possível atualizar o status.");
     } finally {
@@ -374,10 +418,12 @@ export default function StudentsPage() {
     >
       {message ? <p className="mb-4 rounded-lg border border-leaf/15 bg-mint px-4 py-3 text-sm font-semibold text-leaf">{message}</p> : null}
 
+      <YearFilter years={years} selectedYear={selectedYear} onChange={setSelectedYear} />
+
       <section className="grid gap-4 lg:grid-cols-[360px_1fr]">
         <div className="space-y-4">
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
-            {classes.map((classItem) => {
+            {filteredClasses.map((classItem) => {
               const classCount = students.filter((student) => student.class_id === classItem.id && student.status === "active").length;
               const preview = students
                 .filter((student) => student.class_id === classItem.id)
@@ -422,9 +468,9 @@ export default function StudentsPage() {
             })}
           </div>
 
-          {!classes.length ? (
+          {!filteredClasses.length ? (
             <div className="panel p-5 text-sm leading-6 text-ink/65">
-              Crie sua primeira turma para começar a cadastrar alunos e observações.
+              Nenhuma turma ou aluno encontrado em {selectedYear}.
             </div>
           ) : null}
         </div>
@@ -460,30 +506,29 @@ export default function StudentsPage() {
                     {classStudents.map((student) => (
                       <div key={student.id} className={`p-4 ${selectedStudent?.id === student.id ? "bg-mint/45" : ""}`}>
                         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                          <button type="button" onClick={() => setSelectedStudent(student)} className="text-left">
+                          <button type="button" onClick={() => setSelectedStudent(student)} className="min-w-0 text-left">
                             <h4 className="font-bold text-ink">{student.name}</h4>
                             <p className="mt-1 text-sm text-ink/55">
-                              {student.birth_date ? `Nascimento: ${formatDate(student.birth_date)} • ` : ""}
-                              {student.status === "active" ? "Ativo" : "Inativo"}
+                              {student.birth_date ? `Nascimento: ${formatDate(student.birth_date)}` : "Nascimento não informado"}
                             </p>
                           </button>
-                          <div className="flex flex-wrap gap-2">
-                            <button type="button" onClick={() => openObservationModal(student)} className="btn-secondary px-3 py-2 text-xs">
+                          <div className="flex shrink-0 flex-nowrap gap-2 overflow-x-auto">
+                            <button type="button" onClick={() => openObservationModal(student)} className="btn-secondary whitespace-nowrap px-3 py-2 text-xs">
                               <BookOpen size={14} />
                               Observação
                             </button>
-                            <button type="button" onClick={() => openStudentModal(student)} className="btn-secondary px-3 py-2 text-xs">
+                            <button type="button" onClick={() => openStudentModal(student)} className="btn-secondary whitespace-nowrap px-3 py-2 text-xs">
                               <Edit3 size={14} />
                               Editar
                             </button>
                             <button
                               type="button"
                               onClick={() => confirmInactiveStudentId === student.id ? inactiveStudent(student) : setConfirmInactiveStudentId(student.id)}
-                              className="btn-danger px-3 py-2 text-xs"
+                              className="btn-danger whitespace-nowrap px-3 py-2 text-xs"
                               disabled={busy}
                             >
                               <X size={14} />
-                              {confirmInactiveStudentId === student.id ? "Confirmar" : student.status === "active" ? "Inativar" : "Reativar"}
+                              {confirmInactiveStudentId === student.id ? "Confirmar" : "Inativar"}
                             </button>
                           </div>
                         </div>
@@ -553,15 +598,9 @@ export default function StudentsPage() {
             <Field label="Nome">
               <input required value={studentForm.name} onChange={(event) => setStudentForm((current) => ({ ...current, name: event.target.value }))} className="input" />
             </Field>
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div>
               <Field label="Data de nascimento">
                 <input type="date" value={studentForm.birth_date} onChange={(event) => setStudentForm((current) => ({ ...current, birth_date: event.target.value }))} className="input" />
-              </Field>
-              <Field label="Status">
-                <select value={studentForm.status} onChange={(event) => setStudentForm((current) => ({ ...current, status: event.target.value as "active" | "inactive" }))} className="input">
-                  <option value="active">Ativo</option>
-                  <option value="inactive">Inativo</option>
-                </select>
               </Field>
             </div>
             <Field label="Observação geral">
@@ -806,8 +845,51 @@ function ModalActions({ busy, onCancel }: { busy: boolean; onCancel: () => void 
   );
 }
 
+function YearFilter({
+  years,
+  selectedYear,
+  onChange
+}: {
+  years: number[];
+  selectedYear: number;
+  onChange: (year: number) => void;
+}) {
+  return (
+    <div className="mb-5 flex flex-wrap gap-2">
+      {years.map((year) => (
+        <button
+          key={year}
+          type="button"
+          onClick={() => onChange(year)}
+          className={`rounded-full border px-4 py-2 text-sm font-bold transition ${
+            selectedYear === year ? "border-leaf bg-mint text-leaf" : "border-ink/10 bg-white text-ink/60 hover:border-leaf/35"
+          }`}
+        >
+          {year}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function shouldAttachStudents(appliesTo: ObservationRow["applies_to"]) {
   return appliesTo === "selected_students" || appliesTo === "individual_student";
+}
+
+function buildYearOptions(values: Array<string | null | undefined>) {
+  const years = new Set<number>([new Date().getFullYear()]);
+  for (const value of values) {
+    const year = recordYear(value);
+    if (year) years.add(year);
+  }
+  return Array.from(years).sort((a, b) => b - a);
+}
+
+function recordYear(value?: string | null) {
+  if (!value) return null;
+  const match = value.match(/(?:19|20)\d{2}/);
+  const year = match ? Number(match[0]) : Number(value.slice(0, 4));
+  return Number.isFinite(year) && year > 1900 ? year : null;
 }
 
 function formatDate(value: string) {

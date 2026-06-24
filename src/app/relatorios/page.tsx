@@ -44,15 +44,47 @@ export default function ReportsPage() {
   const [periodEnd, setPeriodEnd] = useState(today());
   const [tone, setTone] = useState("Acolhedor");
   const [busy, setBusy] = useState(false);
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [dataLoaded, setDataLoaded] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [resultReports, setResultReports] = useState<Array<{ student: StudentRow; report: ReportRow; cached: boolean }>>([]);
 
+  const years = useMemo(
+    () => buildYearOptions([
+      ...classes.map((item) => item.created_at),
+      ...classes.map((item) => item.school_year),
+      ...students.map((item) => item.created_at),
+      ...reports.map((item) => item.generated_at)
+    ]),
+    [classes, reports, students]
+  );
+  const filteredClassIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const classItem of classes) {
+      if (recordYear(classItem.created_at) === selectedYear || classItem.school_year?.includes(String(selectedYear))) {
+        ids.add(classItem.id);
+      }
+    }
+    for (const student of students) {
+      if (recordYear(student.created_at) === selectedYear) ids.add(student.class_id);
+    }
+    for (const report of reports) {
+      if (recordYear(report.generated_at) === selectedYear) ids.add(report.class_id);
+    }
+    return ids;
+  }, [classes, reports, selectedYear, students]);
+  const filteredClasses = useMemo(
+    () => classes.filter((classItem) => filteredClassIds.has(classItem.id)),
+    [classes, filteredClassIds]
+  );
+  const filteredReports = useMemo(
+    () => reports.filter((report) => recordYear(report.generated_at) === selectedYear),
+    [reports, selectedYear]
+  );
   const classStudents = useMemo(
     () => students.filter((student) => student.class_id === classId && student.status === "active"),
     [classId, students]
   );
-  const selectedReportCard = reportCards.find((card) => card.type === selectedType) || reportCards[0];
   const isClassBatch = selectedType === "Relatório da turma";
 
   useEffect(() => {
@@ -69,8 +101,20 @@ export default function ReportsPage() {
   }, [supabase]);
 
   useEffect(() => {
-    if (!classId && classes[0]) setClassId(classes[0].id);
-  }, [classId, classes]);
+    if (!years.includes(selectedYear)) setSelectedYear(years[0] || new Date().getFullYear());
+  }, [selectedYear, years]);
+
+  useEffect(() => {
+    if (!filteredClasses.length) {
+      setClassId("");
+      setStudentId("");
+      return;
+    }
+    if (!classId || !filteredClasses.some((classItem) => classItem.id === classId)) {
+      setClassId(filteredClasses[0].id);
+      setStudentId("");
+    }
+  }, [classId, filteredClasses]);
 
   useEffect(() => {
     if (periodKind !== "custom") {
@@ -151,6 +195,8 @@ export default function ReportsPage() {
     >
       {message ? <p className="mb-4 rounded-lg border border-leaf/15 bg-mint px-4 py-3 text-sm font-semibold text-leaf">{message}</p> : null}
 
+      <YearFilter years={years} selectedYear={selectedYear} onChange={setSelectedYear} />
+
       <section className="space-y-5">
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {reportCards.map((card) => (
@@ -173,14 +219,6 @@ export default function ReportsPage() {
         </div>
 
         <section className="panel p-5">
-          <p className="label">Resultado</p>
-          <h2 className="mt-1 text-xl font-bold text-ink">{selectedReportCard.type}</h2>
-          <p className="mt-2 text-sm leading-6 text-ink/60">
-            Relatório gerado a partir das observações registradas pela professora.
-          </p>
-        </section>
-
-        <section className="panel p-5">
           <div className="mb-4">
             <p className="label">Fluxo de geração</p>
             <h2 className="mt-1 text-xl font-bold text-ink">{selectedType}</h2>
@@ -194,7 +232,7 @@ export default function ReportsPage() {
               <Field label="Turma">
                 <select value={classId} onChange={(event) => setClassId(event.target.value)} className="input" required>
                   <option value="">Selecione</option>
-                  {classes.map((classItem) => <option key={classItem.id} value={classItem.id}>{classItem.name}</option>)}
+                  {filteredClasses.map((classItem) => <option key={classItem.id} value={classItem.id}>{classItem.name}</option>)}
                 </select>
               </Field>
 
@@ -235,7 +273,7 @@ export default function ReportsPage() {
               A IA não é chamada ao salvar observações ou abrir perfis. Ela só será usada ao gerar relatórios.
             </div>
 
-            <button type="submit" disabled={busy || !classes.length} className="btn-primary disabled:opacity-60">
+            <button type="submit" disabled={busy || !filteredClasses.length} className="btn-primary disabled:opacity-60">
               {busy ? <Loader2 size={17} className="animate-spin" /> : <Sparkles size={17} />}
               {isClassBatch ? "Gerar relatórios da turma" : "Gerar relatório"}
             </button>
@@ -253,7 +291,7 @@ export default function ReportsPage() {
         <section className="panel p-5">
           <h3 className="font-bold text-ink">Relatórios recentes</h3>
           <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
-            {reports.slice(0, 6).map((report) => {
+            {filteredReports.slice(0, 6).map((report) => {
               const student = students.find((item) => item.id === report.student_id);
               return (
                 <div key={report.id} className="rounded-lg border border-ink/10 p-3 text-sm">
@@ -262,7 +300,7 @@ export default function ReportsPage() {
                 </div>
               );
             })}
-            {!reports.length ? <p className="text-sm text-ink/55">Nenhum relatório gerado ainda.</p> : null}
+            {!filteredReports.length ? <p className="text-sm text-ink/55">Nenhum relatório gerado em {selectedYear}.</p> : null}
           </div>
         </section>
       </section>
@@ -295,6 +333,49 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
       {children}
     </label>
   );
+}
+
+function YearFilter({
+  years,
+  selectedYear,
+  onChange
+}: {
+  years: number[];
+  selectedYear: number;
+  onChange: (year: number) => void;
+}) {
+  return (
+    <div className="mb-5 flex flex-wrap gap-2">
+      {years.map((year) => (
+        <button
+          key={year}
+          type="button"
+          onClick={() => onChange(year)}
+          className={`rounded-full border px-4 py-2 text-sm font-bold transition ${
+            selectedYear === year ? "border-leaf bg-mint text-leaf" : "border-ink/10 bg-white text-ink/60 hover:border-leaf/35"
+          }`}
+        >
+          {year}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function buildYearOptions(values: Array<string | null | undefined>) {
+  const years = new Set<number>([new Date().getFullYear()]);
+  for (const value of values) {
+    const year = recordYear(value);
+    if (year) years.add(year);
+  }
+  return Array.from(years).sort((a, b) => b - a);
+}
+
+function recordYear(value?: string | null) {
+  if (!value) return null;
+  const match = value.match(/(?:19|20)\d{2}/);
+  const year = match ? Number(match[0]) : Number(value.slice(0, 4));
+  return Number.isFinite(year) && year > 1900 ? year : null;
 }
 
 function today() {

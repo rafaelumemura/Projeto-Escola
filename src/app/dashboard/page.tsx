@@ -7,6 +7,7 @@ import {
   CalendarDays,
   FolderKanban,
   LibraryBig,
+  PartyPopper,
   Sparkles,
   Target
 } from "lucide-react";
@@ -20,6 +21,7 @@ type Activity = Database["public"]["Tables"]["activities"]["Row"] & {
   primary_collection_id?: string | null;
 };
 type Collection = Database["public"]["Tables"]["collections"]["Row"];
+type Student = Database["public"]["Tables"]["students"]["Row"];
 type WeeklyPlan = Database["public"]["Tables"]["weekly_plans"]["Row"];
 type PlannedItem = Database["public"]["Tables"]["weekly_plan_items"]["Row"] & {
   activities?: Activity | null;
@@ -34,6 +36,7 @@ export default function DashboardPage() {
   const [generatedActivityCount, setGeneratedActivityCount] = useState(0);
   const [collections, setCollections] = useState<Collection[]>([]);
   const [plannedItems, setPlannedItems] = useState<PlannedItem[]>([]);
+  const [students, setStudents] = useState<Student[]>([]);
   const [now, setNow] = useState(() => new Date());
 
   useEffect(() => {
@@ -56,6 +59,13 @@ export default function DashboardPage() {
         setPlannedItems(details.flatMap((detail) => detail.items));
       })
       .catch(() => undefined);
+
+    supabase
+      .from("students")
+      .select("*")
+      .eq("status", "active")
+      .then(({ data }) => setStudents(data || []))
+      .catch(() => undefined);
   }, [supabase]);
 
   useEffect(() => {
@@ -66,6 +76,7 @@ export default function DashboardPage() {
   const futurePlannedItems = useMemo(() => findFuturePlannedItems(plannedItems, now), [now, plannedItems]);
   const nextPlannedItems = useMemo(() => futurePlannedItems.slice(0, 5).map((entry) => entry.item), [futurePlannedItems]);
   const todayItems = useMemo(() => plannedItems.filter((item) => isSameDay(parsePlannedDate(item), now)), [now, plannedItems]);
+  const birthdayStudents = useMemo(() => birthdaysThisMonth(students, now), [now, students]);
   const generatedCount = Math.max(usage?.generated_count ?? 0, generatedActivityCount);
 
   return (
@@ -115,6 +126,10 @@ export default function DashboardPage() {
           value={futurePlannedItems.length}
           accent={statAccents[3]}
         />
+      </section>
+
+      <section className="mt-6">
+        <BirthdayPanel students={birthdayStudents} today={now} />
       </section>
 
       <section className="mt-6 grid gap-6 lg:grid-cols-2 lg:items-start">
@@ -189,6 +204,51 @@ function StatCard({
       </div>
       <p className="mt-4 text-sm font-bold leading-5 text-ink/58 sm:max-w-32">{label}</p>
     </Link>
+  );
+}
+
+function BirthdayPanel({ students, today }: { students: Student[]; today: Date }) {
+  return (
+    <section className="panel p-5">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-2">
+          <PartyPopper size={20} className="text-[#FF4F64]" />
+          <h2 className="text-xl font-bold text-ink">Aniversariantes do mês</h2>
+        </div>
+        <span className="text-sm font-semibold text-ink/50">{monthTitle(today)}</span>
+      </div>
+
+      {students.length ? (
+        <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {students.map((student) => {
+            const birthday = birthdayDate(student.birth_date, today.getFullYear());
+            const isToday = Boolean(birthday && isSameDay(birthday, today));
+            return (
+              <div
+                key={student.id}
+                className={`rounded-lg border p-4 ${
+                  isToday ? "border-[#FF4F64]/45 bg-[#FF4F64]/10" : "border-ink/10 bg-white"
+                }`}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="font-bold text-ink">{student.name}</p>
+                    <p className="mt-1 text-sm font-semibold text-ink/55">
+                      {birthday ? formatBirthdayDay(birthday) : "Data não informada"}
+                    </p>
+                  </div>
+                  {isToday ? (
+                    <span className="rounded-full bg-[#FF4F64] px-2.5 py-1 text-xs font-bold text-white">Hoje</span>
+                  ) : null}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <p className="mt-4 text-sm font-semibold text-ink/55">Nenhum aniversariante cadastrado neste mês.</p>
+      )}
+    </section>
   );
 }
 
@@ -416,6 +476,34 @@ function groupItemsByDate(items: PlannedItem[]) {
     }
   }
   return Array.from(grouped.values()).sort((a, b) => a.key.localeCompare(b.key));
+}
+
+function birthdaysThisMonth(students: Student[], today: Date) {
+  return students
+    .filter((student) => {
+      const birthday = birthdayDate(student.birth_date, today.getFullYear());
+      return Boolean(birthday && birthday.getMonth() === today.getMonth());
+    })
+    .sort((a, b) => {
+      const first = birthdayDate(a.birth_date, today.getFullYear());
+      const second = birthdayDate(b.birth_date, today.getFullYear());
+      if (!first || !second) return 0;
+      return first.getDate() - second.getDate();
+    });
+}
+
+function birthdayDate(value: string | null, year: number) {
+  if (!value) return null;
+  const [, month, day] = value.split("-").map(Number);
+  if (!month || !day) return null;
+  return new Date(year, month - 1, day, 12);
+}
+
+function formatBirthdayDay(date: Date) {
+  return new Intl.DateTimeFormat("pt-BR", {
+    day: "2-digit",
+    month: "long"
+  }).format(date);
 }
 
 function isSameDay(left: Date | null, right: Date | null) {
