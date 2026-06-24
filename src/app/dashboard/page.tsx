@@ -60,12 +60,19 @@ export default function DashboardPage() {
       })
       .catch(() => undefined);
 
-    supabase
-      .from("students")
-      .select("*")
-      .eq("status", "active")
-      .then(({ data }) => setStudents(data || []))
-      .catch(() => undefined);
+    async function loadStudents() {
+      try {
+        const { data } = await supabase
+          .from("students")
+          .select("*")
+          .eq("status", "active");
+        setStudents(data || []);
+      } catch {
+        setStudents([]);
+      }
+    }
+
+    void loadStudents();
   }, [supabase]);
 
   useEffect(() => {

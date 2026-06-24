@@ -600,7 +600,7 @@ export default function StudentsPage() {
             </Field>
             <div>
               <Field label="Data de nascimento">
-                <input type="date" value={studentForm.birth_date} onChange={(event) => setStudentForm((current) => ({ ...current, birth_date: event.target.value }))} className="input" />
+                <input type="date" max={today} value={studentForm.birth_date} onChange={(event) => setStudentForm((current) => ({ ...current, birth_date: event.target.value }))} className="input" />
               </Field>
             </div>
             <Field label="Observação geral">
