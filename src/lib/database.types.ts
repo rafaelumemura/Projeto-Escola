@@ -8,6 +8,9 @@ export type Json =
 
 type PlanningPdfSkill = "grade" | "layout_fundo_1" | "layout_fundo_2" | "layout_fundo_3" | "layout_fundo_4" | "layout_fundo_5" | "layout_fundo_6" | "layout_fundo_7" | "layout_fundo_8" | "layout_fundo_9";
 type ThemePreference = "light" | "dark";
+type StudentStatus = "active" | "inactive";
+type ObservationType = "individual" | "activity" | "class" | "weekly" | "biweekly" | "free";
+type ObservationAppliesTo = "all_class" | "selected_students" | "individual_student" | "none";
 
 type ActivityRow = {
   id: string;
@@ -76,6 +79,201 @@ type ActivityUpdate = {
   evaluation?: string | null;
   raw_ai_response?: Json | null;
   updated_at?: string;
+};
+
+type ClassRow = {
+  id: string;
+  user_id: string;
+  name: string;
+  shift: string | null;
+  school_year: string | null;
+  description: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+type ClassInsert = {
+  id?: string;
+  user_id: string;
+  name: string;
+  shift?: string | null;
+  school_year?: string | null;
+  description?: string | null;
+  created_at?: string;
+  updated_at?: string;
+};
+
+type ClassUpdate = {
+  name?: string;
+  shift?: string | null;
+  school_year?: string | null;
+  description?: string | null;
+  updated_at?: string;
+};
+
+type StudentRow = {
+  id: string;
+  user_id: string;
+  class_id: string;
+  name: string;
+  birth_date: string | null;
+  general_notes: string | null;
+  status: StudentStatus;
+  created_at: string;
+  updated_at: string;
+};
+
+type StudentInsert = {
+  id?: string;
+  user_id: string;
+  class_id: string;
+  name: string;
+  birth_date?: string | null;
+  general_notes?: string | null;
+  status?: StudentStatus;
+  created_at?: string;
+  updated_at?: string;
+};
+
+type StudentUpdate = {
+  class_id?: string;
+  name?: string;
+  birth_date?: string | null;
+  general_notes?: string | null;
+  status?: StudentStatus;
+  updated_at?: string;
+};
+
+type StudentObservationRow = {
+  id: string;
+  user_id: string;
+  class_id: string;
+  observation_type: ObservationType;
+  activity_id: string | null;
+  date: string;
+  period_start: string | null;
+  period_end: string | null;
+  title: string | null;
+  content: string;
+  applies_to: ObservationAppliesTo;
+  tags: string[];
+  created_at: string;
+  updated_at: string;
+};
+
+type StudentObservationInsert = {
+  id?: string;
+  user_id: string;
+  class_id: string;
+  observation_type: ObservationType;
+  activity_id?: string | null;
+  date?: string;
+  period_start?: string | null;
+  period_end?: string | null;
+  title?: string | null;
+  content: string;
+  applies_to?: ObservationAppliesTo;
+  tags?: string[];
+  created_at?: string;
+  updated_at?: string;
+};
+
+type StudentObservationUpdate = {
+  class_id?: string;
+  observation_type?: ObservationType;
+  activity_id?: string | null;
+  date?: string;
+  period_start?: string | null;
+  period_end?: string | null;
+  title?: string | null;
+  content?: string;
+  applies_to?: ObservationAppliesTo;
+  tags?: string[];
+  updated_at?: string;
+};
+
+type ObservationStudentRow = {
+  id: string;
+  observation_id: string;
+  student_id: string;
+  created_at: string;
+};
+
+type ObservationStudentInsert = {
+  id?: string;
+  observation_id: string;
+  student_id: string;
+  created_at?: string;
+};
+
+type StudentReportRow = {
+  id: string;
+  user_id: string;
+  class_id: string;
+  student_id: string | null;
+  report_type: string;
+  period_start: string;
+  period_end: string;
+  tone: string;
+  content: string;
+  structured_content: Json | null;
+  notes_hash: string;
+  generated_at: string;
+  created_at: string;
+  updated_at: string;
+};
+
+type StudentReportInsert = {
+  id?: string;
+  user_id: string;
+  class_id: string;
+  student_id?: string | null;
+  report_type: string;
+  period_start: string;
+  period_end: string;
+  tone: string;
+  content: string;
+  structured_content?: Json | null;
+  notes_hash: string;
+  generated_at?: string;
+  created_at?: string;
+  updated_at?: string;
+};
+
+type StudentReportUpdate = {
+  report_type?: string;
+  period_start?: string;
+  period_end?: string;
+  tone?: string;
+  content?: string;
+  structured_content?: Json | null;
+  notes_hash?: string;
+  generated_at?: string;
+  updated_at?: string;
+};
+
+type ReportGenerationLogRow = {
+  id: string;
+  user_id: string;
+  report_id: string | null;
+  model: string | null;
+  report_type: string | null;
+  input_tokens: number | null;
+  output_tokens: number | null;
+  estimated_cost: number | null;
+  created_at: string;
+};
+
+type ReportGenerationLogInsert = {
+  id?: string;
+  user_id: string;
+  report_id?: string | null;
+  model?: string | null;
+  report_type?: string | null;
+  input_tokens?: number | null;
+  output_tokens?: number | null;
+  estimated_cost?: number | null;
+  created_at?: string;
 };
 
 export type Database = {
@@ -220,6 +418,36 @@ export type Database = {
           end_time?: string | null;
           notes?: string | null;
         };
+      };
+      classes: {
+        Row: ClassRow;
+        Insert: ClassInsert;
+        Update: ClassUpdate;
+      };
+      students: {
+        Row: StudentRow;
+        Insert: StudentInsert;
+        Update: StudentUpdate;
+      };
+      student_observations: {
+        Row: StudentObservationRow;
+        Insert: StudentObservationInsert;
+        Update: StudentObservationUpdate;
+      };
+      observation_students: {
+        Row: ObservationStudentRow;
+        Insert: ObservationStudentInsert;
+        Update: Record<string, never>;
+      };
+      student_reports: {
+        Row: StudentReportRow;
+        Insert: StudentReportInsert;
+        Update: StudentReportUpdate;
+      };
+      report_generation_logs: {
+        Row: ReportGenerationLogRow;
+        Insert: ReportGenerationLogInsert;
+        Update: Record<string, never>;
       };
       printable_assets: {
         Row: {

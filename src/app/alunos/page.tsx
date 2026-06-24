@@ -1,0 +1,827 @@
+"use client";
+
+import Link from "next/link";
+import { FormEvent, useEffect, useMemo, useState } from "react";
+import { BookOpen, CalendarDays, Edit3, FileText, GraduationCap, Plus, Save, Trash2, UserPlus, UsersRound, X } from "lucide-react";
+import { ProtectedPage } from "@/components/layout/ProtectedPage";
+import { useAuth } from "@/components/auth/AuthProvider";
+import type { Database } from "@/lib/database.types";
+
+type ClassRow = Database["public"]["Tables"]["classes"]["Row"];
+type StudentRow = Database["public"]["Tables"]["students"]["Row"];
+type ObservationRow = Database["public"]["Tables"]["student_observations"]["Row"];
+type ObservationStudentRow = Database["public"]["Tables"]["observation_students"]["Row"];
+type StudentReportRow = Database["public"]["Tables"]["student_reports"]["Row"];
+type ModalMode = "class" | "student" | "observation" | null;
+
+const observationTypes = [
+  { value: "individual", label: "Individual" },
+  { value: "activity", label: "Atividade" },
+  { value: "class", label: "Turma" },
+  { value: "weekly", label: "Semana" },
+  { value: "biweekly", label: "Quinzena" },
+  { value: "free", label: "Livre" }
+] as const;
+
+const appliesToOptions = [
+  { value: "all_class", label: "Toda a turma" },
+  { value: "selected_students", label: "Alguns alunos" },
+  { value: "individual_student", label: "Um aluno específico" },
+  { value: "none", label: "Nenhum aluno específico" }
+] as const;
+
+const pedagogicalTags = [
+  "Participação",
+  "Autonomia",
+  "Socialização",
+  "Linguagem",
+  "Coordenação motora",
+  "Atenção",
+  "Criatividade",
+  "Raciocínio lógico",
+  "Interação",
+  "Organização",
+  "Comunicação",
+  "Desenvolvimento emocional"
+];
+
+const today = new Date().toISOString().slice(0, 10);
+
+export default function StudentsPage() {
+  const { supabase, user } = useAuth();
+  const [classes, setClasses] = useState<ClassRow[]>([]);
+  const [students, setStudents] = useState<StudentRow[]>([]);
+  const [observations, setObservations] = useState<ObservationRow[]>([]);
+  const [links, setLinks] = useState<ObservationStudentRow[]>([]);
+  const [reports, setReports] = useState<StudentReportRow[]>([]);
+  const [selectedClassId, setSelectedClassId] = useState("");
+  const [selectedStudent, setSelectedStudent] = useState<StudentRow | null>(null);
+  const [modal, setModal] = useState<ModalMode>(null);
+  const [editingClass, setEditingClass] = useState<ClassRow | null>(null);
+  const [editingStudent, setEditingStudent] = useState<StudentRow | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [confirmDeleteClassId, setConfirmDeleteClassId] = useState<string | null>(null);
+  const [confirmInactiveStudentId, setConfirmInactiveStudentId] = useState<string | null>(null);
+
+  const [classForm, setClassForm] = useState({ name: "", shift: "", school_year: "", description: "" });
+  const [studentForm, setStudentForm] = useState({ name: "", birth_date: "", general_notes: "", status: "active" as "active" | "inactive" });
+  const [observationForm, setObservationForm] = useState({
+    observation_type: "class" as ObservationRow["observation_type"],
+    applies_to: "all_class" as ObservationRow["applies_to"],
+    date: today,
+    period_start: "",
+    period_end: "",
+    title: "",
+    content: "",
+    tags: [] as string[],
+    student_ids: [] as string[]
+  });
+
+  const selectedClass = classes.find((classItem) => classItem.id === selectedClassId) || null;
+  const classStudents = useMemo(
+    () => students.filter((student) => student.class_id === selectedClassId).sort((a, b) => a.name.localeCompare(b.name)),
+    [selectedClassId, students]
+  );
+  const activeClassStudents = classStudents.filter((student) => student.status === "active");
+  const classObservations = useMemo(
+    () => observations.filter((observation) => observation.class_id === selectedClassId).slice(0, 12),
+    [observations, selectedClassId]
+  );
+  const selectedStudentObservationIds = new Set(
+    links.filter((link) => link.student_id === selectedStudent?.id).map((link) => link.observation_id)
+  );
+  const selectedStudentObservations = observations.filter((observation) =>
+    observation.class_id === selectedStudent?.class_id &&
+    (observation.applies_to === "all_class" || selectedStudentObservationIds.has(observation.id))
+  );
+  const selectedStudentReports = reports.filter((report) => report.student_id === selectedStudent?.id);
+
+  useEffect(() => {
+    loadAll().catch((error) => setMessage(error instanceof Error ? error.message : "Não foi possível carregar alunos."));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [supabase]);
+
+  useEffect(() => {
+    if (!selectedClassId && classes[0]) setSelectedClassId(classes[0].id);
+  }, [classes, selectedClassId]);
+
+  async function loadAll() {
+    const [classesResponse, studentsResponse, observationsResponse, reportsResponse] = await Promise.all([
+      supabase.from("classes").select("*").order("created_at", { ascending: false }),
+      supabase.from("students").select("*").order("name"),
+      supabase.from("student_observations").select("*").order("date", { ascending: false }),
+      supabase.from("student_reports").select("*").order("generated_at", { ascending: false })
+    ]);
+
+    if (classesResponse.error) throw classesResponse.error;
+    if (studentsResponse.error) throw studentsResponse.error;
+    if (observationsResponse.error) throw observationsResponse.error;
+    if (reportsResponse.error) throw reportsResponse.error;
+
+    const observationIds = (observationsResponse.data || []).map((observation) => observation.id);
+    const linksResponse = observationIds.length
+      ? await supabase.from("observation_students").select("*").in("observation_id", observationIds)
+      : { data: [], error: null };
+    if (linksResponse.error) throw linksResponse.error;
+
+    setClasses(classesResponse.data || []);
+    setStudents(studentsResponse.data || []);
+    setObservations(observationsResponse.data || []);
+    setReports(reportsResponse.data || []);
+    setLinks(linksResponse.data || []);
+  }
+
+  function openClassModal(classItem?: ClassRow) {
+    setEditingClass(classItem || null);
+    setClassForm({
+      name: classItem?.name || "",
+      shift: classItem?.shift || "",
+      school_year: classItem?.school_year || "",
+      description: classItem?.description || ""
+    });
+    setModal("class");
+  }
+
+  function openStudentModal(student?: StudentRow) {
+    if (!selectedClassId && !student) {
+      setMessage("Crie ou selecione uma turma antes de adicionar alunos.");
+      return;
+    }
+
+    setEditingStudent(student || null);
+    setStudentForm({
+      name: student?.name || "",
+      birth_date: student?.birth_date || "",
+      general_notes: student?.general_notes || "",
+      status: student?.status || "active"
+    });
+    setModal("student");
+  }
+
+  function openObservationModal(student?: StudentRow) {
+    if (!selectedClassId && !student?.class_id) {
+      setMessage("Selecione uma turma antes de adicionar observações.");
+      return;
+    }
+
+    const classId = student?.class_id || selectedClassId;
+    setSelectedClassId(classId);
+    setObservationForm({
+      observation_type: student ? "individual" : "class",
+      applies_to: student ? "individual_student" : "all_class",
+      date: today,
+      period_start: "",
+      period_end: "",
+      title: "",
+      content: "",
+      tags: [],
+      student_ids: student ? [student.id] : []
+    });
+    setModal("observation");
+  }
+
+  function closeModal() {
+    setModal(null);
+    setEditingClass(null);
+    setEditingStudent(null);
+    setBusy(false);
+  }
+
+  async function saveClass(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!user) return;
+    setBusy(true);
+    setMessage(null);
+    try {
+      const payload = {
+        name: classForm.name.trim(),
+        shift: classForm.shift.trim() || null,
+        school_year: classForm.school_year.trim() || null,
+        description: classForm.description.trim() || null
+      };
+
+      if (editingClass) {
+        const { error } = await supabase.from("classes").update(payload).eq("id", editingClass.id);
+        if (error) throw error;
+        setMessage("Turma atualizada.");
+      } else {
+        const { data, error } = await supabase.from("classes").insert({ ...payload, user_id: user.id }).select("*").single();
+        if (error) throw error;
+        setSelectedClassId(data.id);
+        setMessage("Turma criada.");
+      }
+      await loadAll();
+      closeModal();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Não foi possível salvar a turma.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function deleteClass(classId: string) {
+    setBusy(true);
+    setMessage(null);
+    try {
+      const { error } = await supabase.from("classes").delete().eq("id", classId);
+      if (error) throw error;
+      setConfirmDeleteClassId(null);
+      setSelectedClassId((current) => (current === classId ? "" : current));
+      setSelectedStudent(null);
+      await loadAll();
+      setMessage("Turma excluída.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Não foi possível excluir a turma.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function saveStudent(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!user) return;
+    setBusy(true);
+    setMessage(null);
+    try {
+      const payload = {
+        class_id: editingStudent?.class_id || selectedClassId,
+        name: studentForm.name.trim(),
+        birth_date: studentForm.birth_date || null,
+        general_notes: studentForm.general_notes.trim() || null,
+        status: studentForm.status
+      };
+
+      if (editingStudent) {
+        const { error } = await supabase.from("students").update(payload).eq("id", editingStudent.id);
+        if (error) throw error;
+        setMessage("Aluno atualizado.");
+      } else {
+        const { data, error } = await supabase.from("students").insert({ ...payload, user_id: user.id }).select("*").single();
+        if (error) throw error;
+        setSelectedStudent(data);
+        setMessage("Aluno cadastrado.");
+      }
+      await loadAll();
+      closeModal();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Não foi possível salvar o aluno.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function inactiveStudent(student: StudentRow) {
+    setBusy(true);
+    setMessage(null);
+    try {
+      const nextStatus = student.status === "active" ? "inactive" : "active";
+      const { error } = await supabase.from("students").update({ status: nextStatus }).eq("id", student.id);
+      if (error) throw error;
+      setConfirmInactiveStudentId(null);
+      await loadAll();
+      setSelectedStudent((current) => current?.id === student.id ? { ...student, status: nextStatus } : current);
+      setMessage(nextStatus === "active" ? "Aluno reativado." : "Aluno inativado.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Não foi possível atualizar o status.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function saveObservation(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!user) return;
+    setBusy(true);
+    setMessage(null);
+    try {
+      const classId = selectedClassId;
+      const selectedStudentIds = shouldAttachStudents(observationForm.applies_to)
+        ? observationForm.student_ids
+        : [];
+
+      if (shouldAttachStudents(observationForm.applies_to) && selectedStudentIds.length === 0) {
+        throw new Error("Selecione ao menos um aluno relacionado.");
+      }
+
+      const { data, error } = await supabase
+        .from("student_observations")
+        .insert({
+          user_id: user.id,
+          class_id: classId,
+          observation_type: observationForm.observation_type,
+          applies_to: observationForm.applies_to,
+          date: observationForm.date,
+          period_start: observationForm.period_start || null,
+          period_end: observationForm.period_end || null,
+          title: observationForm.title.trim() || null,
+          content: observationForm.content.trim(),
+          tags: observationForm.tags
+        })
+        .select("*")
+        .single();
+
+      if (error) throw error;
+
+      if (selectedStudentIds.length) {
+        const { error: linkError } = await supabase.from("observation_students").insert(
+          selectedStudentIds.map((studentId) => ({
+            observation_id: data.id,
+            student_id: studentId
+          }))
+        );
+        if (linkError) throw linkError;
+      }
+
+      await loadAll();
+      closeModal();
+      setMessage("Observação salva sem uso de IA.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Não foi possível salvar a observação.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function toggleObservationStudent(studentId: string) {
+    setObservationForm((current) => ({
+      ...current,
+      student_ids: current.student_ids.includes(studentId)
+        ? current.student_ids.filter((id) => id !== studentId)
+        : current.applies_to === "individual_student"
+          ? [studentId]
+          : [...current.student_ids, studentId]
+    }));
+  }
+
+  function toggleTag(tag: string) {
+    setObservationForm((current) => ({
+      ...current,
+      tags: current.tags.includes(tag) ? current.tags.filter((item) => item !== tag) : [...current.tags, tag]
+    }));
+  }
+
+  return (
+    <ProtectedPage
+      title="Alunos"
+      subtitle="Organize suas turmas, acompanhe seus alunos e registre observações do seu jeito."
+      actions={
+        <>
+          <button type="button" onClick={() => openClassModal()} className="btn-primary">
+            <Plus size={17} />
+            Criar turma
+          </button>
+          <button type="button" onClick={() => openObservationModal()} className="btn-secondary">
+            <BookOpen size={17} />
+            Adicionar observação
+          </button>
+        </>
+      }
+    >
+      {message ? <p className="mb-4 rounded-lg border border-leaf/15 bg-mint px-4 py-3 text-sm font-semibold text-leaf">{message}</p> : null}
+
+      <section className="grid gap-4 lg:grid-cols-[360px_1fr]">
+        <div className="space-y-4">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
+            {classes.map((classItem) => {
+              const classCount = students.filter((student) => student.class_id === classItem.id && student.status === "active").length;
+              const preview = students
+                .filter((student) => student.class_id === classItem.id)
+                .slice(0, 4)
+                .map((student) => student.name)
+                .join(", ");
+              const active = classItem.id === selectedClassId;
+
+              return (
+                <article
+                  key={classItem.id}
+                  className={`rounded-lg border bg-white p-4 shadow-soft transition ${active ? "border-leaf" : "border-ink/10 hover:border-leaf/30"}`}
+                >
+                  <button type="button" onClick={() => setSelectedClassId(classItem.id)} className="w-full text-left">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <h2 className="text-lg font-bold text-ink">{classItem.name}</h2>
+                        <p className="mt-1 text-sm text-ink/60">{classItem.shift || "Turno não informado"}</p>
+                      </div>
+                      <GraduationCap className="text-leaf" size={22} />
+                    </div>
+                    <p className="mt-3 text-sm font-semibold text-ink">{classCount} {classCount === 1 ? "aluno" : "alunos"}</p>
+                    <p className="mt-1 min-h-10 text-sm leading-5 text-ink/55">{preview || "Nenhum aluno cadastrado ainda."}</p>
+                  </button>
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <button type="button" onClick={() => openClassModal(classItem)} className="btn-secondary px-3 py-2 text-xs">
+                      <Edit3 size={14} />
+                      Editar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => confirmDeleteClassId === classItem.id ? deleteClass(classItem.id) : setConfirmDeleteClassId(classItem.id)}
+                      className="btn-danger px-3 py-2 text-xs"
+                      disabled={busy}
+                    >
+                      <Trash2 size={14} />
+                      {confirmDeleteClassId === classItem.id ? "Confirmar" : "Excluir"}
+                    </button>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+
+          {!classes.length ? (
+            <div className="panel p-5 text-sm leading-6 text-ink/65">
+              Crie sua primeira turma para começar a cadastrar alunos e observações.
+            </div>
+          ) : null}
+        </div>
+
+        <div className="space-y-4">
+          {selectedClass ? (
+            <>
+              <section className="panel p-5">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <p className="label">Turma selecionada</p>
+                    <h2 className="mt-1 text-2xl font-bold text-ink">{selectedClass.name}</h2>
+                    <p className="mt-1 text-sm text-ink/60">{selectedClass.description || "Sem descrição."}</p>
+                  </div>
+                  <button type="button" onClick={() => openStudentModal()} className="btn-primary">
+                    <UserPlus size={17} />
+                    Adicionar aluno
+                  </button>
+                </div>
+              </section>
+
+              <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
+                <div className="panel overflow-hidden">
+                  <div className="border-b border-ink/10 p-4">
+                    <h3 className="flex items-center gap-2 text-lg font-bold text-ink">
+                      <UsersRound size={19} className="text-leaf" />
+                      Alunos
+                    </h3>
+                  </div>
+                  <div className="divide-y divide-ink/10">
+                    {classStudents.map((student) => (
+                      <div key={student.id} className={`p-4 ${selectedStudent?.id === student.id ? "bg-mint/45" : ""}`}>
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                          <button type="button" onClick={() => setSelectedStudent(student)} className="text-left">
+                            <h4 className="font-bold text-ink">{student.name}</h4>
+                            <p className="mt-1 text-sm text-ink/55">
+                              {student.birth_date ? `Nascimento: ${formatDate(student.birth_date)} • ` : ""}
+                              {student.status === "active" ? "Ativo" : "Inativo"}
+                            </p>
+                          </button>
+                          <div className="flex flex-wrap gap-2">
+                            <button type="button" onClick={() => openObservationModal(student)} className="btn-secondary px-3 py-2 text-xs">
+                              <BookOpen size={14} />
+                              Observação
+                            </button>
+                            <button type="button" onClick={() => openStudentModal(student)} className="btn-secondary px-3 py-2 text-xs">
+                              <Edit3 size={14} />
+                              Editar
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => confirmInactiveStudentId === student.id ? inactiveStudent(student) : setConfirmInactiveStudentId(student.id)}
+                              className="btn-danger px-3 py-2 text-xs"
+                              disabled={busy}
+                            >
+                              <X size={14} />
+                              {confirmInactiveStudentId === student.id ? "Confirmar" : student.status === "active" ? "Inativar" : "Reativar"}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+
+                    {!classStudents.length ? (
+                      <p className="p-5 text-sm leading-6 text-ink/60">Nenhum aluno cadastrado nessa turma ainda.</p>
+                    ) : null}
+                  </div>
+                </div>
+
+                <StudentProfile
+                  student={selectedStudent}
+                  observations={selectedStudentObservations}
+                  reports={selectedStudentReports}
+                  classId={selectedClassId}
+                  onAddObservation={openObservationModal}
+                />
+              </section>
+
+              <section className="panel overflow-hidden">
+                <div className="flex flex-col gap-3 border-b border-ink/10 p-4 sm:flex-row sm:items-center sm:justify-between">
+                  <h3 className="flex items-center gap-2 text-lg font-bold text-ink">
+                    <CalendarDays size={19} className="text-leaf" />
+                    Histórico de observações da turma
+                  </h3>
+                  <button type="button" onClick={() => openObservationModal()} className="btn-secondary">
+                    <Plus size={16} />
+                    Adicionar observação
+                  </button>
+                </div>
+                <ObservationList observations={classObservations} links={links} students={students} />
+              </section>
+            </>
+          ) : (
+            <div className="panel p-6 text-sm leading-6 text-ink/65">Selecione ou crie uma turma para continuar.</div>
+          )}
+        </div>
+      </section>
+
+      {modal === "class" ? (
+        <Modal title={editingClass ? "Editar turma" : "Criar turma"} onClose={closeModal}>
+          <form onSubmit={saveClass} className="space-y-4">
+            <Field label="Nome da turma">
+              <input required value={classForm.name} onChange={(event) => setClassForm((current) => ({ ...current, name: event.target.value }))} className="input" />
+            </Field>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label="Período/turno">
+                <input value={classForm.shift} onChange={(event) => setClassForm((current) => ({ ...current, shift: event.target.value }))} className="input" placeholder="Manhã" />
+              </Field>
+              <Field label="Ano/série">
+                <input value={classForm.school_year} onChange={(event) => setClassForm((current) => ({ ...current, school_year: event.target.value }))} className="input" placeholder="Infantil 4" />
+              </Field>
+            </div>
+            <Field label="Descrição">
+              <textarea value={classForm.description} onChange={(event) => setClassForm((current) => ({ ...current, description: event.target.value }))} className="input min-h-24" />
+            </Field>
+            <ModalActions busy={busy} onCancel={closeModal} />
+          </form>
+        </Modal>
+      ) : null}
+
+      {modal === "student" ? (
+        <Modal title={editingStudent ? "Editar aluno" : "Adicionar aluno"} onClose={closeModal}>
+          <form onSubmit={saveStudent} className="space-y-4">
+            <Field label="Nome">
+              <input required value={studentForm.name} onChange={(event) => setStudentForm((current) => ({ ...current, name: event.target.value }))} className="input" />
+            </Field>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label="Data de nascimento">
+                <input type="date" value={studentForm.birth_date} onChange={(event) => setStudentForm((current) => ({ ...current, birth_date: event.target.value }))} className="input" />
+              </Field>
+              <Field label="Status">
+                <select value={studentForm.status} onChange={(event) => setStudentForm((current) => ({ ...current, status: event.target.value as "active" | "inactive" }))} className="input">
+                  <option value="active">Ativo</option>
+                  <option value="inactive">Inativo</option>
+                </select>
+              </Field>
+            </div>
+            <Field label="Observação geral">
+              <textarea value={studentForm.general_notes} onChange={(event) => setStudentForm((current) => ({ ...current, general_notes: event.target.value }))} className="input min-h-24" />
+            </Field>
+            <ModalActions busy={busy} onCancel={closeModal} />
+          </form>
+        </Modal>
+      ) : null}
+
+      {modal === "observation" ? (
+        <Modal title="Adicionar observação" onClose={closeModal}>
+          <form onSubmit={saveObservation} className="space-y-4">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label="Tipo">
+                <select value={observationForm.observation_type} onChange={(event) => setObservationForm((current) => ({ ...current, observation_type: event.target.value as ObservationRow["observation_type"] }))} className="input">
+                  {observationTypes.map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}
+                </select>
+              </Field>
+              <Field label="Refere-se a">
+                <select
+                  value={observationForm.applies_to}
+                  onChange={(event) => setObservationForm((current) => ({ ...current, applies_to: event.target.value as ObservationRow["applies_to"], student_ids: [] }))}
+                  className="input"
+                >
+                  {appliesToOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                </select>
+              </Field>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <Field label="Data">
+                <input type="date" value={observationForm.date} onChange={(event) => setObservationForm((current) => ({ ...current, date: event.target.value }))} className="input" />
+              </Field>
+              <Field label="Início do período">
+                <input type="date" value={observationForm.period_start} onChange={(event) => setObservationForm((current) => ({ ...current, period_start: event.target.value }))} className="input" />
+              </Field>
+              <Field label="Fim do período">
+                <input type="date" value={observationForm.period_end} onChange={(event) => setObservationForm((current) => ({ ...current, period_end: event.target.value }))} className="input" />
+              </Field>
+            </div>
+            <Field label="Título opcional">
+              <input value={observationForm.title} onChange={(event) => setObservationForm((current) => ({ ...current, title: event.target.value }))} className="input" />
+            </Field>
+            {shouldAttachStudents(observationForm.applies_to) ? (
+              <Field label="Alunos relacionados">
+                <div className="grid max-h-44 gap-2 overflow-auto rounded-lg border border-ink/10 p-2 sm:grid-cols-2">
+                  {activeClassStudents.map((student) => (
+                    <label key={student.id} className="flex items-center gap-2 rounded-md px-2 py-2 text-sm text-ink/75 hover:bg-mint/50">
+                      <input type="checkbox" checked={observationForm.student_ids.includes(student.id)} onChange={() => toggleObservationStudent(student.id)} />
+                      {student.name}
+                    </label>
+                  ))}
+                </div>
+              </Field>
+            ) : null}
+            <Field label="Observação">
+              <textarea
+                required
+                value={observationForm.content}
+                onChange={(event) => setObservationForm((current) => ({ ...current, content: event.target.value }))}
+                className="input min-h-36"
+                placeholder="Escreva como aconteceu. Pode ser sobre a turma, um grupo ou um aluno específico."
+              />
+            </Field>
+            <Field label="Tags pedagógicas opcionais">
+              <div className="flex flex-wrap gap-2">
+                {pedagogicalTags.map((tag) => (
+                  <button
+                    key={tag}
+                    type="button"
+                    onClick={() => toggleTag(tag)}
+                    className={`rounded-full border px-3 py-1.5 text-xs font-semibold ${observationForm.tags.includes(tag) ? "border-leaf bg-mint text-leaf" : "border-ink/10 bg-white text-ink/60"}`}
+                  >
+                    {tag}
+                  </button>
+                ))}
+              </div>
+            </Field>
+            <p className="rounded-lg bg-paper px-3 py-2 text-xs leading-5 text-ink/60">
+              Ao salvar, nenhuma IA será chamada. O Projeto Escola usa esses registros apenas quando você gerar relatórios.
+            </p>
+            <ModalActions busy={busy} onCancel={closeModal} />
+          </form>
+        </Modal>
+      ) : null}
+    </ProtectedPage>
+  );
+}
+
+function StudentProfile({
+  student,
+  observations,
+  reports,
+  classId,
+  onAddObservation
+}: {
+  student: StudentRow | null;
+  observations: ObservationRow[];
+  reports: StudentReportRow[];
+  classId: string;
+  onAddObservation: (student: StudentRow) => void;
+}) {
+  if (!student) {
+    return (
+      <aside className="panel p-5 text-sm leading-6 text-ink/60">
+        Selecione um aluno para abrir o perfil, ver observações e acessar relatórios.
+      </aside>
+    );
+  }
+
+  return (
+    <aside className="panel p-5">
+      <p className="label">Perfil do aluno</p>
+      <h3 className="mt-1 text-xl font-bold text-ink">{student.name}</h3>
+      <p className="mt-2 text-sm leading-6 text-ink/60">
+        {student.birth_date ? `Nascimento: ${formatDate(student.birth_date)}` : "Data de nascimento não informada."}
+      </p>
+      {student.general_notes ? <p className="mt-3 rounded-lg bg-paper p-3 text-sm leading-6 text-ink/70">{student.general_notes}</p> : null}
+
+      <div className="mt-4 flex flex-wrap gap-2">
+        <button type="button" onClick={() => onAddObservation(student)} className="btn-secondary">
+          <BookOpen size={16} />
+          Observação individual
+        </button>
+        <Link href={`/relatorios?turma=${classId}&aluno=${student.id}`} className="btn-primary">
+          <FileText size={16} />
+          Gerar relatório
+        </Link>
+      </div>
+
+      <div className="mt-5">
+        <h4 className="font-bold text-ink">Observações recentes</h4>
+        <div className="mt-2 space-y-2">
+          {observations.slice(0, 4).map((observation) => (
+            <div key={observation.id} className="rounded-lg border border-ink/10 p-3 text-sm">
+              <p className="font-semibold text-ink">{formatDate(observation.date)} • {observationTypeLabel(observation.observation_type)}</p>
+              <p className="mt-1 line-clamp-3 text-ink/60">{observation.content}</p>
+            </div>
+          ))}
+          {!observations.length ? <p className="text-sm text-ink/55">Nenhuma observação relacionada ainda.</p> : null}
+        </div>
+      </div>
+
+      <div className="mt-5">
+        <h4 className="font-bold text-ink">Relatórios gerados</h4>
+        <div className="mt-2 space-y-2">
+          {reports.slice(0, 3).map((report) => (
+            <Link key={report.id} href={`/relatorios?turma=${classId}&aluno=${student.id}`} className="block rounded-lg border border-ink/10 p-3 text-sm hover:border-leaf/40">
+              <p className="font-semibold text-ink">{report.report_type}</p>
+              <p className="mt-1 text-ink/55">{formatDate(report.generated_at.slice(0, 10))}</p>
+            </Link>
+          ))}
+          {!reports.length ? <p className="text-sm text-ink/55">Nenhum relatório gerado ainda.</p> : null}
+        </div>
+      </div>
+    </aside>
+  );
+}
+
+function ObservationList({
+  observations,
+  links,
+  students
+}: {
+  observations: ObservationRow[];
+  links: ObservationStudentRow[];
+  students: StudentRow[];
+}) {
+  if (!observations.length) {
+    return <p className="p-5 text-sm leading-6 text-ink/60">Nenhuma observação registrada para esta turma.</p>;
+  }
+
+  return (
+    <div className="divide-y divide-ink/10">
+      {observations.map((observation) => {
+        const studentNames = links
+          .filter((link) => link.observation_id === observation.id)
+          .map((link) => students.find((student) => student.id === link.student_id)?.name)
+          .filter(Boolean)
+          .join(", ");
+
+        return (
+          <article key={observation.id} className="p-4">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <p className="text-sm font-bold text-ink">{observation.title || observationTypeLabel(observation.observation_type)}</p>
+                <p className="mt-1 text-xs font-semibold uppercase text-ink/45">
+                  {formatDate(observation.date)} • {appliesToLabel(observation.applies_to)}
+                </p>
+              </div>
+              {observation.tags.length ? (
+                <div className="flex flex-wrap gap-1">
+                  {observation.tags.slice(0, 3).map((tag) => <span key={tag} className="rounded-full bg-mint px-2 py-1 text-[11px] font-semibold text-leaf">{tag}</span>)}
+                </div>
+              ) : null}
+            </div>
+            {studentNames ? <p className="mt-2 text-xs font-semibold text-leaf">Alunos: {studentNames}</p> : null}
+            <p className="mt-2 text-sm leading-6 text-ink/65">{observation.content}</p>
+          </article>
+        );
+      })}
+    </div>
+  );
+}
+
+function Modal({ title, children, onClose }: { title: string; children: React.ReactNode; onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-ink/35 p-4">
+      <div className="max-h-[92vh] w-full max-w-2xl overflow-auto rounded-lg bg-white p-5 shadow-soft">
+        <div className="mb-4 flex items-center justify-between gap-4">
+          <h2 className="text-xl font-bold text-ink">{title}</h2>
+          <button type="button" onClick={onClose} className="rounded-md border border-ink/10 p-2 text-ink/60 hover:bg-paper">
+            <X size={18} />
+          </button>
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <label className="block">
+      <span className="label mb-2 block">{label}</span>
+      {children}
+    </label>
+  );
+}
+
+function ModalActions({ busy, onCancel }: { busy: boolean; onCancel: () => void }) {
+  return (
+    <div className="flex flex-wrap justify-end gap-2">
+      <button type="button" onClick={onCancel} className="btn-secondary" disabled={busy}>
+        Cancelar
+      </button>
+      <button type="submit" className="btn-primary" disabled={busy}>
+        <Save size={16} />
+        Salvar
+      </button>
+    </div>
+  );
+}
+
+function shouldAttachStudents(appliesTo: ObservationRow["applies_to"]) {
+  return appliesTo === "selected_students" || appliesTo === "individual_student";
+}
+
+function formatDate(value: string) {
+  return new Date(`${value}T12:00:00`).toLocaleDateString("pt-BR");
+}
+
+function observationTypeLabel(value: ObservationRow["observation_type"]) {
+  return observationTypes.find((type) => type.value === value)?.label || value;
+}
+
+function appliesToLabel(value: ObservationRow["applies_to"]) {
+  return appliesToOptions.find((option) => option.value === value)?.label || value;
+}

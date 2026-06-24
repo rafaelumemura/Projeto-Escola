@@ -5,10 +5,12 @@ import { usePathname } from "next/navigation";
 import {
   BookOpen,
   CalendarDays,
+  FileText,
   FolderKanban,
   LayoutDashboard,
   Sparkles,
-  UserRound
+  UserRound,
+  UsersRound
 } from "lucide-react";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { useTheme } from "@/components/theme/ThemeProvider";
@@ -18,6 +20,8 @@ const nav = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/gerar", label: "Gerar", icon: Sparkles },
   { href: "/atividades", label: "Atividades", icon: BookOpen },
+  { href: "/alunos", label: "Alunos", icon: UsersRound },
+  { href: "/relatorios", label: "Relatórios", icon: FileText },
   { href: "/colecoes", label: "Coleções", icon: FolderKanban },
   { href: "/planejamento", label: "Planejamento", icon: CalendarDays }
 ];
@@ -26,6 +30,8 @@ const mobileNav = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/gerar", label: "Gerar", icon: Sparkles },
   { href: "/atividades", label: "Atividades", icon: BookOpen },
+  { href: "/alunos", label: "Alunos", icon: UsersRound },
+  { href: "/relatorios", label: "Relatórios", icon: FileText },
   { href: "/colecoes", label: "Coleções", icon: FolderKanban },
   { href: "/planejamento", label: "Planejar", icon: CalendarDays }
 ];
@@ -98,7 +104,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <UsageMeter usage={usage} compact />
         </div>
 
-        <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t border-ink/10 bg-white/95 px-2 py-2 shadow-[0_-12px_35px_rgba(39,50,44,0.08)] backdrop-blur lg:hidden">
+        <nav className="fixed inset-x-0 bottom-0 z-30 flex gap-1 overflow-x-auto border-t border-ink/10 bg-white/95 px-2 py-2 shadow-[0_-12px_35px_rgba(39,50,44,0.08)] backdrop-blur lg:hidden">
           {mobileNav.map((item) => {
             const Icon = item.icon;
             const active = pathname === item.href;
@@ -107,7 +113,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <Link
                 key={item.href}
                 href={item.href}
-                className={`flex min-w-0 flex-col items-center justify-center gap-1 rounded-md px-1 py-2 text-[11px] font-semibold ${
+                className={`flex min-w-[68px] flex-col items-center justify-center gap-1 rounded-md px-1 py-2 text-[11px] font-semibold ${
                   active ? "bg-mint text-leaf" : "text-ink/65"
                 }`}
               >
