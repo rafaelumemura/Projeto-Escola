@@ -43,7 +43,6 @@ export default function ReportsPage() {
   const [periodStart, setPeriodStart] = useState(monthStart());
   const [periodEnd, setPeriodEnd] = useState(today());
   const [tone, setTone] = useState("Acolhedor");
-  const [forceRegenerate, setForceRegenerate] = useState(false);
   const [busy, setBusy] = useState(false);
   const [dataLoaded, setDataLoaded] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -128,7 +127,7 @@ export default function ReportsPage() {
           period_start: periodStart,
           period_end: periodEnd,
           tone,
-          force_regenerate: forceRegenerate
+          force_regenerate: false
         }
       });
 
@@ -138,7 +137,6 @@ export default function ReportsPage() {
       setMessage(nextReports.some((item) => item.cached)
         ? "Relatório exibido a partir do cache salvo."
         : "Relatório gerado e salvo.");
-      setForceRegenerate(false);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Não foi possível gerar relatório.");
     } finally {
@@ -153,135 +151,120 @@ export default function ReportsPage() {
     >
       {message ? <p className="mb-4 rounded-lg border border-leaf/15 bg-mint px-4 py-3 text-sm font-semibold text-leaf">{message}</p> : null}
 
-      <section className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_420px]">
-        <div className="space-y-5">
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-            {reportCards.map((card) => (
-              <button
-                key={card.type}
-                type="button"
-                onClick={() => setSelectedType(card.type)}
-                className={`rounded-lg border bg-white p-4 text-left shadow-soft transition ${selectedType === card.type ? "border-leaf" : "border-ink/10 hover:border-leaf/30"}`}
-                style={{ borderTopWidth: 6, borderTopColor: card.color }}
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <h2 className="text-base font-bold text-ink">{card.type}</h2>
-                    <p className="mt-2 text-sm leading-5 text-ink/60">{card.description}</p>
-                  </div>
-                  {card.type === "Relatório da turma" ? <UsersRound className="text-leaf" size={20} /> : <FileText className="text-leaf" size={20} />}
+      <section className="space-y-5">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {reportCards.map((card) => (
+            <button
+              key={card.type}
+              type="button"
+              onClick={() => setSelectedType(card.type)}
+              className={`min-h-[150px] rounded-lg border bg-white p-4 text-left shadow-soft transition ${selectedType === card.type ? "border-leaf" : "border-ink/10 hover:border-leaf/30"}`}
+              style={{ borderTopWidth: 6, borderTopColor: card.color }}
+            >
+              <div className="flex h-full items-start justify-between gap-3">
+                <div>
+                  <h2 className="text-base font-bold text-ink">{card.type}</h2>
+                  <p className="mt-2 text-sm leading-5 text-ink/60">{card.description}</p>
                 </div>
-              </button>
-            ))}
-          </div>
-
-          <section className="panel p-5">
-            <div className="mb-4">
-              <p className="label">Fluxo de geração</p>
-              <h2 className="mt-1 text-xl font-bold text-ink">{selectedType}</h2>
-              <p className="mt-2 text-sm leading-6 text-ink/60">
-                Vamos montar uma síntese pedagógica com base nos registros que você salvou.
-              </p>
-            </div>
-
-            <form onSubmit={generateReport} className="space-y-4">
-              <div className="grid gap-3 sm:grid-cols-2">
-                <Field label="Turma">
-                  <select value={classId} onChange={(event) => setClassId(event.target.value)} className="input" required>
-                    <option value="">Selecione</option>
-                    {classes.map((classItem) => <option key={classItem.id} value={classItem.id}>{classItem.name}</option>)}
-                  </select>
-                </Field>
-
-                {!isClassBatch ? (
-                  <Field label="Aluno">
-                    <select value={studentId} onChange={(event) => setStudentId(event.target.value)} className="input" required>
-                      <option value="">Selecione</option>
-                      {classStudents.map((student) => <option key={student.id} value={student.id}>{student.name}</option>)}
-                    </select>
-                  </Field>
-                ) : (
-                  <div className="rounded-lg bg-paper p-3 text-sm leading-6 text-ink/65">
-                    {classStudents.length} alunos ativos serão considerados.
-                  </div>
-                )}
+                {card.type === "Relatório da turma" ? <UsersRound className="shrink-0 text-leaf" size={20} /> : <FileText className="shrink-0 text-leaf" size={20} />}
               </div>
-
-              <div className="grid gap-3 sm:grid-cols-3">
-                <Field label="Período">
-                  <select value={periodKind} onChange={(event) => setPeriodKind(event.target.value)} className="input">
-                    {periodOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-                  </select>
-                </Field>
-                <Field label="Data inicial">
-                  <input type="date" value={periodStart} onChange={(event) => setPeriodStart(event.target.value)} disabled={periodKind !== "custom"} className="input disabled:opacity-70" />
-                </Field>
-                <Field label="Data final">
-                  <input type="date" value={periodEnd} onChange={(event) => setPeriodEnd(event.target.value)} disabled={periodKind !== "custom"} className="input disabled:opacity-70" />
-                </Field>
-              </div>
-
-              <div className="grid gap-3 sm:grid-cols-2">
-                <Field label="Tom">
-                  <select value={tone} onChange={(event) => setTone(event.target.value)} className="input">
-                    {tones.map((toneOption) => <option key={toneOption} value={toneOption}>{toneOption}</option>)}
-                  </select>
-                </Field>
-                <label className="flex items-center gap-3 rounded-lg border border-ink/10 bg-white p-3 text-sm text-ink/70">
-                  <input type="checkbox" checked={forceRegenerate} onChange={(event) => setForceRegenerate(event.target.checked)} />
-                  Regenerar mesmo se já existir versão em cache
-                </label>
-              </div>
-
-              <div className="rounded-lg bg-paper p-3 text-sm leading-6 text-ink/60">
-                A IA não é chamada ao salvar observações ou abrir perfis. Ela só será usada ao gerar ou regenerar relatórios.
-              </div>
-
-              <button type="submit" disabled={busy || !classes.length} className="btn-primary disabled:opacity-60">
-                {busy ? <Loader2 size={17} className="animate-spin" /> : <Sparkles size={17} />}
-                {isClassBatch ? "Gerar relatórios da turma" : "Gerar relatório"}
-              </button>
-            </form>
-          </section>
+            </button>
+          ))}
         </div>
 
-        <aside className="space-y-4">
-          <section className="panel p-5">
-            <p className="label">Resultado</p>
-            <h2 className="mt-1 text-lg font-bold text-ink">{selectedReportCard.type}</h2>
+        <section className="panel p-5">
+          <p className="label">Resultado</p>
+          <h2 className="mt-1 text-xl font-bold text-ink">{selectedReportCard.type}</h2>
+          <p className="mt-2 text-sm leading-6 text-ink/60">
+            Relatório gerado a partir das observações registradas pela professora.
+          </p>
+        </section>
+
+        <section className="panel p-5">
+          <div className="mb-4">
+            <p className="label">Fluxo de geração</p>
+            <h2 className="mt-1 text-xl font-bold text-ink">{selectedType}</h2>
             <p className="mt-2 text-sm leading-6 text-ink/60">
-              Relatório gerado a partir das observações registradas pela professora.
+              Vamos montar uma síntese pedagógica com base nos registros que você salvou.
             </p>
-          </section>
+          </div>
 
-          {resultReports.length ? (
-            <div className="space-y-3">
-              {resultReports.map(({ student, report, cached }) => (
-                <ReportCard key={report.id} student={student} report={report} cached={cached} />
-              ))}
-            </div>
-          ) : (
-            <section className="panel p-5 text-sm leading-6 text-ink/60">
-              Selecione os dados e clique em gerar. Se já houver um relatório com o mesmo conjunto de observações, ele será exibido sem nova chamada de IA.
-            </section>
-          )}
+          <form onSubmit={generateReport} className="space-y-4">
+            <div className="grid gap-3 lg:grid-cols-2">
+              <Field label="Turma">
+                <select value={classId} onChange={(event) => setClassId(event.target.value)} className="input" required>
+                  <option value="">Selecione</option>
+                  {classes.map((classItem) => <option key={classItem.id} value={classItem.id}>{classItem.name}</option>)}
+                </select>
+              </Field>
 
-          <section className="panel p-5">
-            <h3 className="font-bold text-ink">Relatórios recentes</h3>
-            <div className="mt-3 space-y-2">
-              {reports.slice(0, 6).map((report) => {
-                const student = students.find((item) => item.id === report.student_id);
-                return (
-                  <div key={report.id} className="rounded-lg border border-ink/10 p-3 text-sm">
-                    <p className="font-bold text-ink">{student?.name || "Turma"}</p>
-                    <p className="mt-1 text-ink/55">{report.report_type} • {formatDate(report.generated_at.slice(0, 10))}</p>
-                  </div>
-                );
-              })}
-              {!reports.length ? <p className="text-sm text-ink/55">Nenhum relatório gerado ainda.</p> : null}
+              {!isClassBatch ? (
+                <Field label="Aluno">
+                  <select value={studentId} onChange={(event) => setStudentId(event.target.value)} className="input" required>
+                    <option value="">Selecione</option>
+                    {classStudents.map((student) => <option key={student.id} value={student.id}>{student.name}</option>)}
+                  </select>
+                </Field>
+              ) : (
+                <div className="rounded-lg bg-paper p-3 text-sm leading-6 text-ink/65">
+                  {classStudents.length} alunos ativos serão considerados.
+                </div>
+              )}
             </div>
-          </section>
-        </aside>
+
+            <div className="grid gap-3 lg:grid-cols-4">
+              <Field label="Período">
+                <select value={periodKind} onChange={(event) => setPeriodKind(event.target.value)} className="input">
+                  {periodOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                </select>
+              </Field>
+              <Field label="Data inicial">
+                <input type="date" value={periodStart} onChange={(event) => setPeriodStart(event.target.value)} disabled={periodKind !== "custom"} className="input disabled:opacity-70" />
+              </Field>
+              <Field label="Data final">
+                <input type="date" value={periodEnd} onChange={(event) => setPeriodEnd(event.target.value)} disabled={periodKind !== "custom"} className="input disabled:opacity-70" />
+              </Field>
+              <Field label="Tom">
+                <select value={tone} onChange={(event) => setTone(event.target.value)} className="input">
+                  {tones.map((toneOption) => <option key={toneOption} value={toneOption}>{toneOption}</option>)}
+                </select>
+              </Field>
+            </div>
+
+            <div className="rounded-lg bg-paper p-3 text-sm leading-6 text-ink/60">
+              A IA não é chamada ao salvar observações ou abrir perfis. Ela só será usada ao gerar relatórios.
+            </div>
+
+            <button type="submit" disabled={busy || !classes.length} className="btn-primary disabled:opacity-60">
+              {busy ? <Loader2 size={17} className="animate-spin" /> : <Sparkles size={17} />}
+              {isClassBatch ? "Gerar relatórios da turma" : "Gerar relatório"}
+            </button>
+          </form>
+        </section>
+
+        {resultReports.length ? (
+          <div className="grid gap-4 xl:grid-cols-2">
+            {resultReports.map(({ student, report, cached }) => (
+              <ReportCard key={report.id} student={student} report={report} cached={cached} />
+            ))}
+          </div>
+        ) : null}
+
+        <section className="panel p-5">
+          <h3 className="font-bold text-ink">Relatórios recentes</h3>
+          <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+            {reports.slice(0, 6).map((report) => {
+              const student = students.find((item) => item.id === report.student_id);
+              return (
+                <div key={report.id} className="rounded-lg border border-ink/10 p-3 text-sm">
+                  <p className="font-bold text-ink">{student?.name || "Turma"}</p>
+                  <p className="mt-1 text-ink/55">{report.report_type} • {formatDate(report.generated_at.slice(0, 10))}</p>
+                </div>
+              );
+            })}
+            {!reports.length ? <p className="text-sm text-ink/55">Nenhum relatório gerado ainda.</p> : null}
+          </div>
+        </section>
       </section>
     </ProtectedPage>
   );

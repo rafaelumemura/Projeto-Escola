@@ -366,16 +366,10 @@ export default function StudentsPage() {
       title="Alunos"
       subtitle="Organize suas turmas, acompanhe seus alunos e registre observações do seu jeito."
       actions={
-        <>
-          <button type="button" onClick={() => openClassModal()} className="btn-primary">
-            <Plus size={17} />
-            Criar turma
-          </button>
-          <button type="button" onClick={() => openObservationModal()} className="btn-secondary">
-            <BookOpen size={17} />
-            Adicionar observação
-          </button>
-        </>
+        <button type="button" onClick={() => openClassModal()} className="btn-primary">
+          <Plus size={17} />
+          Criar turma
+        </button>
       }
     >
       {message ? <p className="mb-4 rounded-lg border border-leaf/15 bg-mint px-4 py-3 text-sm font-semibold text-leaf">{message}</p> : null}
@@ -442,7 +436,9 @@ export default function StudentsPage() {
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div>
                     <p className="label">Turma selecionada</p>
-                    <h2 className="mt-1 text-2xl font-bold text-ink">{selectedClass.name}</h2>
+                    <h2 className="mt-1 text-2xl font-bold text-ink">
+                      {selectedClass.name}{selectedClass.shift ? ` - ${selectedClass.shift}` : ""}
+                    </h2>
                     <p className="mt-1 text-sm text-ink/60">{selectedClass.description || "Sem descrição."}</p>
                   </div>
                   <button type="button" onClick={() => openStudentModal()} className="btn-primary">
@@ -774,7 +770,7 @@ function ObservationList({
 function Modal({ title, children, onClose }: { title: string; children: React.ReactNode; onClose: () => void }) {
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-ink/35 p-4">
-      <div className="max-h-[92vh] w-full max-w-2xl overflow-auto rounded-lg bg-white p-5 shadow-soft">
+      <div className="max-h-[92vh] w-full max-w-5xl overflow-auto rounded-lg bg-white p-5 shadow-soft">
         <div className="mb-4 flex items-center justify-between gap-4">
           <h2 className="text-xl font-bold text-ink">{title}</h2>
           <button type="button" onClick={onClose} className="rounded-md border border-ink/10 p-2 text-ink/60 hover:bg-paper">

@@ -606,12 +606,12 @@ export default function MonthlyPlanningPage() {
       {pdfModalOpen ? (
         <div className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-ink/45 px-4 py-6">
           <form onSubmit={generatePdf} className="w-full max-w-md rounded-lg border border-ink/10 bg-white p-5 shadow-soft">
-            <div className="mb-5 flex items-start justify-between gap-4">
+            <div className="relative mb-5 text-center">
               <div>
                 <p className="label mb-2">Gerar PDF</p>
                 <h2 className="text-xl font-bold text-ink">Planejamento</h2>
               </div>
-              <button type="button" onClick={() => setPdfModalOpen(false)} className="grid h-9 w-9 place-items-center rounded-md border border-ink/10 text-ink/55 hover:text-ink" title="Fechar">
+              <button type="button" onClick={() => setPdfModalOpen(false)} className="absolute right-0 top-0 grid h-9 w-9 place-items-center rounded-md border border-ink/10 text-ink/55 hover:text-ink" title="Fechar">
                 <X size={17} />
               </button>
             </div>

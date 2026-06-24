@@ -95,6 +95,14 @@ button:disabled {
 @layer components {
   .field {
     @apply w-full rounded-md border border-ink/15 bg-white px-3 py-2.5 text-base text-ink outline-none transition focus:border-leaf focus:ring-2 focus:ring-leaf/20 sm:py-2 sm:text-sm;
+    background-color: rgb(var(--color-surface));
+    color: rgb(var(--color-ink));
+  }
+
+  .input {
+    @apply w-full rounded-md border border-ink/15 bg-white px-3 py-2.5 text-base text-ink outline-none transition placeholder:text-ink/40 focus:border-leaf focus:ring-2 focus:ring-leaf/20 sm:py-2 sm:text-sm;
+    background-color: rgb(var(--color-surface));
+    color: rgb(var(--color-ink));
   }
 
   .label {
@@ -128,13 +136,15 @@ button:disabled {
 }
 
 @media (max-width: 640px) {
-  select.field {
+  select.field,
+  select.input {
     min-height: 48px;
     font-size: 16px;
     line-height: 1.35;
   }
 
-  select.field option {
+  select.field option,
+  select.input option {
     min-height: 44px;
     padding: 12px;
     font-size: 16px;
