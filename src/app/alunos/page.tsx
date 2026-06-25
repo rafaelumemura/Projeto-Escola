@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { BookOpen, CalendarDays, Edit3, FileText, Plus, Save, Trash2, UserPlus, UsersRound, X } from "lucide-react";
+import { BookOpen, CalendarDays, Check, Edit3, FileText, Plus, Save, Trash2, UserPlus, UsersRound, X } from "lucide-react";
 import { ProtectedPage } from "@/components/layout/ProtectedPage";
 import { useAuth } from "@/components/auth/AuthProvider";
 import type { Database } from "@/lib/database.types";
@@ -117,7 +117,7 @@ export default function StudentsPage() {
   );
   const activeClassStudents = classStudents;
   const classObservations = useMemo(
-    () => observations.filter((observation) => observation.class_id === selectedClassId && recordYear(observation.date) === selectedYear).slice(0, 12),
+    () => observations.filter((observation) => observation.class_id === selectedClassId && recordYear(observation.date) === selectedYear),
     [observations, selectedClassId, selectedYear]
   );
   const selectedStudentObservationIds = new Set(
@@ -134,6 +134,12 @@ export default function StudentsPage() {
     loadAll().catch((error) => setMessage(error instanceof Error ? error.message : "Não foi possível carregar alunos."));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [supabase]);
+
+  useEffect(() => {
+    if (!message) return;
+    const timeout = window.setTimeout(() => setMessage(null), 5000);
+    return () => window.clearTimeout(timeout);
+  }, [message]);
 
   useEffect(() => {
     if (!years.includes(selectedYear)) setSelectedYear(years[0] || new Date().getFullYear());
@@ -366,7 +372,6 @@ export default function StudentsPage() {
 
       await loadAll();
       closeModal();
-      setMessage("Observação salva sem uso de IA.");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Não foi possível salvar a observação.");
     } finally {
@@ -403,7 +408,11 @@ export default function StudentsPage() {
         </button>
       }
     >
-      {message ? <p className="mb-4 rounded-lg border border-leaf/15 bg-mint px-4 py-3 text-sm font-semibold text-leaf">{message}</p> : null}
+      {message ? (
+        <div className="fixed left-1/2 top-4 z-[70] w-[calc(100%-2rem)] max-w-md -translate-x-1/2 rounded-lg border border-leaf/15 bg-white px-4 py-3 text-sm font-semibold text-leaf shadow-soft">
+          {message}
+        </div>
+      ) : null}
 
       <YearFilter years={years} selectedYear={selectedYear} onChange={setSelectedYear} />
 
@@ -426,20 +435,43 @@ export default function StudentsPage() {
                         {classItem.shift || "Turno não informado"} • {classCount} {classCount === 1 ? "aluno" : "alunos"}
                       </p>
                     </button>
-                    <div className="flex shrink-0 items-center gap-1">
-                      <button type="button" onClick={() => openClassModal(classItem)} className="grid h-8 w-8 place-items-center rounded-md border border-ink/10 text-ink/60 transition hover:border-leaf/40 hover:text-leaf" title="Editar turma">
-                        <Edit3 size={15} />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => confirmDeleteClassId === classItem.id ? deleteClass(classItem.id) : setConfirmDeleteClassId(classItem.id)}
-                        className="grid h-8 w-8 place-items-center rounded-md border border-clay/25 bg-clay/10 text-clay transition hover:bg-clay/15"
-                        disabled={busy}
-                        title={confirmDeleteClassId === classItem.id ? "Confirmar exclusão" : "Excluir turma"}
-                      >
-                        <Trash2 size={15} />
-                      </button>
-                    </div>
+                    {confirmDeleteClassId === classItem.id ? (
+                      <div className="flex shrink-0 items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => deleteClass(classItem.id)}
+                          className="grid h-8 w-8 place-items-center rounded-md border border-leaf/25 bg-mint text-leaf transition hover:bg-mint/80"
+                          disabled={busy}
+                          title="Confirmar exclusão"
+                        >
+                          <Check size={15} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setConfirmDeleteClassId(null)}
+                          className="grid h-8 w-8 place-items-center rounded-md border border-clay/25 bg-clay/10 text-clay transition hover:bg-clay/15"
+                          disabled={busy}
+                          title="Cancelar exclusão"
+                        >
+                          <X size={15} />
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex shrink-0 items-center gap-1">
+                        <button type="button" onClick={() => openClassModal(classItem)} className="grid h-8 w-8 place-items-center rounded-md border border-ink/10 text-ink/60 transition hover:border-leaf/40 hover:text-leaf" title="Editar turma">
+                          <Edit3 size={15} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setConfirmDeleteClassId(classItem.id)}
+                          className="grid h-8 w-8 place-items-center rounded-md border border-clay/25 bg-clay/10 text-clay transition hover:bg-clay/15"
+                          disabled={busy}
+                          title="Excluir turma"
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </article>
               );
@@ -525,7 +557,7 @@ export default function StudentsPage() {
                     Adicionar observação
                   </button>
                 </div>
-                <ObservationList observations={classObservations} links={links} students={students} />
+                <ObservationList observations={classObservations} links={links} students={students} classStudents={classStudents} />
               </section>
             </>
           ) : (
@@ -737,19 +769,114 @@ function StudentProfile({
 function ObservationList({
   observations,
   links,
-  students
+  students,
+  classStudents
 }: {
   observations: ObservationRow[];
   links: ObservationStudentRow[];
   students: StudentRow[];
+  classStudents: StudentRow[];
 }) {
-  if (!observations.length) {
-    return <p className="p-5 text-sm leading-6 text-ink/60">Nenhuma observação registrada para esta turma.</p>;
-  }
+  const [studentFilter, setStudentFilter] = useState("");
+  const [dateStart, setDateStart] = useState("");
+  const [dateEnd, setDateEnd] = useState("");
+  const [tagFilter, setTagFilter] = useState("");
+  const [appliesToFilter, setAppliesToFilter] = useState("");
+  const [page, setPage] = useState(1);
+  const pageSize = 10;
+  const tagOptions = useMemo(
+    () => Array.from(new Set(observations.flatMap((observation) => observation.tags || []))).sort((a, b) => a.localeCompare(b)),
+    [observations]
+  );
+  const filteredObservations = useMemo(() => {
+    return observations.filter((observation) => {
+      const observationLinks = links.filter((link) => link.observation_id === observation.id);
+      const observationStudentIds = new Set(observationLinks.map((link) => link.student_id));
+      const matchesStudent = !studentFilter || observation.applies_to === "all_class" || observationStudentIds.has(studentFilter);
+      const matchesStart = !dateStart || observation.date >= dateStart;
+      const matchesEnd = !dateEnd || observation.date <= dateEnd;
+      const matchesTag = !tagFilter || (observation.tags || []).includes(tagFilter);
+      const matchesAppliesTo = !appliesToFilter || observation.applies_to === appliesToFilter;
+      return matchesStudent && matchesStart && matchesEnd && matchesTag && matchesAppliesTo;
+    });
+  }, [appliesToFilter, dateEnd, dateStart, links, observations, studentFilter, tagFilter]);
+  const totalPages = Math.max(1, Math.ceil(filteredObservations.length / pageSize));
+  const visibleObservations = filteredObservations.slice((page - 1) * pageSize, page * pageSize);
+
+  useEffect(() => {
+    setPage(1);
+  }, [appliesToFilter, dateEnd, dateStart, observations, studentFilter, tagFilter]);
+
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
 
   return (
-    <div className="divide-y divide-ink/10">
-      {observations.map((observation) => {
+    <div>
+      <div className="grid gap-3 border-b border-ink/10 p-4 md:grid-cols-2 xl:grid-cols-4">
+        <label className="block">
+          <span className="label mb-2 block">Nome do aluno</span>
+          <select value={studentFilter} onChange={(event) => setStudentFilter(event.target.value)} className="input">
+            <option value="">Todos os alunos</option>
+            {classStudents.map((student) => (
+              <option key={student.id} value={student.id}>{student.name}</option>
+            ))}
+          </select>
+        </label>
+        <label className="block">
+          <span className="label mb-2 block">Data inicial</span>
+          <input type="date" value={dateStart} onChange={(event) => setDateStart(event.target.value)} className="input" />
+        </label>
+        <label className="block">
+          <span className="label mb-2 block">Data final</span>
+          <input type="date" value={dateEnd} onChange={(event) => setDateEnd(event.target.value)} className="input" />
+        </label>
+        <label className="block">
+          <span className="label mb-2 block">Tag</span>
+          <select value={tagFilter} onChange={(event) => setTagFilter(event.target.value)} className="input">
+            <option value="">Todas as tags</option>
+            {tagOptions.map((tag) => (
+              <option key={tag} value={tag}>{tag}</option>
+            ))}
+          </select>
+        </label>
+        <label className="block md:col-span-2 xl:col-span-1">
+          <span className="label mb-2 block">Refere-se a</span>
+          <select value={appliesToFilter} onChange={(event) => setAppliesToFilter(event.target.value)} className="input">
+            <option value="">Todos</option>
+            {appliesToOptions.map((option) => (
+              <option key={option.value} value={option.value}>{option.label}</option>
+            ))}
+          </select>
+        </label>
+        <div className="flex items-end md:col-span-2 xl:col-span-3">
+          <button
+            type="button"
+            onClick={() => {
+              setStudentFilter("");
+              setDateStart("");
+              setDateEnd("");
+              setTagFilter("");
+              setAppliesToFilter("");
+            }}
+            className="btn-secondary"
+          >
+            Limpar filtros
+          </button>
+        </div>
+      </div>
+
+      {!observations.length ? (
+        <p className="p-5 text-sm leading-6 text-ink/60">Nenhuma observação registrada para esta turma.</p>
+      ) : null}
+
+      {observations.length > 0 && !filteredObservations.length ? (
+        <p className="p-5 text-sm leading-6 text-ink/60">Nenhuma observação encontrada com os filtros selecionados.</p>
+      ) : null}
+
+      <div className="divide-y divide-ink/10">
+      {visibleObservations.map((observation) => {
+        const observationTags = observation.tags || [];
         const studentNames = links
           .filter((link) => link.observation_id === observation.id)
           .map((link) => students.find((student) => student.id === link.student_id)?.name)
@@ -765,9 +892,9 @@ function ObservationList({
                   {formatDate(observation.date)} • {appliesToLabel(observation.applies_to)}
                 </p>
               </div>
-              {observation.tags.length ? (
+              {observationTags.length ? (
                 <div className="flex flex-wrap gap-1">
-                  {observation.tags.slice(0, 3).map((tag) => <span key={tag} className="rounded-full bg-mint px-2 py-1 text-[11px] font-semibold text-leaf">{tag}</span>)}
+                  {observationTags.slice(0, 3).map((tag) => <span key={tag} className="rounded-full bg-mint px-2 py-1 text-[11px] font-semibold text-leaf">{tag}</span>)}
                 </div>
               ) : null}
             </div>
@@ -776,6 +903,23 @@ function ObservationList({
           </article>
         );
       })}
+      </div>
+
+      {filteredObservations.length > pageSize ? (
+        <div className="flex flex-col gap-3 border-t border-ink/10 p-4 text-sm font-semibold text-ink/60 sm:flex-row sm:items-center sm:justify-between">
+          <span>
+            Página {page} de {totalPages} • {filteredObservations.length} registros
+          </span>
+          <div className="flex gap-2">
+            <button type="button" onClick={() => setPage((current) => Math.max(1, current - 1))} className="btn-secondary" disabled={page === 1}>
+              Anterior
+            </button>
+            <button type="button" onClick={() => setPage((current) => Math.min(totalPages, current + 1))} className="btn-secondary" disabled={page === totalPages}>
+              Próxima
+            </button>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
