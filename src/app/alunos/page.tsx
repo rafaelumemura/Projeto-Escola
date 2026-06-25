@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { BookOpen, CalendarDays, Edit3, FileText, GraduationCap, Plus, Save, Trash2, UserPlus, UsersRound, X } from "lucide-react";
+import { BookOpen, CalendarDays, Edit3, FileText, Plus, Save, Trash2, UserPlus, UsersRound, X } from "lucide-react";
 import { ProtectedPage } from "@/components/layout/ProtectedPage";
 import { useAuth } from "@/components/auth/AuthProvider";
 import type { Database } from "@/lib/database.types";
@@ -63,7 +63,6 @@ export default function StudentsPage() {
   const [busy, setBusy] = useState(false);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [confirmDeleteClassId, setConfirmDeleteClassId] = useState<string | null>(null);
-  const [confirmInactiveStudentId, setConfirmInactiveStudentId] = useState<string | null>(null);
 
   const [classForm, setClassForm] = useState({ name: "", shift: "", school_year: "", description: "" });
   const [studentForm, setStudentForm] = useState({ name: "", birth_date: "", general_notes: "" });
@@ -316,23 +315,6 @@ export default function StudentsPage() {
     }
   }
 
-  async function inactiveStudent(student: StudentRow) {
-    setBusy(true);
-    setMessage(null);
-    try {
-      const { error } = await supabase.from("students").update({ status: "inactive" }).eq("id", student.id);
-      if (error) throw error;
-      setConfirmInactiveStudentId(null);
-      await loadAll();
-      setSelectedStudent((current) => current?.id === student.id ? null : current);
-      setMessage("Aluno inativado.");
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Não foi possível atualizar o status.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
   async function saveObservation(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!user) return;
@@ -425,43 +407,34 @@ export default function StudentsPage() {
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
             {filteredClasses.map((classItem) => {
               const classCount = students.filter((student) => student.class_id === classItem.id && student.status === "active").length;
-              const preview = students
-                .filter((student) => student.class_id === classItem.id)
-                .slice(0, 4)
-                .map((student) => student.name)
-                .join(", ");
               const active = classItem.id === selectedClassId;
 
               return (
                 <article
                   key={classItem.id}
-                  className={`rounded-lg border bg-white p-4 shadow-soft transition ${active ? "border-leaf" : "border-ink/10 hover:border-leaf/30"}`}
+                  className={`rounded-lg border bg-white px-3 py-2.5 shadow-soft transition ${active ? "border-leaf" : "border-ink/10 hover:border-leaf/30"}`}
                 >
-                  <button type="button" onClick={() => setSelectedClassId(classItem.id)} className="w-full text-left">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <h2 className="text-lg font-bold text-ink">{classItem.name}</h2>
-                        <p className="mt-1 text-sm text-ink/60">{classItem.shift || "Turno não informado"}</p>
-                      </div>
-                      <GraduationCap className="text-leaf" size={22} />
+                  <div className="flex items-center justify-between gap-3">
+                    <button type="button" onClick={() => setSelectedClassId(classItem.id)} className="min-w-0 flex-1 text-left">
+                      <h2 className="truncate text-base font-bold text-ink">{classItem.name}</h2>
+                      <p className="mt-0.5 truncate text-xs font-semibold text-ink/55">
+                        {classItem.shift || "Turno não informado"} • {classCount} {classCount === 1 ? "aluno" : "alunos"}
+                      </p>
+                    </button>
+                    <div className="flex shrink-0 items-center gap-1">
+                      <button type="button" onClick={() => openClassModal(classItem)} className="grid h-8 w-8 place-items-center rounded-md border border-ink/10 text-ink/60 transition hover:border-leaf/40 hover:text-leaf" title="Editar turma">
+                        <Edit3 size={15} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => confirmDeleteClassId === classItem.id ? deleteClass(classItem.id) : setConfirmDeleteClassId(classItem.id)}
+                        className="grid h-8 w-8 place-items-center rounded-md border border-clay/25 bg-clay/10 text-clay transition hover:bg-clay/15"
+                        disabled={busy}
+                        title={confirmDeleteClassId === classItem.id ? "Confirmar exclusão" : "Excluir turma"}
+                      >
+                        <Trash2 size={15} />
+                      </button>
                     </div>
-                    <p className="mt-3 text-sm font-semibold text-ink">{classCount} {classCount === 1 ? "aluno" : "alunos"}</p>
-                    <p className="mt-1 min-h-10 text-sm leading-5 text-ink/55">{preview || "Nenhum aluno cadastrado ainda."}</p>
-                  </button>
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    <button type="button" onClick={() => openClassModal(classItem)} className="btn-secondary px-3 py-2 text-xs">
-                      <Edit3 size={14} />
-                      Editar
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => confirmDeleteClassId === classItem.id ? deleteClass(classItem.id) : setConfirmDeleteClassId(classItem.id)}
-                      className="btn-danger px-3 py-2 text-xs"
-                      disabled={busy}
-                    >
-                      <Trash2 size={14} />
-                      {confirmDeleteClassId === classItem.id ? "Confirmar" : "Excluir"}
-                    </button>
                   </div>
                 </article>
               );
@@ -520,15 +493,6 @@ export default function StudentsPage() {
                             <button type="button" onClick={() => openStudentModal(student)} className="btn-secondary whitespace-nowrap px-3 py-2 text-xs">
                               <Edit3 size={14} />
                               Editar
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => confirmInactiveStudentId === student.id ? inactiveStudent(student) : setConfirmInactiveStudentId(student.id)}
-                              className="btn-danger whitespace-nowrap px-3 py-2 text-xs"
-                              disabled={busy}
-                            >
-                              <X size={14} />
-                              {confirmInactiveStudentId === student.id ? "Confirmar" : "Inativar"}
                             </button>
                           </div>
                         </div>

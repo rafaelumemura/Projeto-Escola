@@ -215,48 +215,42 @@ function StatCard({
 }
 
 function BirthdayPanel({ students, today }: { students: Student[]; today: Date }) {
-  return (
-    <section className="panel p-5">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-2">
-          <PartyPopper size={20} className="text-[#FF4F64]" />
-          <h2 className="text-xl font-bold text-ink">Aniversariantes do mês</h2>
-        </div>
-        <span className="text-sm font-semibold text-ink/50">{monthTitle(today)}</span>
-      </div>
+  const todayBirthdays = students.filter((student) => {
+    const birthday = birthdayDate(student.birth_date, today.getFullYear());
+    return Boolean(birthday && isSameDay(birthday, today));
+  });
 
-      {students.length ? (
-        <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-          {students.map((student) => {
-            const birthday = birthdayDate(student.birth_date, today.getFullYear());
-            const isToday = Boolean(birthday && isSameDay(birthday, today));
-            return (
-              <div
-                key={student.id}
-                className={`rounded-lg border p-4 ${
-                  isToday ? "border-[#FF4F64]/45 bg-[#FF4F64]/10" : "border-ink/10 bg-white"
-                }`}
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="font-bold text-ink">{student.name}</p>
-                    <p className="mt-1 text-sm font-semibold text-ink/55">
-                      {birthday ? formatBirthdayDay(birthday) : "Data não informada"}
-                    </p>
-                  </div>
-                  {isToday ? (
-                    <span className="rounded-full bg-[#FF4F64] px-2.5 py-1 text-xs font-bold text-white">Hoje</span>
-                  ) : null}
-                </div>
-              </div>
-            );
-          })}
+  return (
+    <section className="rounded-lg border border-ink/10 bg-white px-4 py-3">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex min-w-0 items-center gap-2">
+          <PartyPopper size={17} className="shrink-0 text-[#FF4F64]" />
+          <p className="truncate text-sm font-bold text-ink">
+            Aniversariantes do mês
+            <span className="ml-2 font-semibold text-ink/55">{students.length ? birthdaySummary(students, today) : `Nenhum em ${monthTitle(today)}`}</span>
+          </p>
         </div>
-      ) : (
-        <p className="mt-4 text-sm font-semibold text-ink/55">Nenhum aniversariante cadastrado neste mês.</p>
-      )}
+        {todayBirthdays.length ? (
+          <span className="shrink-0 rounded-full bg-[#FF4F64] px-2.5 py-1 text-xs font-bold text-white">
+            Hoje: {todayBirthdays.map((student) => student.name).join(", ")}
+          </span>
+        ) : null}
+      </div>
     </section>
   );
+}
+
+function birthdaySummary(students: Student[], today: Date) {
+  const firstStudents = students.slice(0, 3).map((student) => {
+    const birthday = birthdayDate(student.birth_date, today.getFullYear());
+    return `${student.name}${birthday ? ` (${formatBirthdayDay(birthday)})` : ""}`;
+  });
+
+  if (students.length > 3) {
+    return `${firstStudents.join(", ")} e mais ${students.length - 3}`;
+  }
+
+  return firstStudents.join(", ");
 }
 
 function UpcomingPanel({ items }: { items: PlannedItem[] }) {
