@@ -269,10 +269,6 @@ export default function ReportsPage() {
               </Field>
             </div>
 
-            <div className="rounded-lg bg-paper p-3 text-sm leading-6 text-ink/60">
-              A IA não é chamada ao salvar observações ou abrir perfis. Ela só será usada ao gerar relatórios.
-            </div>
-
             <button type="submit" disabled={busy || !filteredClasses.length} className="btn-primary disabled:opacity-60">
               {busy ? <Loader2 size={17} className="animate-spin" /> : <Sparkles size={17} />}
               {isClassBatch ? "Gerar relatórios da turma" : "Gerar relatório"}

@@ -215,42 +215,38 @@ function StatCard({
 }
 
 function BirthdayPanel({ students, today }: { students: Student[]; today: Date }) {
-  const todayBirthdays = students.filter((student) => {
-    const birthday = birthdayDate(student.birth_date, today.getFullYear());
-    return Boolean(birthday && isSameDay(birthday, today));
-  });
-
   return (
     <section className="rounded-lg border border-ink/10 bg-white px-4 py-3">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex min-w-0 items-center gap-2">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+        <div className="flex shrink-0 items-center gap-2">
           <PartyPopper size={17} className="shrink-0 text-[#FF4F64]" />
-          <p className="truncate text-sm font-bold text-ink">
-            Aniversariantes do mês
-            <span className="ml-2 font-semibold text-ink/55">{students.length ? birthdaySummary(students, today) : `Nenhum em ${monthTitle(today)}`}</span>
-          </p>
+          <p className="text-sm font-bold text-ink">Aniversariantes do mês</p>
         </div>
-        {todayBirthdays.length ? (
-          <span className="shrink-0 rounded-full bg-[#FF4F64] px-2.5 py-1 text-xs font-bold text-white">
-            Hoje: {todayBirthdays.map((student) => student.name).join(", ")}
-          </span>
-        ) : null}
+        <div className="flex min-w-0 flex-wrap gap-2">
+          {students.length ? (
+            students.map((student) => {
+              const birthday = birthdayDate(student.birth_date, today.getFullYear());
+              const isToday = Boolean(birthday && isSameDay(birthday, today));
+              return (
+                <span
+                  key={student.id}
+                  className={`rounded-full px-2.5 py-1 text-xs font-bold ${
+                    isToday ? "bg-[#FF4F64] text-white" : "border border-ink/10 bg-mint/50 text-ink/70"
+                  }`}
+                >
+                  {student.name}{birthday ? ` • ${formatBirthdayDay(birthday)}` : ""}
+                </span>
+              );
+            })
+          ) : (
+            <span className="rounded-full border border-ink/10 bg-paper px-2.5 py-1 text-xs font-bold text-ink/50">
+              Nenhum em {monthTitle(today)}
+            </span>
+          )}
+        </div>
       </div>
     </section>
   );
-}
-
-function birthdaySummary(students: Student[], today: Date) {
-  const firstStudents = students.slice(0, 3).map((student) => {
-    const birthday = birthdayDate(student.birth_date, today.getFullYear());
-    return `${student.name}${birthday ? ` (${formatBirthdayDay(birthday)})` : ""}`;
-  });
-
-  if (students.length > 3) {
-    return `${firstStudents.join(", ")} e mais ${students.length - 3}`;
-  }
-
-  return firstStudents.join(", ");
 }
 
 function UpcomingPanel({ items }: { items: PlannedItem[] }) {

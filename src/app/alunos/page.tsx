@@ -220,7 +220,7 @@ export default function StudentsPage() {
       title: "",
       content: "",
       tags: [],
-      student_ids: student ? [student.id] : []
+      student_ids: student ? [student.id] : studentIdsForClass(classId, students)
     });
     setModal("observation");
   }
@@ -246,13 +246,15 @@ export default function StudentsPage() {
       };
 
       if (editingClass) {
-        const { error } = await supabase.from("classes").update(payload).eq("id", editingClass.id);
+        const { data, error } = await supabase.from("classes").update(payload).eq("id", editingClass.id).select("*").single();
         if (error) throw error;
+        setSelectedClassId(data.id);
         setMessage("Turma atualizada.");
       } else {
         const { data, error } = await supabase.from("classes").insert({ ...payload, user_id: user.id }).select("*").single();
         if (error) throw error;
         setSelectedClassId(data.id);
+        setSelectedYear(recordYear(data.created_at) || new Date().getFullYear());
         setMessage("Turma criada.");
       }
       await loadAll();
@@ -297,8 +299,9 @@ export default function StudentsPage() {
       };
 
       if (editingStudent) {
-        const { error } = await supabase.from("students").update(payload).eq("id", editingStudent.id);
+        const { data, error } = await supabase.from("students").update(payload).eq("id", editingStudent.id).select("*").single();
         if (error) throw error;
+        setSelectedStudent(data);
         setMessage("Aluno atualizado.");
       } else {
         const { data, error } = await supabase.from("students").insert({ ...payload, user_id: user.id }).select("*").single();
@@ -322,11 +325,13 @@ export default function StudentsPage() {
     setMessage(null);
     try {
       const classId = selectedClassId;
-      const selectedStudentIds = shouldAttachStudents(observationForm.applies_to)
+      const selectedStudentIds = observationForm.applies_to === "all_class"
+        ? studentIdsForClass(classId, students)
+        : shouldAttachStudents(observationForm.applies_to)
         ? observationForm.student_ids
         : [];
 
-      if (shouldAttachStudents(observationForm.applies_to) && selectedStudentIds.length === 0) {
+      if (observationForm.applies_to !== "all_class" && shouldAttachStudents(observationForm.applies_to) && selectedStudentIds.length === 0) {
         throw new Error("Selecione ao menos um aluno relacionado.");
       }
 
@@ -486,13 +491,8 @@ export default function StudentsPage() {
                             </p>
                           </button>
                           <div className="flex shrink-0 flex-nowrap gap-2 overflow-x-auto">
-                            <button type="button" onClick={() => openObservationModal(student)} className="btn-secondary whitespace-nowrap px-3 py-2 text-xs">
-                              <BookOpen size={14} />
-                              Observação
-                            </button>
-                            <button type="button" onClick={() => openStudentModal(student)} className="btn-secondary whitespace-nowrap px-3 py-2 text-xs">
-                              <Edit3 size={14} />
-                              Editar
+                            <button type="button" onClick={() => openStudentModal(student)} className="grid h-9 w-9 place-items-center rounded-md border border-ink/10 text-ink/60 transition hover:border-leaf/40 hover:text-leaf" title="Editar aluno">
+                              <Edit3 size={15} />
                             </button>
                           </div>
                         </div>
@@ -542,7 +542,13 @@ export default function StudentsPage() {
             </Field>
             <div className="grid gap-3 sm:grid-cols-2">
               <Field label="Período/turno">
-                <input value={classForm.shift} onChange={(event) => setClassForm((current) => ({ ...current, shift: event.target.value }))} className="input" placeholder="Manhã" />
+                <select value={classForm.shift} onChange={(event) => setClassForm((current) => ({ ...current, shift: event.target.value }))} className="input">
+                  <option value="">Selecione</option>
+                  <option value="Manhã">Manhã</option>
+                  <option value="Tarde">Tarde</option>
+                  <option value="Noite">Noite</option>
+                  <option value="Integral">Integral</option>
+                </select>
               </Field>
               <Field label="Ano/série">
                 <input value={classForm.school_year} onChange={(event) => setClassForm((current) => ({ ...current, school_year: event.target.value }))} className="input" placeholder="Infantil 4" />
@@ -587,36 +593,43 @@ export default function StudentsPage() {
               <Field label="Refere-se a">
                 <select
                   value={observationForm.applies_to}
-                  onChange={(event) => setObservationForm((current) => ({ ...current, applies_to: event.target.value as ObservationRow["applies_to"], student_ids: [] }))}
+                  onChange={(event) => {
+                    const appliesTo = event.target.value as ObservationRow["applies_to"];
+                    setObservationForm((current) => ({
+                      ...current,
+                      applies_to: appliesTo,
+                      student_ids: appliesTo === "all_class" ? studentIdsForClass(selectedClassId, students) : []
+                    }));
+                  }}
                   className="input"
                 >
                   {appliesToOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
                 </select>
               </Field>
             </div>
-            <div className="grid gap-3 sm:grid-cols-3">
+            <div>
               <Field label="Data">
                 <input type="date" value={observationForm.date} onChange={(event) => setObservationForm((current) => ({ ...current, date: event.target.value }))} className="input" />
-              </Field>
-              <Field label="Início do período">
-                <input type="date" value={observationForm.period_start} onChange={(event) => setObservationForm((current) => ({ ...current, period_start: event.target.value }))} className="input" />
-              </Field>
-              <Field label="Fim do período">
-                <input type="date" value={observationForm.period_end} onChange={(event) => setObservationForm((current) => ({ ...current, period_end: event.target.value }))} className="input" />
               </Field>
             </div>
             <Field label="Título opcional">
               <input value={observationForm.title} onChange={(event) => setObservationForm((current) => ({ ...current, title: event.target.value }))} className="input" />
             </Field>
-            {shouldAttachStudents(observationForm.applies_to) ? (
+            {observationForm.applies_to !== "none" ? (
               <Field label="Alunos relacionados">
                 <div className="grid max-h-44 gap-2 overflow-auto rounded-lg border border-ink/10 p-2 sm:grid-cols-2">
                   {activeClassStudents.map((student) => (
                     <label key={student.id} className="flex items-center gap-2 rounded-md px-2 py-2 text-sm text-ink/75 hover:bg-mint/50">
-                      <input type="checkbox" checked={observationForm.student_ids.includes(student.id)} onChange={() => toggleObservationStudent(student.id)} />
+                      <input
+                        type="checkbox"
+                        checked={observationForm.applies_to === "all_class" || observationForm.student_ids.includes(student.id)}
+                        disabled={observationForm.applies_to === "all_class"}
+                        onChange={() => toggleObservationStudent(student.id)}
+                      />
                       {student.name}
                     </label>
                   ))}
+                  {!activeClassStudents.length ? <p className="px-2 py-2 text-sm text-ink/55">Nenhum aluno cadastrado nessa turma.</p> : null}
                 </div>
               </Field>
             ) : null}
@@ -643,9 +656,6 @@ export default function StudentsPage() {
                 ))}
               </div>
             </Field>
-            <p className="rounded-lg bg-paper px-3 py-2 text-xs leading-5 text-ink/60">
-              Ao salvar, nenhuma IA será chamada. O Projeto Escola usa esses registros apenas quando você gerar relatórios.
-            </p>
             <ModalActions busy={busy} onCancel={closeModal} />
           </form>
         </Modal>
@@ -838,6 +848,12 @@ function YearFilter({
 
 function shouldAttachStudents(appliesTo: ObservationRow["applies_to"]) {
   return appliesTo === "selected_students" || appliesTo === "individual_student";
+}
+
+function studentIdsForClass(classId: string, students: StudentRow[]) {
+  return students
+    .filter((student) => student.class_id === classId && student.status === "active")
+    .map((student) => student.id);
 }
 
 function buildYearOptions(values: Array<string | null | undefined>) {
