@@ -26,8 +26,7 @@ const observationTypes = [
 const appliesToOptions = [
   { value: "all_class", label: "Toda a turma" },
   { value: "selected_students", label: "Alguns alunos" },
-  { value: "individual_student", label: "Um aluno específico" },
-  { value: "none", label: "Nenhum aluno específico" }
+  { value: "individual_student", label: "Aluno específico" }
 ] as const;
 
 const pedagogicalTags = [
@@ -777,7 +776,7 @@ function ObservationList({
   students: StudentRow[];
   classStudents: StudentRow[];
 }) {
-  const [studentFilter, setStudentFilter] = useState("");
+  const [studentNameFilter, setStudentNameFilter] = useState("");
   const [dateStart, setDateStart] = useState("");
   const [dateEnd, setDateEnd] = useState("");
   const [tagFilter, setTagFilter] = useState("");
@@ -789,23 +788,27 @@ function ObservationList({
     [observations]
   );
   const filteredObservations = useMemo(() => {
+    const normalizedStudentFilter = normalizeSearch(studentNameFilter);
     return observations.filter((observation) => {
       const observationLinks = links.filter((link) => link.observation_id === observation.id);
-      const observationStudentIds = new Set(observationLinks.map((link) => link.student_id));
-      const matchesStudent = !studentFilter || observation.applies_to === "all_class" || observationStudentIds.has(studentFilter);
+      const linkedStudentNames = observationLinks
+        .map((link) => students.find((student) => student.id === link.student_id)?.name)
+        .filter((name): name is string => Boolean(name));
+      const shouldFilterByStudentName = appliesToFilter === "selected_students" || appliesToFilter === "individual_student";
+      const matchesStudent = !shouldFilterByStudentName || !normalizedStudentFilter || linkedStudentNames.some((name) => normalizeSearch(name).includes(normalizedStudentFilter));
       const matchesStart = !dateStart || observation.date >= dateStart;
       const matchesEnd = !dateEnd || observation.date <= dateEnd;
       const matchesTag = !tagFilter || (observation.tags || []).includes(tagFilter);
       const matchesAppliesTo = !appliesToFilter || observation.applies_to === appliesToFilter;
       return matchesStudent && matchesStart && matchesEnd && matchesTag && matchesAppliesTo;
     });
-  }, [appliesToFilter, dateEnd, dateStart, links, observations, studentFilter, tagFilter]);
+  }, [appliesToFilter, dateEnd, dateStart, links, observations, studentNameFilter, students, tagFilter]);
   const totalPages = Math.max(1, Math.ceil(filteredObservations.length / pageSize));
   const visibleObservations = filteredObservations.slice((page - 1) * pageSize, page * pageSize);
 
   useEffect(() => {
     setPage(1);
-  }, [appliesToFilter, dateEnd, dateStart, observations, studentFilter, tagFilter]);
+  }, [appliesToFilter, dateEnd, dateStart, observations, studentNameFilter, tagFilter]);
 
   useEffect(() => {
     if (page > totalPages) setPage(totalPages);
@@ -815,14 +818,39 @@ function ObservationList({
     <div>
       <div className="grid gap-3 border-b border-ink/10 p-4 md:grid-cols-2 xl:grid-cols-4">
         <label className="block">
-          <span className="label mb-2 block">Nome do aluno</span>
-          <select value={studentFilter} onChange={(event) => setStudentFilter(event.target.value)} className="input">
-            <option value="">Todos os alunos</option>
-            {classStudents.map((student) => (
-              <option key={student.id} value={student.id}>{student.name}</option>
+          <span className="label mb-2 block">Refere-se a</span>
+          <select
+            value={appliesToFilter}
+            onChange={(event) => {
+              const value = event.target.value;
+              setAppliesToFilter(value);
+              if (value !== "selected_students" && value !== "individual_student") setStudentNameFilter("");
+            }}
+            className="input"
+          >
+            <option value="">Todos</option>
+            {appliesToOptions.map((option) => (
+              <option key={option.value} value={option.value}>{option.label}</option>
             ))}
           </select>
         </label>
+        {appliesToFilter === "selected_students" || appliesToFilter === "individual_student" ? (
+          <label className="block">
+            <span className="label mb-2 block">Nome do aluno</span>
+            <input
+              list="observation-student-filter"
+              value={studentNameFilter}
+              onChange={(event) => setStudentNameFilter(event.target.value)}
+              className="input"
+              placeholder="Digite o nome do aluno"
+            />
+            <datalist id="observation-student-filter">
+              {classStudents.map((student) => (
+                <option key={student.id} value={student.name} />
+              ))}
+            </datalist>
+          </label>
+        ) : null}
         <label className="block">
           <span className="label mb-2 block">Data inicial</span>
           <input type="date" value={dateStart} onChange={(event) => setDateStart(event.target.value)} className="input" />
@@ -840,20 +868,11 @@ function ObservationList({
             ))}
           </select>
         </label>
-        <label className="block md:col-span-2 xl:col-span-1">
-          <span className="label mb-2 block">Refere-se a</span>
-          <select value={appliesToFilter} onChange={(event) => setAppliesToFilter(event.target.value)} className="input">
-            <option value="">Todos</option>
-            {appliesToOptions.map((option) => (
-              <option key={option.value} value={option.value}>{option.label}</option>
-            ))}
-          </select>
-        </label>
         <div className="flex items-end md:col-span-2 xl:col-span-3">
           <button
             type="button"
             onClick={() => {
-              setStudentFilter("");
+              setStudentNameFilter("");
               setDateStart("");
               setDateEnd("");
               setTagFilter("");
@@ -1014,6 +1033,14 @@ function recordYear(value?: string | null) {
   const match = value.match(/(?:19|20)\d{2}/);
   const year = match ? Number(match[0]) : Number(value.slice(0, 4));
   return Number.isFinite(year) && year > 1900 ? year : null;
+}
+
+function normalizeSearch(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
 }
 
 function formatDate(value: string) {
