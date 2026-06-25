@@ -14,6 +14,7 @@ export const collectionActivitySchema = z.object({
 
 export const weeklyPlanCreateSchema = z.object({
   title: z.string().min(1, "Informe o titulo do planejamento."),
+  class_id: z.string().uuid().nullable().optional(),
   start_date: z.string().nullable().optional(),
   end_date: z.string().nullable().optional()
 });

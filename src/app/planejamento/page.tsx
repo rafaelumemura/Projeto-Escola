@@ -16,6 +16,7 @@ import type { Database } from "@/lib/database.types";
 
 type MonthlyPlan = Database["public"]["Tables"]["weekly_plans"]["Row"];
 type Activity = Database["public"]["Tables"]["activities"]["Row"];
+type ClassRow = Database["public"]["Tables"]["classes"]["Row"];
 type ActivityWithCollections = Activity & {
   collection_ids?: string[];
   primary_collection_id?: string | null;
@@ -35,6 +36,9 @@ export default function MonthlyPlanningPage() {
   const [monthlyPlan, setMonthlyPlan] = useState<MonthlyPlan | null>(null);
   const [activities, setActivities] = useState<ActivityWithCollections[]>([]);
   const [collections, setCollections] = useState<Collection[]>([]);
+  const [classes, setClasses] = useState<ClassRow[]>([]);
+  const [classesLoaded, setClassesLoaded] = useState(false);
+  const [selectedClassId, setSelectedClassId] = useState("");
   const [items, setItems] = useState<PlanItem[]>([]);
   const [modalDate, setModalDate] = useState<string | null>(null);
   const [modalCanChangeDate, setModalCanChangeDate] = useState(false);
@@ -68,19 +72,25 @@ export default function MonthlyPlanningPage() {
   useEffect(() => {
     Promise.all([
       apiFetch<{ activities: ActivityWithCollections[] }>(supabase, "/api/activities"),
-      apiFetch<{ collections: Collection[] }>(supabase, "/api/collections")
+      apiFetch<{ collections: Collection[] }>(supabase, "/api/collections"),
+      supabase.from("classes").select("*").order("created_at", { ascending: false })
     ])
-      .then(([activityData, collectionData]) => {
+      .then(([activityData, collectionData, classesResponse]) => {
+        if (classesResponse.error) throw classesResponse.error;
         setActivities(activityData.activities);
         setCollections(collectionData.collections);
+        setClasses(classesResponse.data || []);
+        setSelectedClassId((current) => current || classesResponse.data?.[0]?.id || "");
+        setClassesLoaded(true);
       })
       .catch((error) => setMessage(error instanceof Error ? error.message : "Não foi possível carregar atividades."));
   }, [supabase]);
 
   useEffect(() => {
+    if (!classesLoaded) return;
     loadMonth().catch((error) => setMessage(error instanceof Error ? error.message : "Não foi possível carregar o planejamento."));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [monthStartDate, monthEndDate, supabase]);
+  }, [classesLoaded, monthStartDate, monthEndDate, selectedClassId, supabase]);
 
   useEffect(() => {
     setMobileSelectedDate(null);
@@ -109,13 +119,16 @@ export default function MonthlyPlanningPage() {
     const targetStartDate = formatDate(monthStart(date));
     const targetEndDate = formatDate(monthEnd(date));
     const plansData = await apiFetch<{ weekly_plans: MonthlyPlan[] }>(supabase, "/api/weekly-plans");
-    const existing = plansData.weekly_plans.find((plan) => plan.title === title || plan.title === legacyTitle);
+    const existing = plansData.weekly_plans.find((plan) =>
+      (plan.title === title || plan.title === legacyTitle) &&
+      (selectedClassId ? plan.class_id === selectedClassId : !plan.class_id)
+    );
 
     if (existing) return existing;
 
     const created = await apiFetch<{ weekly_plan: MonthlyPlan }>(supabase, "/api/weekly-plans", {
       method: "POST",
-      body: { title, start_date: targetStartDate, end_date: targetEndDate }
+      body: { title, class_id: selectedClassId || null, start_date: targetStartDate, end_date: targetEndDate }
     });
 
     return created.weekly_plan;
@@ -277,6 +290,20 @@ export default function MonthlyPlanningPage() {
   return (
     <ProtectedPage title="Planejamento" subtitle="Organize as atividades salvas em um calendário com horários de início.">
       {message ? <p className="mb-4 rounded-lg border border-ink/10 bg-white px-4 py-3 text-sm font-semibold text-ink/70">{message}</p> : null}
+
+      <section className="panel mb-5 p-4">
+        <label className="block max-w-md">
+          <span className="label mb-2 block">Turma do planejamento</span>
+          <select value={selectedClassId} onChange={(event) => setSelectedClassId(event.target.value)} className="field">
+            <option value="">Sem turma selecionada</option>
+            {classes.map((classItem) => (
+              <option key={classItem.id} value={classItem.id}>
+                {classItem.name}{classItem.shift ? ` - ${classItem.shift}` : ""}
+              </option>
+            ))}
+          </select>
+        </label>
+      </section>
 
       <section className="panel mb-5 hidden p-4 lg:block">
         <div className="flex flex-wrap items-center justify-between gap-3">

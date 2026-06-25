@@ -35,7 +35,7 @@ export async function POST(request: Request) {
 
       if (error) throw error;
 
-      const planItems = await fetchPlanItemsForPdf(supabase, user.id, payload.weekly_plan_id, payload.start_date, payload.end_date);
+      const planItems = await fetchPlanItemsForPdf(supabase, user.id, payload.weekly_plan_id, plan.class_id || null, payload.start_date, payload.end_date);
 
       weeklyPlan = {
         ...plan,
@@ -83,16 +83,21 @@ async function fetchPlanItemsForPdf(
   supabase: Awaited<ReturnType<typeof getAuthenticatedUser>>["supabase"],
   userId: string,
   weeklyPlanId: string,
+  classId: string | null,
   startDate?: string,
   endDate?: string
 ) {
   let planIds = [weeklyPlanId];
 
   if (startDate || endDate) {
-    const { data: plans, error: plansError } = await supabase
+    let plansQuery = supabase
       .from("weekly_plans")
       .select("id,start_date,end_date")
       .eq("user_id", userId);
+
+    plansQuery = classId ? plansQuery.eq("class_id", classId) : plansQuery.is("class_id", null);
+
+    const { data: plans, error: plansError } = await plansQuery;
 
     if (plansError) throw plansError;
 

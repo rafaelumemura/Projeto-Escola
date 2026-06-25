@@ -206,6 +206,22 @@ type ObservationStudentInsert = {
   created_at?: string;
 };
 
+type ClassActivityRow = {
+  id: string;
+  user_id: string;
+  class_id: string;
+  activity_id: string;
+  created_at: string;
+};
+
+type ClassActivityInsert = {
+  id?: string;
+  user_id: string;
+  class_id: string;
+  activity_id: string;
+  created_at?: string;
+};
+
 type StudentReportRow = {
   id: string;
   user_id: string;
@@ -368,6 +384,7 @@ export type Database = {
         Row: {
           id: string;
           user_id: string;
+          class_id: string | null;
           title: string;
           start_date: string | null;
           end_date: string | null;
@@ -377,6 +394,7 @@ export type Database = {
         Insert: {
           id?: string;
           user_id: string;
+          class_id?: string | null;
           title: string;
           start_date?: string | null;
           end_date?: string | null;
@@ -384,6 +402,7 @@ export type Database = {
           updated_at?: string;
         };
         Update: {
+          class_id?: string | null;
           title?: string;
           start_date?: string | null;
           end_date?: string | null;
@@ -437,6 +456,11 @@ export type Database = {
       observation_students: {
         Row: ObservationStudentRow;
         Insert: ObservationStudentInsert;
+        Update: Record<string, never>;
+      };
+      class_activities: {
+        Row: ClassActivityRow;
+        Insert: ClassActivityInsert;
         Update: Record<string, never>;
       };
       student_reports: {

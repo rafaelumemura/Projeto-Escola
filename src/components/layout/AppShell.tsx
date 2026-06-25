@@ -19,7 +19,7 @@ const nav = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/gerar", label: "Gerar", icon: Sparkles },
   { href: "/atividades", label: "Atividades", icon: BookOpen },
-  { href: "/alunos", label: "Alunos", icon: UsersRound },
+  { href: "/alunos", label: "Turma / Alunos", icon: UsersRound },
   { href: "/relatorios", label: "Relatórios", icon: FileText },
   { href: "/colecoes", label: "Coleções", icon: FolderKanban },
   { href: "/planejamento", label: "Planejamento", icon: CalendarDays }
@@ -29,7 +29,7 @@ const mobileNav = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/gerar", label: "Gerar", icon: Sparkles },
   { href: "/atividades", label: "Atividades", icon: BookOpen },
-  { href: "/alunos", label: "Alunos", icon: UsersRound },
+  { href: "/alunos", label: "Turma / Alunos", icon: UsersRound },
   { href: "/relatorios", label: "Relatórios", icon: FileText },
   { href: "/colecoes", label: "Coleções", icon: FolderKanban },
   { href: "/planejamento", label: "Planejar", icon: CalendarDays }

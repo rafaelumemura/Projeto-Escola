@@ -4,14 +4,18 @@ import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { BookOpen, CalendarDays, Check, Edit3, FileText, Plus, Save, Trash2, UserPlus, UsersRound, X } from "lucide-react";
 import { ProtectedPage } from "@/components/layout/ProtectedPage";
+import { ActivityView } from "@/components/ui/ActivityView";
 import { useAuth } from "@/components/auth/AuthProvider";
 import type { Database } from "@/lib/database.types";
 
+type ActivityRow = Database["public"]["Tables"]["activities"]["Row"];
 type ClassRow = Database["public"]["Tables"]["classes"]["Row"];
 type StudentRow = Database["public"]["Tables"]["students"]["Row"];
 type ObservationRow = Database["public"]["Tables"]["student_observations"]["Row"];
 type ObservationStudentRow = Database["public"]["Tables"]["observation_students"]["Row"];
 type StudentReportRow = Database["public"]["Tables"]["student_reports"]["Row"];
+type ClassActivityRow = Database["public"]["Tables"]["class_activities"]["Row"];
+type ClassActivityWithActivity = ClassActivityRow & { activities?: ActivityRow | null };
 type ModalMode = "class" | "student" | "observation" | null;
 
 const observationTypes = [
@@ -53,8 +57,12 @@ export default function StudentsPage() {
   const [observations, setObservations] = useState<ObservationRow[]>([]);
   const [links, setLinks] = useState<ObservationStudentRow[]>([]);
   const [reports, setReports] = useState<StudentReportRow[]>([]);
+  const [activities, setActivities] = useState<ActivityRow[]>([]);
+  const [classActivities, setClassActivities] = useState<ClassActivityWithActivity[]>([]);
   const [selectedClassId, setSelectedClassId] = useState("");
   const [selectedStudent, setSelectedStudent] = useState<StudentRow | null>(null);
+  const [selectedActivityId, setSelectedActivityId] = useState("");
+  const [viewActivity, setViewActivity] = useState<ActivityRow | null>(null);
   const [modal, setModal] = useState<ModalMode>(null);
   const [editingClass, setEditingClass] = useState<ClassRow | null>(null);
   const [editingStudent, setEditingStudent] = useState<StudentRow | null>(null);
@@ -62,6 +70,7 @@ export default function StudentsPage() {
   const [busy, setBusy] = useState(false);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [confirmDeleteClassId, setConfirmDeleteClassId] = useState<string | null>(null);
+  const [studentPage, setStudentPage] = useState(1);
 
   const [classForm, setClassForm] = useState({ name: "", shift: "", school_year: "", description: "" });
   const [studentForm, setStudentForm] = useState({ name: "", birth_date: "", general_notes: "" });
@@ -110,11 +119,41 @@ export default function StudentsPage() {
     [classes, filteredClassIds]
   );
   const selectedClass = filteredClasses.find((classItem) => classItem.id === selectedClassId) || null;
+  const classActivityCountByClass = useMemo(() => {
+    return classActivities.reduce<Record<string, number>>((acc, item) => {
+      acc[item.class_id] = (acc[item.class_id] || 0) + 1;
+      return acc;
+    }, {});
+  }, [classActivities]);
   const classStudents = useMemo(
     () => students.filter((student) => student.class_id === selectedClassId && student.status === "active").sort((a, b) => a.name.localeCompare(b.name)),
     [selectedClassId, students]
   );
+  const studentPageSize = 4;
+  const totalStudentPages = Math.max(1, Math.ceil(classStudents.length / studentPageSize));
+  const visibleClassStudents = useMemo(() => {
+    const safePage = Math.min(studentPage, totalStudentPages);
+    return classStudents.slice((safePage - 1) * studentPageSize, safePage * studentPageSize);
+  }, [classStudents, studentPage, totalStudentPages]);
   const activeClassStudents = classStudents;
+  const selectedClassActivityLinks = useMemo(
+    () => classActivities.filter((item) => item.class_id === selectedClassId),
+    [classActivities, selectedClassId]
+  );
+  const selectedClassActivityIds = useMemo(() => new Set(selectedClassActivityLinks.map((item) => item.activity_id)), [selectedClassActivityLinks]);
+  const selectedClassAssignedActivities = useMemo(
+    () => selectedClassActivityLinks
+      .map((link) => ({
+        link,
+        activity: link.activities || activities.find((activity) => activity.id === link.activity_id) || null
+      }))
+      .filter((item): item is { link: ClassActivityWithActivity; activity: ActivityRow } => Boolean(item.activity)),
+    [activities, selectedClassActivityLinks]
+  );
+  const availableActivities = useMemo(
+    () => activities.filter((activity) => !selectedClassActivityIds.has(activity.id)),
+    [activities, selectedClassActivityIds]
+  );
   const classObservations = useMemo(
     () => observations.filter((observation) => observation.class_id === selectedClassId && recordYear(observation.date) === selectedYear),
     [observations, selectedClassId, selectedYear]
@@ -156,18 +195,31 @@ export default function StudentsPage() {
     }
   }, [filteredClasses, selectedClassId]);
 
+  useEffect(() => {
+    setStudentPage(1);
+    setSelectedActivityId("");
+  }, [selectedClassId]);
+
+  useEffect(() => {
+    if (studentPage > totalStudentPages) setStudentPage(totalStudentPages);
+  }, [studentPage, totalStudentPages]);
+
   async function loadAll() {
-    const [classesResponse, studentsResponse, observationsResponse, reportsResponse] = await Promise.all([
+    const [classesResponse, studentsResponse, observationsResponse, reportsResponse, activitiesResponse, classActivitiesResponse] = await Promise.all([
       supabase.from("classes").select("*").order("created_at", { ascending: false }),
       supabase.from("students").select("*").order("name"),
       supabase.from("student_observations").select("*").order("date", { ascending: false }),
-      supabase.from("student_reports").select("*").order("generated_at", { ascending: false })
+      supabase.from("student_reports").select("*").order("generated_at", { ascending: false }),
+      supabase.from("activities").select("*").order("created_at", { ascending: false }),
+      supabase.from("class_activities").select("*, activities(*)").order("created_at", { ascending: false })
     ]);
 
     if (classesResponse.error) throw classesResponse.error;
     if (studentsResponse.error) throw studentsResponse.error;
     if (observationsResponse.error) throw observationsResponse.error;
     if (reportsResponse.error) throw reportsResponse.error;
+    if (activitiesResponse.error) throw activitiesResponse.error;
+    if (classActivitiesResponse.error) throw classActivitiesResponse.error;
 
     const observationIds = (observationsResponse.data || []).map((observation) => observation.id);
     const linksResponse = observationIds.length
@@ -180,6 +232,8 @@ export default function StudentsPage() {
     setObservations(observationsResponse.data || []);
     setReports(reportsResponse.data || []);
     setLinks(linksResponse.data || []);
+    setActivities(activitiesResponse.data || []);
+    setClassActivities((classActivitiesResponse.data || []) as ClassActivityWithActivity[]);
   }
 
   function openClassModal(classItem?: ClassRow) {
@@ -284,6 +338,44 @@ export default function StudentsPage() {
       setMessage("Turma excluída.");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Não foi possível excluir a turma.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function addClassActivity() {
+    if (!user || !selectedClassId || !selectedActivityId) {
+      setMessage("Selecione uma atividade para atribuir à turma.");
+      return;
+    }
+
+    setBusy(true);
+    setMessage(null);
+    try {
+      const { error } = await supabase
+        .from("class_activities")
+        .insert({ user_id: user.id, class_id: selectedClassId, activity_id: selectedActivityId });
+      if (error) throw error;
+      setSelectedActivityId("");
+      await loadAll();
+      setMessage("Atividade atribuída à turma.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Não foi possível atribuir a atividade.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function removeClassActivity(linkId: string) {
+    setBusy(true);
+    setMessage(null);
+    try {
+      const { error } = await supabase.from("class_activities").delete().eq("id", linkId);
+      if (error) throw error;
+      await loadAll();
+      setMessage("Atividade removida da turma.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Não foi possível remover a atividade.");
     } finally {
       setBusy(false);
     }
@@ -398,7 +490,7 @@ export default function StudentsPage() {
 
   return (
     <ProtectedPage
-      title="Alunos"
+      title="Turma / Alunos"
       subtitle="Organize suas turmas, acompanhe seus alunos e registre observações do seu jeito."
       actions={
         <button type="button" onClick={() => openClassModal()} className="btn-primary">
@@ -420,6 +512,7 @@ export default function StudentsPage() {
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
             {filteredClasses.map((classItem) => {
               const classCount = students.filter((student) => student.class_id === classItem.id && student.status === "active").length;
+              const activityCount = classActivityCountByClass[classItem.id] || 0;
               const active = classItem.id === selectedClassId;
 
               return (
@@ -431,7 +524,7 @@ export default function StudentsPage() {
                     <button type="button" onClick={() => setSelectedClassId(classItem.id)} className="min-w-0 flex-1 text-left">
                       <h2 className="truncate text-base font-bold text-ink">{classItem.name}</h2>
                       <p className="mt-0.5 truncate text-xs font-semibold text-ink/55">
-                        {classItem.shift || "Turno não informado"} • {classCount} {classCount === 1 ? "aluno" : "alunos"}
+                        {classItem.shift || "Turno não informado"} • {classCount} {classCount === 1 ? "aluno" : "alunos"} • {activityCount} {activityCount === 1 ? "atividade" : "atividades"}
                       </p>
                     </button>
                     {confirmDeleteClassId === classItem.id ? (
@@ -503,6 +596,52 @@ export default function StudentsPage() {
                 </div>
               </section>
 
+              <section className="panel p-5">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                  <div>
+                    <p className="label">Atividades atribuídas</p>
+                    <h3 className="mt-1 text-lg font-bold text-ink">Atividades desta turma</h3>
+                  </div>
+                  <div className="flex w-full flex-col gap-2 sm:w-auto sm:min-w-[420px] sm:flex-row">
+                    <select value={selectedActivityId} onChange={(event) => setSelectedActivityId(event.target.value)} className="input">
+                      <option value="">Selecione uma atividade cadastrada</option>
+                      {availableActivities.map((activity) => (
+                        <option key={activity.id} value={activity.id}>{activity.title}</option>
+                      ))}
+                    </select>
+                    <button type="button" onClick={addClassActivity} disabled={busy || !selectedActivityId} className="btn-primary sm:shrink-0">
+                      <Plus size={16} />
+                      Adicionar
+                    </button>
+                  </div>
+                </div>
+
+                <div className="mt-4 divide-y divide-ink/10 rounded-lg border border-ink/10">
+                  {selectedClassAssignedActivities.map(({ link, activity }) => (
+                    <div key={link.id} className="flex items-center justify-between gap-3 p-3">
+                      <button type="button" onClick={() => setViewActivity(activity)} className="min-w-0 flex-1 text-left">
+                        <p className="truncate text-sm font-bold text-ink">{activity.title}</p>
+                        <p className="mt-0.5 truncate text-xs font-semibold text-ink/50">
+                          {[activity.age_range, activity.development_area].filter(Boolean).join(" • ") || "Sem detalhes"}
+                        </p>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => removeClassActivity(link.id)}
+                        className="grid h-8 w-8 shrink-0 place-items-center rounded-md border border-clay/25 bg-clay/10 text-clay transition hover:bg-clay/15"
+                        disabled={busy}
+                        title="Remover atividade da turma"
+                      >
+                        <Trash2 size={15} />
+                      </button>
+                    </div>
+                  ))}
+                  {!selectedClassAssignedActivities.length ? (
+                    <p className="p-4 text-sm text-ink/55">Nenhuma atividade atribuída a esta turma ainda.</p>
+                  ) : null}
+                </div>
+              </section>
+
               <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
                 <div className="panel overflow-hidden">
                   <div className="border-b border-ink/10 p-4">
@@ -512,7 +651,7 @@ export default function StudentsPage() {
                     </h3>
                   </div>
                   <div className="divide-y divide-ink/10">
-                    {classStudents.map((student) => (
+                    {visibleClassStudents.map((student) => (
                       <div key={student.id} className={`p-4 ${selectedStudent?.id === student.id ? "bg-mint/45" : ""}`}>
                         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                           <button type="button" onClick={() => setSelectedStudent(student)} className="min-w-0 text-left">
@@ -534,6 +673,19 @@ export default function StudentsPage() {
                       <p className="p-5 text-sm leading-6 text-ink/60">Nenhum aluno cadastrado nessa turma ainda.</p>
                     ) : null}
                   </div>
+                  {classStudents.length > studentPageSize ? (
+                    <div className="flex flex-col gap-3 border-t border-ink/10 p-4 text-sm font-semibold text-ink/60 sm:flex-row sm:items-center sm:justify-between">
+                      <span>Página {studentPage} de {totalStudentPages}</span>
+                      <div className="flex gap-2">
+                        <button type="button" onClick={() => setStudentPage((current) => Math.max(1, current - 1))} className="btn-secondary" disabled={studentPage === 1}>
+                          Anterior
+                        </button>
+                        <button type="button" onClick={() => setStudentPage((current) => Math.min(totalStudentPages, current + 1))} className="btn-secondary" disabled={studentPage === totalStudentPages}>
+                          Próxima
+                        </button>
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
 
                 <StudentProfile
@@ -690,6 +842,31 @@ export default function StudentsPage() {
             <ModalActions busy={busy} onCancel={closeModal} />
           </form>
         </Modal>
+      ) : null}
+
+      {viewActivity ? (
+        <div className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-ink/45 px-4 py-6">
+          <div className="w-full max-w-4xl rounded-lg border border-ink/10 bg-white shadow-soft">
+            <div className="flex items-start justify-between gap-4 border-b border-ink/10 p-4">
+              <div>
+                <p className="label">Atividade atribuída</p>
+                <h2 className="mt-1 text-xl font-bold text-ink">{viewActivity.title}</h2>
+              </div>
+              <div className="flex shrink-0 items-center gap-2">
+                <Link href={`/atividades?atividade=${viewActivity.id}`} className="btn-secondary">
+                  <Edit3 size={16} />
+                  Editar
+                </Link>
+                <button type="button" onClick={() => setViewActivity(null)} className="grid h-9 w-9 place-items-center rounded-md border border-ink/10 text-ink/55 hover:text-ink" title="Fechar">
+                  <X size={17} />
+                </button>
+              </div>
+            </div>
+            <div className="max-h-[75vh] overflow-auto p-4">
+              <ActivityView activity={viewActivity} />
+            </div>
+          </div>
+        </div>
       ) : null}
     </ProtectedPage>
   );
