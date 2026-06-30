@@ -305,10 +305,12 @@ export default function CollectionsPage() {
                 }}
                 style={{
                   borderTopColor: collection.color || defaultCollectionColor,
-                  borderBottomColor: collection.color || defaultCollectionColor,
-                  boxShadow: selected?.id === collection.id ? `0 0 0 2px ${collection.color || defaultCollectionColor}22` : undefined
+                  borderBottomColor: collection.color || defaultCollectionColor
                 }}
-                className="panel block min-h-[150px] border-x-0 border-y-[8px] p-3 text-left transition hover:-translate-y-0.5 sm:min-h-[180px] sm:p-5"
+                className={`panel block min-h-[150px] border-x-0 border-y-[8px] p-3 text-left transition hover:-translate-y-0.5 sm:min-h-[180px] sm:p-5 ${
+                  selected?.id === collection.id ? "bg-mint/20 ring-2 ring-leaf ring-offset-2 ring-offset-paper" : ""
+                }`}
+                aria-pressed={selected?.id === collection.id}
               >
                 <div className="flex items-center justify-between">
                   <span className="grid h-9 w-9 place-items-center rounded-lg bg-mint text-leaf sm:h-11 sm:w-11">

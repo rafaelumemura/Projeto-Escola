@@ -21,8 +21,12 @@ const planOptions = Object.values(PLAN_DEFINITIONS);
 export default function ProfilePage() {
   const router = useRouter();
   const { supabase, profile, usage, user, refreshProfile, refreshUsage, signOut } = useAuth();
-  const { theme, setTheme, accent, setAccent } = useTheme();
+  const { theme, accent, saveAppearance } = useTheme();
   const [activeTab, setActiveTab] = useState<ProfileTab>("personal");
+  const [themeDraft, setThemeDraft] = useState<ThemeMode>(theme);
+  const [accentDraft, setAccentDraft] = useState<ThemeAccent>(accent);
+  const [appearanceMessage, setAppearanceMessage] = useState<string | null>(null);
+  const [appearanceBusy, setAppearanceBusy] = useState(false);
   const [name, setName] = useState("");
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
@@ -64,6 +68,34 @@ export default function ProfilePage() {
       setAccessPlan(currentPlan);
     }
   }, [profile?.is_admin, profile?.plan, usage?.plan_key]);
+
+  useEffect(() => {
+    setThemeDraft(theme);
+    setAccentDraft(accent);
+  }, [accent, theme]);
+
+  useEffect(() => {
+    if (activeTab !== "theme") {
+      setThemeDraft(theme);
+      setAccentDraft(accent);
+      setAppearanceMessage(null);
+    }
+  }, [accent, activeTab, theme]);
+
+  async function saveAppearanceSettings() {
+    setAppearanceBusy(true);
+    setAppearanceMessage(null);
+    try {
+      await saveAppearance(themeDraft, accentDraft);
+      setAppearanceMessage("Aparência salva.");
+    } catch (error) {
+      setThemeDraft(theme);
+      setAccentDraft(accent);
+      setAppearanceMessage(error instanceof Error ? error.message : "Não foi possível salvar a aparência.");
+    } finally {
+      setAppearanceBusy(false);
+    }
+  }
 
   async function saveProfile(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -473,7 +505,22 @@ export default function ProfilePage() {
               <h2 className="text-lg font-bold text-ink">Aparência do app</h2>
               <p className="mt-2 text-sm leading-6 text-ink/60">Escolha o modo de fundo e uma cor de destaque inspirada no logotipo do Projeto Escola.</p>
             </div>
-            <ThemeSelector theme={theme} accent={accent} onThemeChange={setTheme} onAccentChange={setAccent} />
+            <ThemeSelector
+              theme={themeDraft}
+              accent={accentDraft}
+              busy={appearanceBusy}
+              changed={themeDraft !== theme || accentDraft !== accent}
+              message={appearanceMessage}
+              onThemeChange={(nextTheme) => {
+                setThemeDraft(nextTheme);
+                setAppearanceMessage(null);
+              }}
+              onAccentChange={(nextAccent) => {
+                setAccentDraft(nextAccent);
+                setAppearanceMessage(null);
+              }}
+              onSave={saveAppearanceSettings}
+            />
           </section>
         </section>
       </div>
@@ -657,13 +704,21 @@ const themeAccentOptions: Array<{ key: ThemeAccent; name: string; color: string 
 function ThemeSelector({
   theme,
   accent,
+  busy,
+  changed,
+  message,
   onThemeChange,
-  onAccentChange
+  onAccentChange,
+  onSave
 }: {
   theme: ThemeMode;
   accent: ThemeAccent;
+  busy: boolean;
+  changed: boolean;
+  message: string | null;
   onThemeChange: (theme: ThemeMode) => void;
   onAccentChange: (accent: ThemeAccent) => void;
+  onSave: () => void;
 }) {
   return (
     <div className="space-y-6">
@@ -724,6 +779,13 @@ function ThemeSelector({
           })}
         </div>
       </div>
+
+      {message ? <p className="rounded-md bg-mint px-3 py-2 text-sm font-semibold text-ink/70">{message}</p> : null}
+
+      <button type="button" onClick={onSave} disabled={busy || !changed} className="btn-primary disabled:cursor-not-allowed disabled:opacity-50">
+        <Save size={16} />
+        Salvar
+      </button>
     </div>
   );
 }

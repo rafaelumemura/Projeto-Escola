@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/components/auth/AuthProvider";
 
 export type ThemeMode = "light" | "dark";
@@ -8,9 +8,8 @@ export type ThemeAccent = "teal" | "blue" | "coral" | "amber" | "purple" | "gree
 
 type ThemeContextValue = {
   theme: ThemeMode;
-  setTheme: (theme: ThemeMode) => void;
   accent: ThemeAccent;
-  setAccent: (accent: ThemeAccent) => void;
+  saveAppearance: (theme: ThemeMode, accent: ThemeAccent) => Promise<void>;
 };
 
 const storageKey = "projeto-escola-theme";
@@ -27,9 +26,10 @@ const accentPalettes: Record<ThemeAccent, { color: string; hover: string; lightT
 };
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const { profile, supabase, user, refreshProfile } = useAuth();
+  const { profile, supabase, user } = useAuth();
   const [theme, setThemeState] = useState<ThemeMode>("light");
   const [accent, setAccentState] = useState<ThemeAccent>("teal");
+  const syncedProfileId = useRef<string | null>(null);
 
   useEffect(() => {
     const savedTheme = window.localStorage.getItem(storageKey);
@@ -57,6 +57,13 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
+    const profileId = getProfileId(profile);
+    if (!profileId) {
+      syncedProfileId.current = null;
+      return;
+    }
+    if (syncedProfileId.current === profileId) return;
+
     const profileTheme = getProfileThemePreference(profile);
     const profileAccent = getProfileThemeAccent(profile);
     if (profileTheme) {
@@ -65,6 +72,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     if (profileAccent) {
       setAccentState((current) => (current === profileAccent ? current : profileAccent));
     }
+    syncedProfileId.current = profileId;
   }, [profile]);
 
   useEffect(() => {
@@ -82,40 +90,31 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     updateThemeAssets(theme, accent);
   }, [accent, theme]);
 
-  const setTheme = useCallback(
-    (nextTheme: ThemeMode) => {
+  const saveAppearance = useCallback(
+    async (nextTheme: ThemeMode, nextAccent: ThemeAccent) => {
+      if (user) {
+        const { error } = await supabase
+          .from("profiles")
+          .update({ theme_preference: nextTheme, theme_accent: nextAccent })
+          .eq("id", user.id);
+        if (error) throw error;
+      }
+
       setThemeState(nextTheme);
-      window.localStorage.setItem(storageKey, nextTheme);
-
-      const profileTheme = getProfileThemePreference(profile);
-      if (user && profileTheme !== nextTheme) {
-        void saveThemePreference(supabase, user.id, nextTheme, refreshProfile);
-      }
-    },
-    [profile, refreshProfile, supabase, user]
-  );
-
-  const setAccent = useCallback(
-    (nextAccent: ThemeAccent) => {
       setAccentState(nextAccent);
+      window.localStorage.setItem(storageKey, nextTheme);
       window.localStorage.setItem(accentStorageKey, nextAccent);
-
-      const profileAccent = getProfileThemeAccent(profile);
-      if (user && profileAccent !== nextAccent) {
-        void saveThemeAccent(supabase, user.id, nextAccent, refreshProfile);
-      }
     },
-    [profile, refreshProfile, supabase, user]
+    [supabase, user]
   );
 
   const value = useMemo(
     () => ({
       theme,
-      setTheme,
       accent,
-      setAccent
+      saveAppearance
     }),
-    [accent, setAccent, setTheme, theme]
+    [accent, saveAppearance, theme]
   );
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
@@ -135,42 +134,16 @@ function getProfileThemePreference(profile: unknown): ThemeMode | null {
   return isThemeMode(value) ? value : null;
 }
 
+function getProfileId(profile: unknown) {
+  if (!profile || typeof profile !== "object") return null;
+  const value = (profile as { id?: unknown }).id;
+  return typeof value === "string" ? value : null;
+}
+
 function getProfileThemeAccent(profile: unknown): ThemeAccent | null {
   if (!profile || typeof profile !== "object") return null;
   const value = (profile as { theme_accent?: unknown }).theme_accent;
   return isThemeAccent(value) ? value : null;
-}
-
-async function saveThemePreference(
-  supabase: ReturnType<typeof useAuth>["supabase"],
-  userId: string,
-  theme: ThemeMode,
-  refreshProfile: () => Promise<void>
-) {
-  try {
-    const { error } = await supabase.from("profiles").update({ theme_preference: theme }).eq("id", userId);
-    if (!error) {
-      await refreshProfile();
-    }
-  } catch {
-    // The local theme still changes even if the remote preference is not available yet.
-  }
-}
-
-async function saveThemeAccent(
-  supabase: ReturnType<typeof useAuth>["supabase"],
-  userId: string,
-  accent: ThemeAccent,
-  refreshProfile: () => Promise<void>
-) {
-  try {
-    const { error } = await supabase.from("profiles").update({ theme_accent: accent }).eq("id", userId);
-    if (!error) {
-      await refreshProfile();
-    }
-  } catch {
-    // The local accent still changes even if the remote preference is not available yet.
-  }
 }
 
 export function useTheme() {

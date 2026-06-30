@@ -412,6 +412,7 @@ function DashboardActivityRow({
 }
 
 function EvolutionLineChart({ series, max, color }: { series: EvolutionPoint[]; max: number; color: string }) {
+  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   const width = 700;
   const height = 170;
   const chartTop = 12;
@@ -424,11 +425,17 @@ function EvolutionLineChart({ series, max, color }: { series: EvolutionPoint[]; 
   const line = smoothPath(points);
   const area = points.length ? `${line} L ${points[points.length - 1].x} ${chartBottom} L ${points[0].x} ${chartBottom} Z` : "";
   const gradientId = color === "#00B3AF" ? "activity-chart-gradient" : "student-chart-gradient";
+  const hoveredPoint = hoveredIndex === null ? null : points[hoveredIndex];
+  const slotWidth = width / Math.max(1, series.length);
+  const tooltipWidth = 76;
+  const tooltipHeight = 52;
+  const tooltipX = hoveredPoint ? Math.max(4, Math.min(width - tooltipWidth - 4, hoveredPoint.x - tooltipWidth / 2)) : 0;
+  const tooltipY = hoveredPoint ? (hoveredPoint.y > 68 ? hoveredPoint.y - 62 : hoveredPoint.y + 12) : 0;
 
   return (
     <div className="overflow-x-auto">
       <div className="min-w-[620px]">
-        <svg viewBox={`0 0 ${width} ${height}`} className="h-52 w-full" role="img" aria-label="Evolução no período">
+        <svg viewBox={`0 0 ${width} ${height}`} className="h-52 w-full" role="img" aria-label="Evolução no período" onMouseLeave={() => setHoveredIndex(null)}>
           <defs>
             <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor={color} stopOpacity="0.2" />
@@ -438,11 +445,32 @@ function EvolutionLineChart({ series, max, color }: { series: EvolutionPoint[]; 
           {[36, 72, 108, 142].map((y) => <line key={y} x1="0" y1={y} x2={width} y2={y} stroke="currentColor" className="text-ink/10" strokeWidth="1" />)}
           {area ? <path d={area} fill={`url(#${gradientId})`} /> : null}
           {line ? <path d={line} fill="none" stroke={color} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" /> : null}
-          {points.map(({ x, y, point }) => (
-            <circle key={point.key} cx={x} cy={y} r={point.count ? 4 : 2.5} fill={color} stroke="white" strokeWidth="2">
-              <title>{point.label}: {point.count}</title>
-            </circle>
+          {points.map(({ x, y, point }, index) => (
+            <g key={point.key}>
+              {point.count ? <circle cx={x} cy={y} r="4.5" fill={color} stroke="white" strokeWidth="2" /> : null}
+              <rect
+                x={Math.max(0, x - slotWidth / 2)}
+                y="0"
+                width={Math.min(slotWidth, width - Math.max(0, x - slotWidth / 2))}
+                height={chartBottom + 12}
+                fill="transparent"
+                tabIndex={0}
+                aria-label={`${point.label}: ${point.count}`}
+                onMouseEnter={() => setHoveredIndex(index)}
+                onFocus={() => setHoveredIndex(index)}
+                onBlur={() => setHoveredIndex(null)}
+              />
+            </g>
           ))}
+          {hoveredPoint ? (
+            <g pointerEvents="none">
+              <line x1={hoveredPoint.x} y1="0" x2={hoveredPoint.x} y2={chartBottom} stroke={color} strokeOpacity="0.35" strokeDasharray="4 4" />
+              <circle cx={hoveredPoint.x} cy={hoveredPoint.y} r="5" fill={color} stroke="white" strokeWidth="2" />
+              <rect x={tooltipX} y={tooltipY} width={tooltipWidth} height={tooltipHeight} rx="9" fill="#111827" />
+              <text x={tooltipX + 12} y={tooltipY + 19} fill="#cbd5e1" fontSize="10" fontWeight="600">{hoveredPoint.point.shortLabel}</text>
+              <text x={tooltipX + 12} y={tooltipY + 40} fill={color} fontSize="18" fontWeight="800">{hoveredPoint.point.count}</text>
+            </g>
+          ) : null}
         </svg>
         <div className="grid -mt-8 px-1 pb-4" style={{ gridTemplateColumns: `repeat(${series.length}, minmax(0, 1fr))` }}>
           {series.map((point, index) => {

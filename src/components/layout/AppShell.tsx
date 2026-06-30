@@ -19,22 +19,22 @@ import { useTheme } from "@/components/theme/ThemeProvider";
 
 const nav = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/gerar", label: "Gerar", icon: Sparkles },
   { href: "/atividades", label: "Atividades", icon: BookOpen },
+  { href: "/gerar", label: "Gerar", icon: Sparkles, nested: true },
   { href: "/colecoes", label: "Coleções", icon: FolderKanban },
-  { href: "/alunos?view=classes", label: "Turmas", icon: School },
   { href: "/alunos?view=students", label: "Alunos", icon: UsersRound },
+  { href: "/alunos?view=classes", label: "Turmas", icon: School },
   { href: "/relatorios", label: "Relatórios", icon: FileText },
   { href: "/planejamento", label: "Planejamento", icon: CalendarDays }
 ];
 
 const mobileNav = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/gerar", label: "Gerar", icon: Sparkles },
   { href: "/atividades", label: "Atividades", icon: BookOpen },
+  { href: "/gerar", label: "Gerar", icon: Sparkles },
   { href: "/colecoes", label: "Coleções", icon: FolderKanban },
-  { href: "/alunos?view=classes", label: "Turmas", icon: School },
   { href: "/alunos?view=students", label: "Alunos", icon: UsersRound },
+  { href: "/alunos?view=classes", label: "Turmas", icon: School },
   { href: "/relatorios", label: "Relatórios", icon: FileText },
   { href: "/planejamento", label: "Planejar", icon: CalendarDays }
 ];
@@ -65,7 +65,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <Link
                 key={item.href}
                 href={item.href}
-                className={`flex items-center gap-3 rounded-md px-3 py-2 text-sm font-semibold transition ${
+                className={`flex items-center gap-3 rounded-md px-3 py-2 text-sm font-semibold transition ${item.nested ? "ml-7 border-l-2 border-ink/10 pl-4 text-[13px]" : ""} ${
                   active ? "bg-mint text-leaf" : "text-ink/70 hover:bg-paper hover:text-ink"
                 }`}
               >
