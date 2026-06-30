@@ -1,9 +1,14 @@
+@import url("https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Inter:wght@400;500;600;700;800&family=Nunito:wght@400;500;600;700;800&family=Open+Sans:wght@400;500;600;700;800&family=Poppins:wght@400;500;600;700;800&display=swap");
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
   color-scheme: light;
+  --ui-font-family: "Inter", Arial, sans-serif;
+  --ui-font-scale: 1;
+  --ui-root-font-size: 16px;
   --color-ink: 29 35 32;
   --color-paper: 255 255 255;
   --color-surface: 255 255 255;
@@ -40,6 +45,7 @@
 html {
   min-height: 100%;
   -webkit-text-size-adjust: 100%;
+  font-size: var(--ui-root-font-size);
 }
 
 body {
@@ -48,7 +54,7 @@ body {
   overflow-x: hidden;
   background: rgb(var(--color-paper));
   color: rgb(var(--color-ink));
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--ui-font-family);
 }
 
 button,

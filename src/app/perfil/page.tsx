@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation";
 import { ProtectedPage } from "@/components/layout/ProtectedPage";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { useTheme } from "@/components/theme/ThemeProvider";
-import type { ThemeAccent, ThemeMode } from "@/components/theme/ThemeProvider";
+import type { ThemeAccent, ThemeMode, UiFontFamily, UiFontScale } from "@/components/theme/ThemeProvider";
 import { apiFetch } from "@/lib/api/client";
 import { PLAN_DEFINITIONS, canUsePlanningSkins, planName, type PaidPlanKey } from "@/lib/billing/plans";
 import { normalizePlanningPdfSkill, planningPdfSkills, type PlanningPdfSkillKey } from "@/lib/planning/pdf-skills";
@@ -21,12 +21,16 @@ const planOptions = Object.values(PLAN_DEFINITIONS);
 export default function ProfilePage() {
   const router = useRouter();
   const { supabase, profile, usage, user, refreshProfile, refreshUsage, signOut } = useAuth();
-  const { theme, accent, saveAppearance } = useTheme();
+  const { theme, accent, fontFamily, fontScale, saveAppearance, saveTypography } = useTheme();
   const [activeTab, setActiveTab] = useState<ProfileTab>("personal");
   const [themeDraft, setThemeDraft] = useState<ThemeMode>(theme);
   const [accentDraft, setAccentDraft] = useState<ThemeAccent>(accent);
   const [appearanceMessage, setAppearanceMessage] = useState<string | null>(null);
   const [appearanceBusy, setAppearanceBusy] = useState(false);
+  const [fontFamilyDraft, setFontFamilyDraft] = useState<UiFontFamily>(fontFamily);
+  const [fontScaleDraft, setFontScaleDraft] = useState<UiFontScale>(fontScale);
+  const [typographyMessage, setTypographyMessage] = useState<string | null>(null);
+  const [typographyBusy, setTypographyBusy] = useState(false);
   const [name, setName] = useState("");
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
@@ -75,12 +79,20 @@ export default function ProfilePage() {
   }, [accent, theme]);
 
   useEffect(() => {
+    setFontFamilyDraft(fontFamily);
+    setFontScaleDraft(fontScale);
+  }, [fontFamily, fontScale]);
+
+  useEffect(() => {
     if (activeTab !== "theme") {
       setThemeDraft(theme);
       setAccentDraft(accent);
       setAppearanceMessage(null);
+      setFontFamilyDraft(fontFamily);
+      setFontScaleDraft(fontScale);
+      setTypographyMessage(null);
     }
-  }, [accent, activeTab, theme]);
+  }, [accent, activeTab, fontFamily, fontScale, theme]);
 
   async function saveAppearanceSettings() {
     setAppearanceBusy(true);
@@ -94,6 +106,21 @@ export default function ProfilePage() {
       setAppearanceMessage(error instanceof Error ? error.message : "Não foi possível salvar a aparência.");
     } finally {
       setAppearanceBusy(false);
+    }
+  }
+
+  async function saveTypographySettings() {
+    setTypographyBusy(true);
+    setTypographyMessage(null);
+    try {
+      await saveTypography(fontFamilyDraft, fontScaleDraft);
+      setTypographyMessage("Tipografia salva.");
+    } catch (error) {
+      setFontFamilyDraft(fontFamily);
+      setFontScaleDraft(fontScale);
+      setTypographyMessage(error instanceof Error ? error.message : "Não foi possível salvar a tipografia.");
+    } finally {
+      setTypographyBusy(false);
     }
   }
 
@@ -521,6 +548,24 @@ export default function ProfilePage() {
               }}
               onSave={saveAppearanceSettings}
             />
+            <div className="border-t border-ink/10 pt-6">
+              <TypographySelector
+                fontFamily={fontFamilyDraft}
+                fontScale={fontScaleDraft}
+                busy={typographyBusy}
+                changed={fontFamilyDraft !== fontFamily || fontScaleDraft !== fontScale}
+                message={typographyMessage}
+                onFontFamilyChange={(value) => {
+                  setFontFamilyDraft(value);
+                  setTypographyMessage(null);
+                }}
+                onFontScaleChange={(value) => {
+                  setFontScaleDraft(value);
+                  setTypographyMessage(null);
+                }}
+                onSave={saveTypographySettings}
+              />
+            </div>
           </section>
         </section>
       </div>
@@ -785,6 +830,113 @@ function ThemeSelector({
       <button type="button" onClick={onSave} disabled={busy || !changed} className="btn-primary disabled:cursor-not-allowed disabled:opacity-50">
         <Save size={16} />
         Salvar
+      </button>
+    </div>
+  );
+}
+
+const typographyFontOptions: Array<{ key: UiFontFamily; name: string; stack: string }> = [
+  { key: "inter", name: "Inter", stack: '"Inter", Arial, sans-serif' },
+  { key: "nunito", name: "Nunito", stack: '"Nunito", Arial, sans-serif' },
+  { key: "atkinson", name: "Atkinson Hyperlegible", stack: '"Atkinson Hyperlegible", Arial, sans-serif' },
+  { key: "open_sans", name: "Open Sans", stack: '"Open Sans", Arial, sans-serif' },
+  { key: "poppins", name: "Poppins", stack: '"Poppins", Arial, sans-serif' }
+];
+
+const typographyScaleOptions: Array<{ key: UiFontScale; name: string; scale: string }> = [
+  { key: "small", name: "Pequena", scale: "0.95x" },
+  { key: "default", name: "Padrão", scale: "1.00x" },
+  { key: "large", name: "Grande", scale: "1.10x" },
+  { key: "extra_large", name: "Extra Grande", scale: "1.20x" }
+];
+
+function TypographySelector({
+  fontFamily,
+  fontScale,
+  busy,
+  changed,
+  message,
+  onFontFamilyChange,
+  onFontScaleChange,
+  onSave
+}: {
+  fontFamily: UiFontFamily;
+  fontScale: UiFontScale;
+  busy: boolean;
+  changed: boolean;
+  message: string | null;
+  onFontFamilyChange: (fontFamily: UiFontFamily) => void;
+  onFontScaleChange: (fontScale: UiFontScale) => void;
+  onSave: () => void;
+}) {
+  return (
+    <div className="space-y-6">
+      <div>
+        <p className="label mb-2">Tipografia</p>
+        <h2 className="text-lg font-bold text-ink">Conforto de leitura</h2>
+        <p className="mt-2 text-sm leading-6 text-ink/60">
+          Personalize a fonte da interface sem alterar atividades, PDFs ou materiais exportados.
+        </p>
+      </div>
+
+      <fieldset>
+        <legend className="label">Família da fonte</legend>
+        <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+          {typographyFontOptions.map((option) => {
+            const active = fontFamily === option.key;
+            return (
+              <button
+                key={option.key}
+                type="button"
+                onClick={() => onFontFamilyChange(option.key)}
+                className={`flex min-h-20 items-center justify-between gap-3 rounded-md border px-4 py-3 text-left transition ${
+                  active
+                    ? "border-leaf bg-mint text-ink ring-2 ring-leaf/15"
+                    : "border-ink/10 bg-white text-ink hover:border-leaf/35"
+                }`}
+                aria-pressed={active}
+              >
+                <span style={{ fontFamily: option.stack }}>
+                  <span className="block text-sm font-bold">{option.name}</span>
+                  <span className="mt-1 block text-base text-ink/65">Aa Bb Cc 123</span>
+                </span>
+                {active ? <Check size={17} className="shrink-0 text-leaf" strokeWidth={3} /> : null}
+              </button>
+            );
+          })}
+        </div>
+      </fieldset>
+
+      <fieldset className="border-t border-ink/10 pt-5">
+        <legend className="label">Tamanho da fonte</legend>
+        <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+          {typographyScaleOptions.map((option) => {
+            const active = fontScale === option.key;
+            return (
+              <button
+                key={option.key}
+                type="button"
+                onClick={() => onFontScaleChange(option.key)}
+                className={`flex min-h-12 items-center justify-between gap-3 rounded-md border px-3 py-2.5 text-left transition ${
+                  active
+                    ? "border-leaf bg-mint text-ink ring-2 ring-leaf/15"
+                    : "border-ink/10 bg-white text-ink hover:border-leaf/35"
+                }`}
+                aria-pressed={active}
+              >
+                <span className="text-sm font-bold">{option.name}</span>
+                <span className="text-xs font-semibold text-ink/50">{option.scale}</span>
+              </button>
+            );
+          })}
+        </div>
+      </fieldset>
+
+      {message ? <p className="rounded-md bg-mint px-3 py-2 text-sm font-semibold text-ink/70">{message}</p> : null}
+
+      <button type="button" onClick={onSave} disabled={busy || !changed} className="btn-primary disabled:cursor-not-allowed disabled:opacity-50">
+        <Save size={16} />
+        Salvar tipografia
       </button>
     </div>
   );

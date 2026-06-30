@@ -2,7 +2,7 @@
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, ChevronLeft, ChevronRight, Eye, FileDown, Filter, FolderMinus, FolderPlus, Loader2, Pencil, Plus, Printer, Save, Sparkles, Trash2, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Eye, FileDown, Filter, FolderMinus, FolderPlus, Loader2, Pencil, Plus, Printer, Save, Sparkles, Trash2, X } from "lucide-react";
 import { ProtectedPage } from "@/components/layout/ProtectedPage";
 import { AiActivityCreator } from "@/components/activities/AiActivityCreator";
 import { ActivityView } from "@/components/ui/ActivityView";
@@ -31,7 +31,7 @@ type EditState = Partial<Activity> & {
   teacher_tips_text?: string;
   variations_text?: string;
 };
-type ActivitiesMode = "list" | "ai" | "manual";
+type ActivitiesMode = "list" | "ai";
 
 const pageSize = 10;
 const printableProgressMessages = [
@@ -114,20 +114,45 @@ export default function ActivitiesPage() {
     collection_id: ""
   });
   const [actionCollectionId, setActionCollectionId] = useState("");
+  const [manualModalOpen, setManualModalOpen] = useState(false);
   const [createChoiceOpen, setCreateChoiceOpen] = useState(false);
   const [mode, setMode] = useState<ActivitiesMode>("list");
   const [createdAiActivityId, setCreatedAiActivityId] = useState<string | null>(null);
   const [manualForm, setManualForm] = useState<ManualActivityForm>(initialManualActivityForm);
   const [printableProgress, setPrintableProgress] = useState<{ activityId: string; step: number } | null>(null);
   const printableProgressTimers = useRef<number[]>([]);
+  const createMenuRef = useRef<HTMLDivElement | null>(null);
   const { pendingAction, schedule: scheduleDeletion, undo: undoDeletion } = useUndoableAction();
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     setHighlightedActivityId(params.get("atividade"));
     if (params.get("criar") === "ia") setMode("ai");
-    if (params.get("criar") === "manual") setMode("manual");
   }, []);
+
+  useEffect(() => {
+    if (!createChoiceOpen) return;
+
+    const closeOnOutsideClick = (event: MouseEvent | TouchEvent) => {
+      if (!createMenuRef.current?.contains(event.target as Node)) setCreateChoiceOpen(false);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setCreateChoiceOpen(false);
+    };
+    const focusTimer = window.setTimeout(() => {
+      createMenuRef.current?.querySelector<HTMLButtonElement>('[role="menuitem"]')?.focus();
+    }, 0);
+
+    document.addEventListener("mousedown", closeOnOutsideClick);
+    document.addEventListener("touchstart", closeOnOutsideClick);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      window.clearTimeout(focusTimer);
+      document.removeEventListener("mousedown", closeOnOutsideClick);
+      document.removeEventListener("touchstart", closeOnOutsideClick);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [createChoiceOpen]);
 
   const query = useMemo(() => {
     const params = new URLSearchParams();
@@ -226,7 +251,7 @@ export default function ActivitiesPage() {
   }
 
   function openCreateChoice() {
-    setCreateChoiceOpen(true);
+    setCreateChoiceOpen((current) => !current);
     setMessage(null);
   }
 
@@ -241,8 +266,7 @@ export default function ActivitiesPage() {
     setCreateChoiceOpen(false);
     setManualForm(initialManualActivityForm);
     setMessage(null);
-    setMode("manual");
-    window.history.replaceState(null, "", "/atividades?criar=manual");
+    setManualModalOpen(true);
   }
 
   async function backToActivities() {
@@ -255,11 +279,10 @@ export default function ActivitiesPage() {
     }
   }
 
-  function cancelManualCreator() {
+  function closeManualModal() {
     setManualForm(initialManualActivityForm);
     setMessage(null);
-    setMode("list");
-    window.history.replaceState(null, "", "/atividades");
+    setManualModalOpen(false);
   }
 
   function updateManualField<K extends keyof ManualActivityForm>(key: K, value: ManualActivityForm[K]) {
@@ -281,9 +304,7 @@ export default function ActivitiesPage() {
       setSelected(created);
       setEdit(null);
       setPage(1);
-      setHighlightedActivityId(created.id);
-      setMode("list");
-      window.history.replaceState(null, "", `/atividades?atividade=${created.id}`);
+      closeManualModal();
       setMessage("Atividade criada.");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Não foi possível criar a atividade.");
@@ -479,43 +500,31 @@ export default function ActivitiesPage() {
 
   return (
     <ProtectedPage
-      title={mode === "ai" ? "Criar atividade com IA" : mode === "manual" ? "Criar atividade manualmente" : "Atividades"}
-      subtitle={mode === "ai"
-        ? "Informe o contexto pedagógico e gere uma atividade estruturada dentro do seu acervo."
-        : mode === "manual"
-          ? "Preencha as informações para cadastrar uma atividade no seu acervo."
-          : "Consulte, filtre, edite e reutilize atividades salvas."}
+      title={mode === "ai" ? "Criar atividade com IA" : "Atividades"}
+      subtitle={mode === "ai" ? "Informe o contexto pedagógico e gere uma atividade estruturada dentro do seu acervo." : "Consulte, filtre, edite e reutilize atividades salvas."}
       actions={mode === "list" ? (
-        <button type="button" onClick={openCreateChoice} className="btn-primary">
-          <Plus size={17} />
-          Criar atividade
-        </button>
+        <div ref={createMenuRef} className="relative">
+          <button type="button" onClick={openCreateChoice} className="btn-primary" aria-haspopup="menu" aria-expanded={createChoiceOpen}>
+            <Plus size={17} />
+            Criar atividade
+          </button>
+          {createChoiceOpen ? (
+            <div role="menu" aria-label="Escolha como criar a atividade" className="absolute right-0 top-[calc(100%+0.5rem)] z-40 w-[min(320px,calc(100vw-2rem))] overflow-hidden rounded-lg border border-ink/10 bg-white p-1.5 shadow-soft">
+              <button type="button" role="menuitem" onClick={openAiCreator} className="flex w-full items-start gap-3 rounded-md px-3 py-3 text-left transition hover:bg-mint/35 focus:bg-mint/35 focus:outline-none">
+                <Sparkles size={18} className="mt-0.5 shrink-0 text-leaf" />
+                <span><span className="block text-sm font-bold text-ink">Criar com IA</span><span className="mt-0.5 block text-xs leading-5 text-ink/55">Gere uma atividade completa em segundos.</span></span>
+              </button>
+              <button type="button" role="menuitem" onClick={openManualCreator} className="flex w-full items-start gap-3 rounded-md px-3 py-3 text-left transition hover:bg-mint/35 focus:bg-mint/35 focus:outline-none">
+                <Pencil size={18} className="mt-0.5 shrink-0 text-ink/55" />
+                <span><span className="block text-sm font-bold text-ink">Criar manualmente</span><span className="mt-0.5 block text-xs leading-5 text-ink/55">Escreva sua própria atividade.</span></span>
+              </button>
+            </div>
+          ) : null}
+        </div>
       ) : undefined}
     >
       {mode === "ai" ? (
         <AiActivityCreator onBack={() => void backToActivities()} onActivityCreated={(activity) => setCreatedAiActivityId(activity.id)} />
-      ) : mode === "manual" ? (
-        <div className="space-y-5">
-          <button type="button" onClick={cancelManualCreator} className="inline-flex items-center gap-2 text-sm font-bold text-leaf hover:underline hover:underline-offset-4">
-            <ArrowLeft size={17} />
-            Voltar para atividades
-          </button>
-
-          {message ? <p className="rounded-lg border border-ink/10 bg-white px-4 py-3 text-sm font-semibold text-ink/70">{message}</p> : null}
-
-          <form onSubmit={createManualActivity} className="panel mx-auto max-w-4xl space-y-5 p-5 sm:p-6">
-            <ManualActivityFields form={manualForm} onChange={updateManualField} />
-            <div className="flex flex-col-reverse gap-2 border-t border-ink/10 pt-5 sm:flex-row sm:justify-end">
-              <button type="button" onClick={cancelManualCreator} disabled={busy} className="btn-secondary">
-                Cancelar
-              </button>
-              <button disabled={busy} className="btn-primary">
-                <Save size={16} />
-                Salvar atividade
-              </button>
-            </div>
-          </form>
-        </div>
       ) : (
       <>
       <section className="panel mb-5 p-4">
@@ -748,32 +757,19 @@ export default function ActivitiesPage() {
       </>
       )}
 
-      {createChoiceOpen ? (
-        <div className="fixed inset-0 z-50 grid place-items-center bg-ink/45 px-4 py-6">
-          <div className="w-full max-w-lg rounded-lg border border-ink/10 bg-white p-5 shadow-soft">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <p className="label mb-2">Nova atividade</p>
-                <h2 className="text-xl font-bold text-ink">Como você deseja criar?</h2>
-              </div>
-              <button type="button" onClick={() => setCreateChoiceOpen(false)} className="grid h-9 w-9 place-items-center rounded-md border border-ink/10 text-ink/55 hover:text-ink" title="Fechar">
-                <X size={17} />
-              </button>
+      {manualModalOpen ? (
+        <div className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-ink/45 px-4 py-6">
+          <form onSubmit={createManualActivity} className="w-full max-w-2xl rounded-lg border border-ink/10 bg-white p-5 shadow-soft">
+            <div className="mb-5 flex items-start justify-between gap-4">
+              <div><p className="label mb-2">Atividades</p><h2 className="text-xl font-bold text-ink">Nova atividade</h2></div>
+              <button type="button" onClick={closeManualModal} className="grid h-9 w-9 place-items-center rounded-md border border-ink/10 text-ink/55 hover:text-ink" title="Fechar"><X size={17} /></button>
             </div>
-
-            <div className="mt-5 grid gap-3 sm:grid-cols-2">
-              <button type="button" onClick={openAiCreator} className="group rounded-lg border border-ink/10 bg-white p-4 text-left transition hover:border-leaf hover:bg-mint/25">
-                <span className="grid h-10 w-10 place-items-center rounded-md bg-mint text-leaf"><Sparkles size={19} /></span>
-                <span className="mt-4 block font-bold text-ink group-hover:text-leaf">Criar com IA</span>
-                <span className="mt-1 block text-sm leading-6 text-ink/55">A IA organiza uma atividade completa a partir do seu objetivo.</span>
-              </button>
-              <button type="button" onClick={openManualCreator} className="group rounded-lg border border-ink/10 bg-white p-4 text-left transition hover:border-leaf hover:bg-mint/25">
-                <span className="grid h-10 w-10 place-items-center rounded-md bg-paper text-ink/60"><Pencil size={19} /></span>
-                <span className="mt-4 block font-bold text-ink group-hover:text-leaf">Criar manualmente</span>
-                <span className="mt-1 block text-sm leading-6 text-ink/55">Preencha os campos da atividade do seu jeito.</span>
-              </button>
+            <ManualActivityFields form={manualForm} onChange={updateManualField} />
+            <div className="mt-6 flex justify-end gap-2">
+              <button type="button" onClick={closeManualModal} disabled={busy} className="btn-secondary">Cancelar</button>
+              <button disabled={busy} className="btn-primary"><Save size={16} />Salvar atividade</button>
             </div>
-          </div>
+          </form>
         </div>
       ) : null}
 
