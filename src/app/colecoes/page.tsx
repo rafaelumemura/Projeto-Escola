@@ -82,7 +82,6 @@ export default function CollectionsPage() {
 
   useEffect(() => {
     if (selected?.id) {
-      setConfirmDeleteCollection(false);
       setConfirmRemoveActivityId(null);
       setMovingActivityId(null);
       setMoveTargetCollectionId("");
@@ -283,9 +282,15 @@ export default function CollectionsPage() {
                 key={collection.id}
                 role="button"
                 tabIndex={0}
-                onClick={() => setSelected(collection)}
+                onClick={() => {
+                  setConfirmDeleteCollection(false);
+                  setSelected(collection);
+                }}
                 onKeyDown={(event) => {
-                  if (event.key === "Enter" || event.key === " ") setSelected(collection);
+                  if (event.key === "Enter" || event.key === " ") {
+                    setConfirmDeleteCollection(false);
+                    setSelected(collection);
+                  }
                 }}
                 style={{
                   borderTopColor: collection.color || defaultCollectionColor,
@@ -309,6 +314,27 @@ export default function CollectionsPage() {
                       title="Editar coleção"
                     >
                       <Pencil size={16} />
+                    </button>
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        if (selected?.id === collection.id && confirmDeleteCollection) {
+                          deleteCollection();
+                        } else {
+                          setSelected(collection);
+                          setConfirmDeleteCollection(true);
+                        }
+                      }}
+                      className={`grid h-9 w-9 place-items-center rounded-md border transition ${
+                        selected?.id === collection.id && confirmDeleteCollection
+                          ? "border-clay/40 bg-clay/10 text-clay"
+                          : "border-ink/10 bg-white text-ink/60 hover:border-clay/40 hover:text-clay"
+                      }`}
+                      title={selected?.id === collection.id && confirmDeleteCollection ? "Confirmar exclusão" : "Excluir coleção"}
+                    >
+                      <Trash2 size={16} />
                     </button>
                   </div>
                 </div>
@@ -339,21 +365,6 @@ export default function CollectionsPage() {
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="badge">{collectionActivities.length} itens</span>
-                    <button
-                      type="button"
-                      disabled={busy}
-                      onClick={() => {
-                        if (confirmDeleteCollection) {
-                          deleteCollection();
-                        } else {
-                          setConfirmDeleteCollection(true);
-                        }
-                      }}
-                      className="btn-danger"
-                    >
-                      <Trash2 size={16} />
-                      {confirmDeleteCollection ? "Confirmar exclusão" : "Excluir"}
-                    </button>
                   </div>
                 </div>
 

@@ -38,7 +38,7 @@ export default function MonthlyPlanningPage() {
   const [collections, setCollections] = useState<Collection[]>([]);
   const [classes, setClasses] = useState<ClassRow[]>([]);
   const [classesLoaded, setClassesLoaded] = useState(false);
-  const [selectedClassId, setSelectedClassId] = useState("");
+  const [selectedClassId, setSelectedClassId] = useState("all");
   const [items, setItems] = useState<PlanItem[]>([]);
   const [modalDate, setModalDate] = useState<string | null>(null);
   const [modalCanChangeDate, setModalCanChangeDate] = useState(false);
@@ -80,7 +80,6 @@ export default function MonthlyPlanningPage() {
         setActivities(activityData.activities);
         setCollections(collectionData.collections);
         setClasses(classesResponse.data || []);
-        setSelectedClassId((current) => current || classesResponse.data?.[0]?.id || "");
         setClassesLoaded(true);
       })
       .catch((error) => setMessage(error instanceof Error ? error.message : "Não foi possível carregar atividades."));
@@ -100,6 +99,21 @@ export default function MonthlyPlanningPage() {
     setBusy(true);
     setMessage(null);
     try {
+      if (selectedClassId === "all") {
+        const plansData = await apiFetch<{ weekly_plans: MonthlyPlan[] }>(supabase, "/api/weekly-plans");
+        const plans = plansData.weekly_plans.filter((plan) => {
+          const planStart = plan.start_date || monthStartDate;
+          const planEnd = plan.end_date || monthEndDate;
+          return planStart <= monthEndDate && planEnd >= monthStartDate;
+        });
+        const details = await Promise.all(
+          plans.map((plan) => apiFetch<{ items: PlanItem[] }>(supabase, `/api/weekly-plans/${plan.id}`).catch(() => ({ items: [] })))
+        );
+        setMonthlyPlan(null);
+        setItems(details.flatMap((detail) => detail.items).filter((item) => item.date >= monthStartDate && item.date <= monthEndDate));
+        return;
+      }
+
       const plan = await ensureMonthlyPlan();
       const details = await apiFetch<{ weekly_plan: MonthlyPlan; items: PlanItem[] }>(supabase, `/api/weekly-plans/${plan.id}`);
       setMonthlyPlan(details.weekly_plan);
@@ -114,6 +128,9 @@ export default function MonthlyPlanningPage() {
   }
 
   async function ensureMonthlyPlanForDate(date: Date) {
+    if (selectedClassId === "all") {
+      throw new Error("Selecione uma turma para adicionar atividades ao planejamento.");
+    }
     const title = hiddenPlanTitle(date);
     const legacyTitle = legacyHiddenPlanTitle(date);
     const targetStartDate = formatDate(monthStart(date));
@@ -135,6 +152,10 @@ export default function MonthlyPlanningPage() {
   }
 
   function openAddModal(date: string, canChangeDate = false) {
+    if (selectedClassId === "all") {
+      setMessage("Selecione uma turma para adicionar atividades ao planejamento.");
+      return;
+    }
     setModalDate(date);
     setModalCanChangeDate(canChangeDate);
     setActivityId("");
@@ -228,13 +249,11 @@ export default function MonthlyPlanningPage() {
     }
   }
 
-  async function removeItem(itemId: string) {
-    if (!monthlyPlan) return;
-
+  async function removeItem(item: PlanItem) {
     setBusy(true);
     setMessage(null);
     try {
-      await apiFetch(supabase, `/api/weekly-plans/${monthlyPlan.id}/items/${itemId}`, { method: "DELETE" });
+      await apiFetch(supabase, `/api/weekly-plans/${item.weekly_plan_id}/items/${item.id}`, { method: "DELETE" });
       await loadMonth();
       setMessage("Atividade removida do calendário.");
     } catch (error) {
@@ -246,7 +265,7 @@ export default function MonthlyPlanningPage() {
 
   async function generatePdf(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!monthlyPlan) return;
+    if (!monthlyPlan && selectedClassId !== "all") return;
     if (!pdfStartDate || !pdfEndDate || pdfStartDate > pdfEndDate) {
       setMessage("Informe um intervalo válido para gerar o PDF.");
       return;
@@ -255,16 +274,29 @@ export default function MonthlyPlanningPage() {
     setBusy(true);
     setMessage(null);
     try {
+      const pdfPayload = selectedClassId === "all"
+        ? {
+            weekly_plan: {
+              title: pdfTitle || "Planejamento",
+              start_date: pdfStartDate,
+              end_date: pdfEndDate
+            },
+            items: items.filter((item) => item.date >= pdfStartDate && item.date <= pdfEndDate),
+            title: pdfTitle || "Planejamento",
+            skill: profile?.planning_pdf_skill
+          }
+        : {
+            weekly_plan_id: monthlyPlan?.id,
+            start_date: pdfStartDate,
+            end_date: pdfEndDate,
+            title: pdfTitle || "Planejamento",
+            skill: profile?.planning_pdf_skill
+          };
+
       await downloadPdf(
         supabase,
         "/api/pdf/weekly-plan",
-        {
-          weekly_plan_id: monthlyPlan.id,
-          start_date: pdfStartDate,
-          end_date: pdfEndDate,
-          title: pdfTitle || "Planejamento",
-          skill: profile?.planning_pdf_skill
-        },
+        pdfPayload,
         `${(pdfTitle || "planejamento").replace(/[\\/]/g, "-")}.pdf`
       );
       setPdfModalOpen(false);
@@ -295,6 +327,7 @@ export default function MonthlyPlanningPage() {
         <label className="block max-w-md">
           <span className="label mb-2 block">Turma do planejamento</span>
           <select value={selectedClassId} onChange={(event) => setSelectedClassId(event.target.value)} className="field">
+            <option value="all">Todos</option>
             <option value="">Sem turma selecionada</option>
             {classes.map((classItem) => (
               <option key={classItem.id} value={classItem.id}>
@@ -396,7 +429,7 @@ export default function MonthlyPlanningPage() {
                                 type="button"
                                 onClick={(event) => {
                                   event.stopPropagation();
-                                  removeItem(item.id);
+                                  removeItem(item);
                                 }}
                                 className="grid h-8 w-8 place-items-center rounded-md text-ink/35 hover:text-clay"
                                 title="Remover"
@@ -544,7 +577,7 @@ export default function MonthlyPlanningPage() {
                                 type="button"
                                 onClick={(event) => {
                                   event.stopPropagation();
-                                  removeItem(item.id);
+                                  removeItem(item);
                                 }}
                                 className="text-ink/35 hover:text-clay"
                                 title="Remover"

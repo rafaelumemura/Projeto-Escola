@@ -1,15 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
+  BarChart3,
   BookOpen,
   CalendarDays,
-  FolderKanban,
-  LibraryBig,
   PartyPopper,
   Sparkles,
-  Target
+  Target,
+  UsersRound
 } from "lucide-react";
 import { ProtectedPage } from "@/components/layout/ProtectedPage";
 import { useAuth } from "@/components/auth/AuthProvider";
@@ -26,18 +26,27 @@ type WeeklyPlan = Database["public"]["Tables"]["weekly_plans"]["Row"];
 type PlannedItem = Database["public"]["Tables"]["weekly_plan_items"]["Row"] & {
   activities?: Activity | null;
 };
+type EvolutionPoint = {
+  key: string;
+  label: string;
+  shortLabel: string;
+  count: number;
+};
 
 const statAccents = ["#00B3AF", "#2F80ED", "#C98117", "#FF4F64"];
+type DashboardView = "activities" | "students";
+type DashboardPeriod = "week" | "month";
 
 export default function DashboardPage() {
-  const { supabase, profile, usage } = useAuth();
+  const { supabase, profile } = useAuth();
   const [activities, setActivities] = useState<Activity[]>([]);
-  const [registeredActivityCount, setRegisteredActivityCount] = useState(0);
-  const [generatedActivityCount, setGeneratedActivityCount] = useState(0);
+  const [generatedActivities, setGeneratedActivities] = useState<Activity[]>([]);
   const [collections, setCollections] = useState<Collection[]>([]);
   const [plannedItems, setPlannedItems] = useState<PlannedItem[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
   const [now, setNow] = useState(() => new Date());
+  const [dashboardView, setDashboardView] = useState<DashboardView>("activities");
+  const [dashboardPeriod, setDashboardPeriod] = useState<DashboardPeriod>("week");
 
   useEffect(() => {
     Promise.all([
@@ -47,8 +56,7 @@ export default function DashboardPage() {
     ])
       .then(async ([activityData, collectionData, planData]) => {
         const generatedActivities = activityData.activities.filter(isGeneratedActivity);
-        setRegisteredActivityCount(activityData.activities.length);
-        setGeneratedActivityCount(generatedActivities.length);
+        setGeneratedActivities(generatedActivities);
         setActivities(generatedActivities.slice(0, 5));
         setCollections(collectionData.collections);
         const details = await Promise.all(
@@ -84,7 +92,10 @@ export default function DashboardPage() {
   const nextPlannedItems = useMemo(() => futurePlannedItems.slice(0, 5).map((entry) => entry.item), [futurePlannedItems]);
   const todayItems = useMemo(() => plannedItems.filter((item) => isSameDay(parsePlannedDate(item), now)), [now, plannedItems]);
   const birthdayStudents = useMemo(() => birthdaysThisMonth(students, now), [now, students]);
-  const generatedCount = Math.max(usage?.generated_count ?? 0, generatedActivityCount);
+  const evolutionSeries = useMemo(
+    () => buildEvolutionSeries(dashboardView === "activities" ? generatedActivities : students, now, dashboardPeriod === "week" ? 7 : 30),
+    [dashboardPeriod, dashboardView, generatedActivities, now, students]
+  );
 
   return (
     <ProtectedPage title="Dashboard" hideHeader>
@@ -104,40 +115,19 @@ export default function DashboardPage() {
         </div>
       </section>
 
-      <section className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
-        <StatCard
-          href="/atividades"
-          icon={<LibraryBig size={22} />}
-          label="Atividades cadastradas"
-          value={registeredActivityCount}
-          accent={statAccents[0]}
-        />
-        <StatCard
-          href="/atividades"
-          icon={<BookOpen size={22} />}
-          label="Atividades geradas"
-          value={generatedCount}
-          accent={statAccents[1]}
-        />
-        <StatCard
-          href="/colecoes"
-          icon={<FolderKanban size={22} />}
-          label="Coleções"
-          value={collections.length}
-          accent={statAccents[2]}
-        />
-        <StatCard
-          href="/planejamento"
-          icon={<CalendarDays size={22} />}
-          label="Atividades planejadas"
-          value={futurePlannedItems.length}
-          accent={statAccents[3]}
-        />
-      </section>
+      <EvolutionPanel
+        view={dashboardView}
+        period={dashboardPeriod}
+        series={evolutionSeries}
+        onViewChange={setDashboardView}
+        onPeriodChange={setDashboardPeriod}
+      />
 
-      <section className="mt-6">
-        <BirthdayPanel students={birthdayStudents} today={now} />
-      </section>
+      {dashboardView === "students" ? (
+        <section className="mt-4">
+          <BirthdayPanel students={birthdayStudents} today={now} />
+        </section>
+      ) : null}
 
       <section className="mt-6 grid gap-6 lg:grid-cols-2 lg:items-start">
         <UpcomingPanel items={nextPlannedItems} />
@@ -177,40 +167,99 @@ export default function DashboardPage() {
   );
 }
 
-function StatCard({
-  icon,
-  label,
-  value,
-  href,
-  accent
+function EvolutionPanel({
+  view,
+  period,
+  series,
+  onViewChange,
+  onPeriodChange
 }: {
-  icon: ReactNode;
-  label: string;
-  value: number;
-  href: string;
-  accent: string;
+  view: DashboardView;
+  period: DashboardPeriod;
+  series: EvolutionPoint[];
+  onViewChange: (view: DashboardView) => void;
+  onPeriodChange: (period: DashboardPeriod) => void;
 }) {
+  const total = series.reduce((sum, point) => sum + point.count, 0);
+  const max = Math.max(1, ...series.map((point) => point.count));
+
   return (
-    <Link
-      href={href}
-      className="panel group block overflow-hidden p-4 transition hover:-translate-y-0.5 hover:border-leaf/35 sm:p-5"
-      style={{ borderTop: `5px solid ${accent}` }}
-    >
-      <div className="flex items-center gap-4">
-        <span
-          className="grid h-10 w-10 shrink-0 place-items-center rounded-lg border sm:h-12 sm:w-12"
-          style={{
-            borderColor: `${accent}33`,
-            backgroundColor: `${accent}18`,
-            color: accent
-          }}
-        >
-          {icon}
-        </span>
-        <span className="text-3xl font-bold leading-none text-ink sm:text-4xl">{value}</span>
+    <section className="panel overflow-hidden">
+      <div className="flex flex-col gap-4 border-b border-ink/10 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
+        <div className="inline-flex w-full rounded-lg border border-ink/10 bg-paper p-1 sm:w-auto">
+          <button
+            type="button"
+            onClick={() => onViewChange("activities")}
+            className={`flex flex-1 items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-bold transition sm:flex-none ${
+              view === "activities" ? "bg-white text-leaf shadow-sm" : "text-ink/55 hover:text-ink"
+            }`}
+          >
+            <BookOpen size={16} />
+            Atividades geradas
+          </button>
+          <button
+            type="button"
+            onClick={() => onViewChange("students")}
+            className={`flex flex-1 items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-bold transition sm:flex-none ${
+              view === "students" ? "bg-white text-leaf shadow-sm" : "text-ink/55 hover:text-ink"
+            }`}
+          >
+            <UsersRound size={16} />
+            Alunos
+          </button>
+        </div>
+
+        <label className="flex items-center gap-2">
+          <span className="label whitespace-nowrap">Período</span>
+          <select value={period} onChange={(event) => onPeriodChange(event.target.value as DashboardPeriod)} className="input min-w-40 py-2">
+            <option value="week">Última semana</option>
+            <option value="month">Últimos 30 dias</option>
+          </select>
+        </label>
       </div>
-      <p className="mt-4 text-sm font-bold leading-5 text-ink/58 sm:max-w-32">{label}</p>
-    </Link>
+
+      <div className="p-4 sm:p-5">
+        <div className="mb-5 flex items-end justify-between gap-4">
+          <div>
+            <p className="label">Evolução no período</p>
+            <p className="mt-1 text-3xl font-bold text-ink">{total}</p>
+            <p className="mt-1 text-sm font-semibold text-ink/50">
+              {view === "activities" ? "atividades geradas" : "alunos cadastrados"}
+            </p>
+          </div>
+          <BarChart3 size={24} className="text-leaf" />
+        </div>
+
+        <div className="overflow-x-auto pb-1">
+          <div
+            className="grid min-w-[520px] items-end gap-2 border-b border-ink/10"
+            style={{ gridTemplateColumns: `repeat(${series.length}, minmax(14px, 1fr))` }}
+          >
+            {series.map((point, index) => {
+              const showLabel = series.length <= 7 || index === 0 || index === series.length - 1 || index % 5 === 0;
+              const height = point.count ? Math.max(18, Math.round((point.count / max) * 150)) : 4;
+              return (
+                <div key={point.key} className="flex min-h-48 flex-col items-center justify-end gap-2">
+                  {point.count ? <span className="text-[11px] font-bold text-ink/50">{point.count}</span> : null}
+                  <span
+                    className={`w-full max-w-8 rounded-t-md ${point.count ? "bg-[#00B3AF]" : "bg-ink/10"}`}
+                    style={{ height }}
+                    title={`${point.label}: ${point.count}`}
+                  />
+                  <span className="h-5 text-[10px] font-semibold text-ink/40">{showLabel ? point.shortLabel : ""}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {!total ? (
+          <p className="mt-4 text-sm font-semibold text-ink/50">
+            Nenhum registro encontrado neste período.
+          </p>
+        ) : null}
+      </div>
+    </section>
   );
 }
 
@@ -392,6 +441,34 @@ function DashboardActivityCard({
       </div>
     </Link>
   );
+}
+
+function buildEvolutionSeries(items: Array<{ created_at: string }>, now: Date, days: number): EvolutionPoint[] {
+  const end = new Date(now);
+  end.setHours(23, 59, 59, 999);
+  const start = new Date(end);
+  start.setDate(end.getDate() - days + 1);
+  start.setHours(0, 0, 0, 0);
+
+  const counts = new Map<string, number>();
+  for (const item of items) {
+    const createdAt = new Date(item.created_at);
+    if (Number.isNaN(createdAt.getTime()) || createdAt < start || createdAt > end) continue;
+    const key = dateKey(createdAt);
+    counts.set(key, (counts.get(key) || 0) + 1);
+  }
+
+  return Array.from({ length: days }, (_, index) => {
+    const date = new Date(start);
+    date.setDate(start.getDate() + index);
+    const key = dateKey(date);
+    return {
+      key,
+      label: new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "long" }).format(date),
+      shortLabel: new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "2-digit" }).format(date),
+      count: counts.get(key) || 0
+    };
+  });
 }
 
 function findFuturePlannedItems(items: PlannedItem[], now: Date) {

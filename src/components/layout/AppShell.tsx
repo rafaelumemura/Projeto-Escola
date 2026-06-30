@@ -1,13 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import {
   BookOpen,
   CalendarDays,
   FileText,
   FolderKanban,
   LayoutDashboard,
+  LogOut,
+  School,
   Sparkles,
   UserRound,
   UsersRound
@@ -19,9 +21,10 @@ const nav = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/gerar", label: "Gerar", icon: Sparkles },
   { href: "/atividades", label: "Atividades", icon: BookOpen },
-  { href: "/alunos", label: "Turma / Alunos", icon: UsersRound },
-  { href: "/relatorios", label: "Relatórios", icon: FileText },
   { href: "/colecoes", label: "Coleções", icon: FolderKanban },
+  { href: "/alunos?view=classes", label: "Turmas", icon: School },
+  { href: "/alunos?view=students", label: "Alunos", icon: UsersRound },
+  { href: "/relatorios", label: "Relatórios", icon: FileText },
   { href: "/planejamento", label: "Planejamento", icon: CalendarDays }
 ];
 
@@ -29,15 +32,17 @@ const mobileNav = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/gerar", label: "Gerar", icon: Sparkles },
   { href: "/atividades", label: "Atividades", icon: BookOpen },
-  { href: "/alunos", label: "Turma / Alunos", icon: UsersRound },
-  { href: "/relatorios", label: "Relatórios", icon: FileText },
   { href: "/colecoes", label: "Coleções", icon: FolderKanban },
+  { href: "/alunos?view=classes", label: "Turmas", icon: School },
+  { href: "/alunos?view=students", label: "Alunos", icon: UsersRound },
+  { href: "/relatorios", label: "Relatórios", icon: FileText },
   { href: "/planejamento", label: "Planejar", icon: CalendarDays }
 ];
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const { profile } = useAuth();
+  const searchParams = useSearchParams();
+  const { profile, signOut, usage } = useAuth();
   const { theme } = useTheme();
   const desktopLogoSrc = theme === "dark" ? "/logo-horizontal-dark.webp" : "/logo-horizontal.png";
   const mobileLogoSrc = theme === "dark" ? "/logo-horizontal-dark.webp" : "/logo-horizontal.png";
@@ -47,14 +52,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen">
       <aside className="fixed inset-y-0 left-0 hidden w-64 flex-col border-r border-ink/10 bg-white px-4 py-5 lg:flex">
-        <Link href="/dashboard" className="flex items-center px-2">
-          <img src={desktopLogoSrc} alt="Projeto Escola" className={`${desktopLogoClass} object-contain`} />
+        <Link href="/dashboard" className="flex items-center justify-start px-3">
+          <img src={desktopLogoSrc} alt="Projeto Escola" className={`${desktopLogoClass} object-contain object-left`} />
         </Link>
 
         <nav className="mt-4 space-y-1">
           {nav.map((item) => {
             const Icon = item.icon;
-            const active = pathname === item.href;
+            const active = isActiveNavItem(pathname, searchParams, item.href);
 
             return (
               <Link
@@ -72,13 +77,24 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </nav>
 
         <div className="mt-auto space-y-3">
-          <Link href="/perfil" className="flex items-center gap-3 rounded-lg border border-ink/10 bg-white p-3 transition hover:border-leaf/35">
-            <Avatar src={profile?.avatar_url} name={profile?.name || profile?.email || "Perfil"} />
-            <span className="min-w-0">
-              <span className="block truncate text-sm font-semibold text-ink">{profile?.name || "Professor(a)"}</span>
-              <span className="block truncate text-xs text-ink/55">{profile?.email}</span>
-            </span>
-          </Link>
+          <div className="flex items-center gap-2 rounded-lg border border-ink/10 bg-white p-2.5">
+            <Link href="/perfil" className="flex min-w-0 flex-1 items-center gap-3 transition hover:opacity-80">
+              <Avatar src={profile?.avatar_url} name={profile?.name || profile?.email || "Perfil"} />
+              <span className="min-w-0">
+                <span className="block truncate text-sm font-semibold text-ink">{profile?.name || "Professor(a)"}</span>
+                <span className="block truncate text-xs font-semibold text-ink/50">{usage?.plan_name || planLabel(profile?.plan)}</span>
+              </span>
+            </Link>
+            <button
+              type="button"
+              onClick={() => void signOut()}
+              className="grid h-9 w-9 shrink-0 place-items-center rounded-md text-ink/45 transition hover:bg-paper hover:text-clay"
+              title="Sair"
+              aria-label="Sair"
+            >
+              <LogOut size={17} />
+            </button>
+          </div>
         </div>
       </aside>
 
@@ -101,7 +117,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <nav className="fixed inset-x-0 bottom-0 z-30 flex gap-1 overflow-x-auto border-t border-ink/10 bg-white/95 px-2 py-2 shadow-[0_-12px_35px_rgba(39,50,44,0.08)] backdrop-blur lg:hidden">
           {mobileNav.map((item) => {
             const Icon = item.icon;
-            const active = pathname === item.href;
+            const active = isActiveNavItem(pathname, searchParams, item.href);
 
             return (
               <Link
@@ -120,6 +136,23 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </div>
     </div>
   );
+}
+
+function isActiveNavItem(pathname: string, searchParams: { get: (name: string) => string | null }, href: string) {
+  const [itemPath, query = ""] = href.split("?");
+  if (pathname !== itemPath) return false;
+  const itemView = new URLSearchParams(query).get("view");
+  if (!itemView) return true;
+  const currentView = searchParams.get("view");
+  return currentView === itemView || (!currentView && itemView === "classes");
+}
+
+function planLabel(plan?: string | null) {
+  if (plan === "free") return "Gratuito";
+  if (plan === "basic") return "Básico";
+  if (plan === "complete") return "Completo";
+  if (plan === "pro") return "Pro";
+  return "Plano não informado";
 }
 
 function Avatar({ src, name, compact = false }: { src?: string | null; name: string; compact?: boolean }) {

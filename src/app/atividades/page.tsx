@@ -585,10 +585,6 @@ export default function ActivitiesPage() {
                 return (
               <>
               <div className="grid grid-cols-2 gap-2 rounded-lg border border-ink/10 bg-white p-3 shadow-soft sm:flex sm:flex-wrap sm:border-0 sm:bg-transparent sm:p-0 sm:shadow-none">
-                <button onClick={() => startEdit(selected)} className="btn-secondary">
-                  <Pencil size={16} />
-                  Editar
-                </button>
                 <button onClick={() => downloadPdf(supabase, "/api/pdf/activity", { activity_id: selected.id }, pdfFileName(selected.title))} className="btn-secondary">
                   <FileDown size={16} />
                   PDF
@@ -601,6 +597,10 @@ export default function ActivitiesPage() {
                 >
                   {isGeneratingMaterial ? <Loader2 size={16} className="animate-spin" /> : <Printer size={16} />}
                   {printableButtonText}
+                </button>
+                <button onClick={() => startEdit(selected)} className="btn-secondary">
+                  <Pencil size={16} />
+                  Editar
                 </button>
                 <button
                   disabled={busy}

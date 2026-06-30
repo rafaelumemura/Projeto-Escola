@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useEffect, useMemo, useState } from "react";
-import { BookOpen, CalendarDays, Check, Edit3, FileText, Plus, Save, Trash2, UserPlus, UsersRound, X } from "lucide-react";
+import { useSearchParams } from "next/navigation";
+import { FormEvent, Suspense, useEffect, useMemo, useState } from "react";
+import { CalendarDays, Check, Edit3, FileText, Plus, Save, Search, Trash2, UserPlus, UsersRound, X } from "lucide-react";
 import { ProtectedPage } from "@/components/layout/ProtectedPage";
 import { ActivityView } from "@/components/ui/ActivityView";
 import { useAuth } from "@/components/auth/AuthProvider";
@@ -51,6 +52,16 @@ const pedagogicalTags = [
 const today = new Date().toISOString().slice(0, 10);
 
 export default function StudentsPage() {
+  return (
+    <Suspense fallback={<div className="panel p-6 text-sm font-semibold text-ink/60">Carregando...</div>}>
+      <StudentsPageContent />
+    </Suspense>
+  );
+}
+
+function StudentsPageContent() {
+  const searchParams = useSearchParams();
+  const pageView = searchParams.get("view") === "students" ? "students" : "classes";
   const { supabase, user } = useAuth();
   const [classes, setClasses] = useState<ClassRow[]>([]);
   const [students, setStudents] = useState<StudentRow[]>([]);
@@ -158,16 +169,6 @@ export default function StudentsPage() {
     () => observations.filter((observation) => observation.class_id === selectedClassId && recordYear(observation.date) === selectedYear),
     [observations, selectedClassId, selectedYear]
   );
-  const selectedStudentObservationIds = new Set(
-    links.filter((link) => link.student_id === selectedStudent?.id).map((link) => link.observation_id)
-  );
-  const selectedStudentObservations = observations.filter((observation) =>
-    observation.class_id === selectedStudent?.class_id &&
-    recordYear(observation.date) === selectedYear &&
-    (observation.applies_to === "all_class" || selectedStudentObservationIds.has(observation.id))
-  );
-  const selectedStudentReports = reports.filter((report) => report.student_id === selectedStudent?.id && recordYear(report.generated_at) === selectedYear);
-
   useEffect(() => {
     loadAll().catch((error) => setMessage(error instanceof Error ? error.message : "Não foi possível carregar alunos."));
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -490,14 +491,16 @@ export default function StudentsPage() {
 
   return (
     <ProtectedPage
-      title="Turma / Alunos"
-      subtitle="Organize suas turmas, acompanhe seus alunos e registre observações do seu jeito."
-      actions={
+      title={pageView === "classes" ? "Turmas" : "Alunos"}
+      subtitle={pageView === "classes"
+        ? "Organize suas turmas, atribua atividades e registre observações coletivas."
+        : "Acompanhe cada aluno, suas observações e relatórios."}
+      actions={pageView === "classes" ? (
         <button type="button" onClick={() => openClassModal()} className="btn-primary">
           <Plus size={17} />
           Criar turma
         </button>
-      }
+      ) : undefined}
     >
       {message ? (
         <div className="fixed left-1/2 top-4 z-[70] w-[calc(100%-2rem)] max-w-md -translate-x-1/2 rounded-lg border border-leaf/15 bg-white px-4 py-3 text-sm font-semibold text-leaf shadow-soft">
@@ -507,6 +510,7 @@ export default function StudentsPage() {
 
       <YearFilter years={years} selectedYear={selectedYear} onChange={setSelectedYear} />
 
+      {pageView === "classes" ? (
       <section className="grid gap-4 lg:grid-cols-[360px_1fr]">
         <div className="space-y-4">
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
@@ -642,7 +646,7 @@ export default function StudentsPage() {
                 </div>
               </section>
 
-              <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
+              <section>
                 <div className="panel overflow-hidden">
                   <div className="border-b border-ink/10 p-4">
                     <h3 className="flex items-center gap-2 text-lg font-bold text-ink">
@@ -688,13 +692,6 @@ export default function StudentsPage() {
                   ) : null}
                 </div>
 
-                <StudentProfile
-                  student={selectedStudent}
-                  observations={selectedStudentObservations}
-                  reports={selectedStudentReports}
-                  classId={selectedClassId}
-                  onAddObservation={openObservationModal}
-                />
               </section>
 
               <section className="panel overflow-hidden">
@@ -716,6 +713,18 @@ export default function StudentsPage() {
           )}
         </div>
       </section>
+      ) : (
+        <IndividualStudentsView
+          students={students}
+          classes={filteredClasses}
+          observations={observations}
+          links={links}
+          reports={reports}
+          selectedYear={selectedYear}
+          onAddObservation={openObservationModal}
+          onEditStudent={openStudentModal}
+        />
+      )}
 
       {modal === "class" ? (
         <Modal title={editingClass ? "Editar turma" : "Criar turma"} onClose={closeModal}>
@@ -872,74 +881,214 @@ export default function StudentsPage() {
   );
 }
 
-function StudentProfile({
-  student,
+function IndividualStudentsView({
+  students,
+  classes,
   observations,
+  links,
   reports,
-  classId,
-  onAddObservation
+  selectedYear,
+  onAddObservation,
+  onEditStudent
 }: {
-  student: StudentRow | null;
+  students: StudentRow[];
+  classes: ClassRow[];
   observations: ObservationRow[];
+  links: ObservationStudentRow[];
   reports: StudentReportRow[];
-  classId: string;
+  selectedYear: number;
   onAddObservation: (student: StudentRow) => void;
+  onEditStudent: (student: StudentRow) => void;
 }) {
-  if (!student) {
-    return (
-      <aside className="panel p-5 text-sm leading-6 text-ink/60">
-        Selecione um aluno para abrir o perfil, ver observações e acessar relatórios.
-      </aside>
-    );
-  }
+  const [search, setSearch] = useState("");
+  const [classFilter, setClassFilter] = useState("");
+  const [selectedStudentId, setSelectedStudentId] = useState("");
+  const [tagFilter, setTagFilter] = useState("");
+  const classIds = useMemo(() => new Set(classes.map((classItem) => classItem.id)), [classes]);
+  const filteredStudents = useMemo(() => {
+    const normalizedSearch = normalizeSearch(search);
+    return students
+      .filter((student) => student.status === "active" && classIds.has(student.class_id))
+      .filter((student) => !classFilter || student.class_id === classFilter)
+      .filter((student) => !normalizedSearch || normalizeSearch(student.name).includes(normalizedSearch))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [classFilter, classIds, search, students]);
+  const selectedStudent = filteredStudents.find((student) => student.id === selectedStudentId) || filteredStudents[0] || null;
+  const selectedObservationIds = useMemo(
+    () => new Set(links.filter((link) => link.student_id === selectedStudent?.id).map((link) => link.observation_id)),
+    [links, selectedStudent?.id]
+  );
+  const studentObservations = useMemo(
+    () => observations.filter((observation) =>
+      observation.class_id === selectedStudent?.class_id &&
+      recordYear(observation.date) === selectedYear &&
+      (observation.applies_to === "all_class" || selectedObservationIds.has(observation.id))
+    ),
+    [observations, selectedObservationIds, selectedStudent?.class_id, selectedYear]
+  );
+  const tagOptions = useMemo(
+    () => Array.from(new Set(studentObservations.flatMap((observation) => observation.tags || []))).sort((a, b) => a.localeCompare(b)),
+    [studentObservations]
+  );
+  const visibleObservations = tagFilter
+    ? studentObservations.filter((observation) => (observation.tags || []).includes(tagFilter))
+    : studentObservations;
+  const studentReports = reports.filter((report) => report.student_id === selectedStudent?.id && recordYear(report.generated_at) === selectedYear);
+  const selectedClass = classes.find((classItem) => classItem.id === selectedStudent?.class_id) || null;
+
+  useEffect(() => {
+    if (!filteredStudents.length) {
+      setSelectedStudentId("");
+      return;
+    }
+    if (!filteredStudents.some((student) => student.id === selectedStudentId)) {
+      setSelectedStudentId(filteredStudents[0].id);
+    }
+  }, [filteredStudents, selectedStudentId]);
 
   return (
-    <aside className="panel p-5">
-      <p className="label">Perfil do aluno</p>
-      <h3 className="mt-1 text-xl font-bold text-ink">{student.name}</h3>
-      <p className="mt-2 text-sm leading-6 text-ink/60">
-        {student.birth_date ? `Nascimento: ${formatDate(student.birth_date)}` : "Data de nascimento não informada."}
-      </p>
-      {student.general_notes ? <p className="mt-3 rounded-lg bg-paper p-3 text-sm leading-6 text-ink/70">{student.general_notes}</p> : null}
-
-      <div className="mt-4 flex flex-wrap gap-2">
-        <button type="button" onClick={() => onAddObservation(student)} className="btn-secondary">
-          <BookOpen size={16} />
-          Observação individual
-        </button>
-        <Link href={`/relatorios?turma=${classId}&aluno=${student.id}`} className="btn-primary">
-          <FileText size={16} />
-          Gerar relatório
-        </Link>
+    <section className="space-y-4">
+      <div className="panel grid gap-3 p-4 sm:grid-cols-2">
+        <label className="block">
+          <span className="label mb-2 block">Buscar aluno</span>
+          <span className="relative block">
+            <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink/35" />
+            <input value={search} onChange={(event) => setSearch(event.target.value)} className="input pl-10" placeholder="Digite o nome do aluno" />
+          </span>
+        </label>
+        <label className="block">
+          <span className="label mb-2 block">Turma</span>
+          <select value={classFilter} onChange={(event) => setClassFilter(event.target.value)} className="input">
+            <option value="">Todas as turmas</option>
+            {classes.map((classItem) => (
+              <option key={classItem.id} value={classItem.id}>{classItem.name}{classItem.shift ? ` - ${classItem.shift}` : ""}</option>
+            ))}
+          </select>
+        </label>
       </div>
 
-      <div className="mt-5">
-        <h4 className="font-bold text-ink">Observações recentes</h4>
-        <div className="mt-2 space-y-2">
-          {observations.slice(0, 4).map((observation) => (
-            <div key={observation.id} className="rounded-lg border border-ink/10 p-3 text-sm">
-              <p className="font-semibold text-ink">{formatDate(observation.date)} • {observationTypeLabel(observation.observation_type)}</p>
-              <p className="mt-1 line-clamp-3 text-ink/60">{observation.content}</p>
-            </div>
-          ))}
-          {!observations.length ? <p className="text-sm text-ink/55">Nenhuma observação relacionada ainda.</p> : null}
-        </div>
-      </div>
+      <div className="grid gap-4 lg:grid-cols-[300px_minmax(0,1fr)]">
+        <aside className="panel overflow-hidden">
+          <div className="border-b border-ink/10 p-4">
+            <h2 className="font-bold text-ink">Alunos</h2>
+            <p className="mt-1 text-xs font-semibold text-ink/45">{filteredStudents.length} encontrados</p>
+          </div>
+          <div className="max-h-[620px] divide-y divide-ink/10 overflow-y-auto">
+            {filteredStudents.map((student) => {
+              const classItem = classes.find((item) => item.id === student.class_id);
+              return (
+                <button
+                  key={student.id}
+                  type="button"
+                  onClick={() => setSelectedStudentId(student.id)}
+                  className={`block w-full px-4 py-3 text-left transition ${selectedStudent?.id === student.id ? "bg-mint/60" : "hover:bg-paper"}`}
+                >
+                  <span className="block truncate text-sm font-bold text-ink">{student.name}</span>
+                  <span className="mt-1 block truncate text-xs font-semibold text-ink/50">{classItem?.name || "Sem turma"}</span>
+                </button>
+              );
+            })}
+            {!filteredStudents.length ? <p className="p-5 text-sm text-ink/55">Nenhum aluno encontrado.</p> : null}
+          </div>
+        </aside>
 
-      <div className="mt-5">
-        <h4 className="font-bold text-ink">Relatórios gerados</h4>
-        <div className="mt-2 space-y-2">
-          {reports.slice(0, 3).map((report) => (
-            <Link key={report.id} href={`/relatorios?turma=${classId}&aluno=${student.id}`} className="block rounded-lg border border-ink/10 p-3 text-sm hover:border-leaf/40">
-              <p className="font-semibold text-ink">{report.report_type}</p>
-              <p className="mt-1 text-ink/55">{formatDate(report.generated_at.slice(0, 10))}</p>
-            </Link>
-          ))}
-          {!reports.length ? <p className="text-sm text-ink/55">Nenhum relatório gerado ainda.</p> : null}
-        </div>
+        {selectedStudent ? (
+          <div className="space-y-4">
+            <section className="panel p-5">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <p className="label">Perfil do aluno</p>
+                  <h2 className="mt-1 text-2xl font-bold text-ink">{selectedStudent.name}</h2>
+                  <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-sm font-semibold text-ink/55">
+                    <span>{selectedStudent.birth_date ? `${formatDate(selectedStudent.birth_date)} • ${studentAgeLabel(selectedStudent.birth_date)}` : "Nascimento não informado"}</span>
+                    <span>{selectedClass ? `${selectedClass.name}${selectedClass.shift ? ` - ${selectedClass.shift}` : ""}` : "Turma não informada"}</span>
+                    <span>{studentObservations.length} {studentObservations.length === 1 ? "observação" : "observações"}</span>
+                  </div>
+                </div>
+                <button type="button" onClick={() => onEditStudent(selectedStudent)} className="grid h-9 w-9 place-items-center rounded-md border border-ink/10 text-ink/55 hover:border-leaf/40 hover:text-leaf" title="Editar aluno">
+                  <Edit3 size={16} />
+                </button>
+              </div>
+              {selectedStudent.general_notes ? <p className="mt-4 rounded-lg bg-paper p-3 text-sm leading-6 text-ink/65">{selectedStudent.general_notes}</p> : null}
+            </section>
+
+            <section className="panel flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="label">Relatórios</p>
+                <p className="mt-1 text-sm font-semibold text-ink/55">{studentReports.length} {studentReports.length === 1 ? "relatório gerado" : "relatórios gerados"}</p>
+              </div>
+              <Link href={`/relatorios?turma=${selectedStudent.class_id}&aluno=${selectedStudent.id}`} className="btn-primary">
+                <FileText size={16} />
+                Gerar
+              </Link>
+            </section>
+
+            <section className="panel overflow-hidden">
+              <div className="flex flex-col gap-3 border-b border-ink/10 p-4 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                  <p className="label">Histórico individual</p>
+                  <h3 className="mt-1 text-lg font-bold text-ink">Observações</h3>
+                </div>
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+                  <label className="block min-w-44">
+                    <span className="label mb-2 block">Tag</span>
+                    <select value={tagFilter} onChange={(event) => setTagFilter(event.target.value)} className="input py-2">
+                      <option value="">Todas as tags</option>
+                      {tagOptions.map((tag) => <option key={tag} value={tag}>{tag}</option>)}
+                    </select>
+                  </label>
+                  <button type="button" onClick={() => onAddObservation(selectedStudent)} className="btn-secondary">
+                    <Plus size={16} />
+                    Nova observação
+                  </button>
+                </div>
+              </div>
+
+              {visibleObservations.length ? (
+                <div className="divide-y divide-ink/10">
+                  {visibleObservations.map((observation) => (
+                    <article key={observation.id} className="p-4">
+                      <div className="flex flex-wrap items-start justify-between gap-2">
+                        <div>
+                          <p className="text-sm font-bold text-ink">{observation.title || observationTypeLabel(observation.observation_type)}</p>
+                          <p className="mt-1 text-xs font-semibold uppercase text-ink/45">{formatDate(observation.date)} • {appliesToLabel(observation.applies_to)}</p>
+                        </div>
+                        <div className="flex flex-wrap gap-1">
+                          {(observation.tags || []).map((tag) => <span key={tag} className="rounded-full bg-mint px-2 py-1 text-[11px] font-semibold text-leaf">{tag}</span>)}
+                        </div>
+                      </div>
+                      <p className="mt-2 text-sm leading-6 text-ink/65">{observation.content}</p>
+                    </article>
+                  ))}
+                </div>
+              ) : (
+                <div className="p-8 text-center">
+                  <p className="text-sm font-semibold text-ink/55">{tagFilter ? "Nenhuma observação encontrada com esta tag." : "Nenhuma observação registrada para este aluno."}</p>
+                  {!tagFilter ? (
+                    <button type="button" onClick={() => onAddObservation(selectedStudent)} className="mt-4 btn-primary">
+                      <Plus size={16} />
+                      Adicionar primeira observação
+                    </button>
+                  ) : null}
+                </div>
+              )}
+            </section>
+          </div>
+        ) : (
+          <div className="panel p-8 text-center text-sm font-semibold text-ink/55">Selecione um aluno para acompanhar.</div>
+        )}
       </div>
-    </aside>
+    </section>
   );
+}
+
+function studentAgeLabel(birthDate: string) {
+  const [year, month, day] = birthDate.split("-").map(Number);
+  if (!year || !month || !day) return "Idade não informada";
+  const current = new Date();
+  let age = current.getFullYear() - year;
+  if (current.getMonth() + 1 < month || (current.getMonth() + 1 === month && current.getDate() < day)) age -= 1;
+  return `${Math.max(0, age)} ${age === 1 ? "ano" : "anos"}`;
 }
 
 function ObservationList({
