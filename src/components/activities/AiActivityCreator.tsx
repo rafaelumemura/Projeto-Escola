@@ -107,7 +107,7 @@ export function AiActivityCreator({
 
       <div className="grid gap-6 lg:grid-cols-[minmax(340px,440px)_minmax(0,1fr)]">
         <form onSubmit={handleGenerate} className="panel h-fit p-5">
-          <FormSection title="Contexto da turma">
+          <FormSection>
             <TextField
               label="Idade ou faixa etária"
               value={form.age_range}
@@ -116,7 +116,7 @@ export function AiActivityCreator({
             />
           </FormSection>
 
-          <FormSection title="O que será trabalhado">
+          <FormSection>
             <TextField
               label="Área de desenvolvimento/conhecimento"
               value={form.development_area}
@@ -131,7 +131,7 @@ export function AiActivityCreator({
             />
           </FormSection>
 
-          <FormSection title="Como a atividade será aplicada">
+          <FormSection>
             <SelectField label="Tipo de atividade" value={form.activity_type} onChange={(value) => updateField("activity_type", value as ActivityGenerationInput["activity_type"])} options={activityTypes} />
             <SelectField label="Ambiente" value={form.environment} onChange={(value) => updateField("environment", value)} options={generationEnvironments} />
             {form.environment === "Outro" ? (
@@ -143,7 +143,7 @@ export function AiActivityCreator({
             ) : null}
           </FormSection>
 
-          <FormSection title="Recursos disponíveis" last>
+          <FormSection last>
             <TextAreaField
               label="Materiais disponíveis"
               value={form.materials}
@@ -196,10 +196,9 @@ export function AiActivityCreator({
   );
 }
 
-function FormSection({ title, children, last = false }: { title: string; children: React.ReactNode; last?: boolean }) {
+function FormSection({ children, last = false }: { children: React.ReactNode; last?: boolean }) {
   return (
     <fieldset className={`space-y-4 py-5 first:pt-0 ${last ? "" : "border-b border-ink/10"}`}>
-      <legend className="label mb-4 block w-full text-leaf">{title}</legend>
       {children}
     </fieldset>
   );

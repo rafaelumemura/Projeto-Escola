@@ -2,7 +2,7 @@
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { ChevronLeft, ChevronRight, Eye, FileDown, Filter, FolderMinus, FolderPlus, Loader2, Pencil, Plus, Printer, Save, Sparkles, Trash2, X } from "lucide-react";
+import { ArrowLeft, ChevronLeft, ChevronRight, Eye, FileDown, Filter, FolderMinus, FolderPlus, Loader2, Pencil, Plus, Printer, Save, Sparkles, Trash2, X } from "lucide-react";
 import { ProtectedPage } from "@/components/layout/ProtectedPage";
 import { AiActivityCreator } from "@/components/activities/AiActivityCreator";
 import { ActivityView } from "@/components/ui/ActivityView";
@@ -31,7 +31,7 @@ type EditState = Partial<Activity> & {
   teacher_tips_text?: string;
   variations_text?: string;
 };
-type ActivitiesMode = "list" | "ai";
+type ActivitiesMode = "list" | "ai" | "manual";
 
 const pageSize = 10;
 const printableProgressMessages = [
@@ -114,7 +114,6 @@ export default function ActivitiesPage() {
     collection_id: ""
   });
   const [actionCollectionId, setActionCollectionId] = useState("");
-  const [manualModalOpen, setManualModalOpen] = useState(false);
   const [createChoiceOpen, setCreateChoiceOpen] = useState(false);
   const [mode, setMode] = useState<ActivitiesMode>("list");
   const [createdAiActivityId, setCreatedAiActivityId] = useState<string | null>(null);
@@ -127,6 +126,7 @@ export default function ActivitiesPage() {
     const params = new URLSearchParams(window.location.search);
     setHighlightedActivityId(params.get("atividade"));
     if (params.get("criar") === "ia") setMode("ai");
+    if (params.get("criar") === "manual") setMode("manual");
   }, []);
 
   const query = useMemo(() => {
@@ -225,12 +225,6 @@ export default function ActivitiesPage() {
     });
   }
 
-  function openManualModal() {
-    setManualForm(initialManualActivityForm);
-    setManualModalOpen(true);
-    setMessage(null);
-  }
-
   function openCreateChoice() {
     setCreateChoiceOpen(true);
     setMessage(null);
@@ -245,7 +239,10 @@ export default function ActivitiesPage() {
 
   function openManualCreator() {
     setCreateChoiceOpen(false);
-    openManualModal();
+    setManualForm(initialManualActivityForm);
+    setMessage(null);
+    setMode("manual");
+    window.history.replaceState(null, "", "/atividades?criar=manual");
   }
 
   async function backToActivities() {
@@ -258,9 +255,11 @@ export default function ActivitiesPage() {
     }
   }
 
-  function closeManualModal() {
-    setManualModalOpen(false);
+  function cancelManualCreator() {
     setManualForm(initialManualActivityForm);
+    setMessage(null);
+    setMode("list");
+    window.history.replaceState(null, "", "/atividades");
   }
 
   function updateManualField<K extends keyof ManualActivityForm>(key: K, value: ManualActivityForm[K]) {
@@ -282,7 +281,9 @@ export default function ActivitiesPage() {
       setSelected(created);
       setEdit(null);
       setPage(1);
-      closeManualModal();
+      setHighlightedActivityId(created.id);
+      setMode("list");
+      window.history.replaceState(null, "", `/atividades?atividade=${created.id}`);
       setMessage("Atividade criada.");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Não foi possível criar a atividade.");
@@ -478,8 +479,12 @@ export default function ActivitiesPage() {
 
   return (
     <ProtectedPage
-      title={mode === "ai" ? "Criar atividade com IA" : "Atividades"}
-      subtitle={mode === "ai" ? "Informe o contexto pedagógico e gere uma atividade estruturada dentro do seu acervo." : "Consulte, filtre, edite e reutilize atividades salvas."}
+      title={mode === "ai" ? "Criar atividade com IA" : mode === "manual" ? "Criar atividade manualmente" : "Atividades"}
+      subtitle={mode === "ai"
+        ? "Informe o contexto pedagógico e gere uma atividade estruturada dentro do seu acervo."
+        : mode === "manual"
+          ? "Preencha as informações para cadastrar uma atividade no seu acervo."
+          : "Consulte, filtre, edite e reutilize atividades salvas."}
       actions={mode === "list" ? (
         <button type="button" onClick={openCreateChoice} className="btn-primary">
           <Plus size={17} />
@@ -489,6 +494,28 @@ export default function ActivitiesPage() {
     >
       {mode === "ai" ? (
         <AiActivityCreator onBack={() => void backToActivities()} onActivityCreated={(activity) => setCreatedAiActivityId(activity.id)} />
+      ) : mode === "manual" ? (
+        <div className="space-y-5">
+          <button type="button" onClick={cancelManualCreator} className="inline-flex items-center gap-2 text-sm font-bold text-leaf hover:underline hover:underline-offset-4">
+            <ArrowLeft size={17} />
+            Voltar para atividades
+          </button>
+
+          {message ? <p className="rounded-lg border border-ink/10 bg-white px-4 py-3 text-sm font-semibold text-ink/70">{message}</p> : null}
+
+          <form onSubmit={createManualActivity} className="panel mx-auto max-w-4xl space-y-5 p-5 sm:p-6">
+            <ManualActivityFields form={manualForm} onChange={updateManualField} />
+            <div className="flex flex-col-reverse gap-2 border-t border-ink/10 pt-5 sm:flex-row sm:justify-end">
+              <button type="button" onClick={cancelManualCreator} disabled={busy} className="btn-secondary">
+                Cancelar
+              </button>
+              <button disabled={busy} className="btn-primary">
+                <Save size={16} />
+                Salvar atividade
+              </button>
+            </div>
+          </form>
+        </div>
       ) : (
       <>
       <section className="panel mb-5 p-4">
@@ -750,33 +777,6 @@ export default function ActivitiesPage() {
         </div>
       ) : null}
 
-      {manualModalOpen ? (
-        <div className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-ink/45 px-4 py-6">
-          <form onSubmit={createManualActivity} className="w-full max-w-2xl rounded-lg border border-ink/10 bg-white p-5 shadow-soft">
-            <div className="mb-5 flex items-start justify-between gap-4">
-              <div>
-                <p className="label mb-2">Atividades</p>
-                <h2 className="text-xl font-bold text-ink">Nova atividade</h2>
-              </div>
-              <button type="button" onClick={closeManualModal} className="grid h-9 w-9 place-items-center rounded-md border border-ink/10 text-ink/55 hover:text-ink" title="Fechar">
-                <X size={17} />
-              </button>
-            </div>
-
-            <ManualActivityFields form={manualForm} onChange={updateManualField} />
-
-            <div className="mt-6 flex justify-end gap-2">
-              <button type="button" onClick={closeManualModal} disabled={busy} className="btn-secondary">
-                Cancelar
-              </button>
-              <button disabled={busy} className="btn-primary">
-                <Save size={16} />
-                Salvar atividade
-              </button>
-            </div>
-          </form>
-        </div>
-      ) : null}
     </ProtectedPage>
   );
 }
