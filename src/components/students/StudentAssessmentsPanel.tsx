@@ -26,8 +26,8 @@ type AssessmentForm = {
   description: string;
   score: string;
   max_score: string;
-  delivery_status: StudentAssessment["delivery_status"] | "";
-  participation_level: StudentAssessment["participation_level"] | "";
+  delivery_status: NonNullable<StudentAssessment["delivery_status"]> | "";
+  participation_level: NonNullable<StudentAssessment["participation_level"]> | "";
   comments: string;
   criterion_ids: string[];
 };
