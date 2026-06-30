@@ -8,6 +8,7 @@ export type Json =
 
 type PlanningPdfSkill = "grade" | "layout_fundo_1" | "layout_fundo_2" | "layout_fundo_3" | "layout_fundo_4" | "layout_fundo_5" | "layout_fundo_6" | "layout_fundo_7" | "layout_fundo_8" | "layout_fundo_9";
 type ThemePreference = "light" | "dark";
+type ThemeAccent = "teal" | "blue" | "coral" | "amber" | "purple" | "green";
 type StudentStatus = "active" | "inactive";
 type ObservationType = "individual" | "activity" | "class" | "weekly" | "biweekly" | "free";
 type ObservationAppliesTo = "all_class" | "selected_students" | "individual_student" | "none";
@@ -305,6 +306,7 @@ export type Database = {
           plan: "free" | "basic" | "complete" | "pro";
           planning_pdf_skill: PlanningPdfSkill;
           theme_preference: ThemePreference;
+          theme_accent: ThemeAccent;
           password_must_change: boolean;
           material_printable_v2: boolean;
           created_at: string;
@@ -318,6 +320,7 @@ export type Database = {
           plan?: "free" | "basic" | "complete" | "pro";
           planning_pdf_skill?: PlanningPdfSkill;
           theme_preference?: ThemePreference;
+          theme_accent?: ThemeAccent;
           password_must_change?: boolean;
           material_printable_v2?: boolean;
           created_at?: string;
@@ -330,6 +333,7 @@ export type Database = {
           plan?: "free" | "basic" | "complete" | "pro";
           planning_pdf_skill?: PlanningPdfSkill;
           theme_preference?: ThemePreference;
+          theme_accent?: ThemeAccent;
           password_must_change?: boolean;
           material_printable_v2?: boolean;
         };

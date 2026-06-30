@@ -9,6 +9,7 @@
   --color-surface: 255 255 255;
   --color-mint: 220 239 231;
   --color-leaf: 47 125 88;
+  --color-leaf-hover: 38 102 71;
   --color-ocean: 37 109 133;
   --color-clay: 196 109 75;
   --color-sun: 244 201 93;
@@ -24,6 +25,7 @@
   --color-surface: 12 22 43;
   --color-mint: 20 53 58;
   --color-leaf: 45 212 170;
+  --color-leaf-hover: 35 180 143;
   --color-ocean: 82 183 212;
   --color-clay: 255 136 98;
   --color-sun: 255 213 86;
@@ -115,11 +117,11 @@ button:disabled {
 
   .btn-primary {
     @apply inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-white transition disabled:bg-ink/25;
-    background-color: #00b3af;
+    background-color: rgb(var(--color-leaf));
   }
 
   .btn-primary:hover:not(:disabled) {
-    background-color: #009d99;
+    background-color: rgb(var(--color-leaf-hover));
   }
 
   .btn-secondary {

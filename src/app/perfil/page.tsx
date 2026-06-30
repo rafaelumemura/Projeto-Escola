@@ -1,18 +1,19 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
-import { Camera, LogOut, Mail, Moon, Save, Sun, UserRound } from "lucide-react";
+import { FormEvent, type ReactNode, useEffect, useMemo, useState } from "react";
+import { Camera, Check, CreditCard, LogOut, Mail, Moon, Palette, Save, Sun, UserRound } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ProtectedPage } from "@/components/layout/ProtectedPage";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { useTheme } from "@/components/theme/ThemeProvider";
-import type { ThemeMode } from "@/components/theme/ThemeProvider";
+import type { ThemeAccent, ThemeMode } from "@/components/theme/ThemeProvider";
 import { apiFetch } from "@/lib/api/client";
-import { PLAN_DEFINITIONS, canUsePlanningSkins, planName, type BillingUsage, type PaidPlanKey } from "@/lib/billing/plans";
+import { PLAN_DEFINITIONS, canUsePlanningSkins, planName, type PaidPlanKey } from "@/lib/billing/plans";
 import { normalizePlanningPdfSkill, planningPdfSkills, type PlanningPdfSkillKey } from "@/lib/planning/pdf-skills";
 
 type AccessRole = "admin" | "user";
+type ProfileTab = "personal" | "account" | "theme";
 
 const ownerEmail = "rafaelumemura@gmail.com";
 const planOptions = Object.values(PLAN_DEFINITIONS);
@@ -20,7 +21,8 @@ const planOptions = Object.values(PLAN_DEFINITIONS);
 export default function ProfilePage() {
   const router = useRouter();
   const { supabase, profile, usage, user, refreshProfile, refreshUsage, signOut } = useAuth();
-  const { theme, setTheme } = useTheme();
+  const { theme, setTheme, accent, setAccent } = useTheme();
+  const [activeTab, setActiveTab] = useState<ProfileTab>("personal");
   const [name, setName] = useState("");
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
@@ -42,6 +44,12 @@ export default function ProfilePage() {
   const [accessBusy, setAccessBusy] = useState(false);
   const canManageOwnAccess = (profile?.email || user?.email || "").toLowerCase() === ownerEmail;
   const planningSkinsEnabled = canUsePlanningSkins(usage?.plan_key || profile?.plan);
+  const savedPlanningSkill = normalizePlanningPdfSkill(profile?.planning_pdf_skill);
+  const orderedPlanningSkills = useMemo(() => {
+    const saved = planningPdfSkills.find((skill) => skill.key === savedPlanningSkill);
+    return saved ? [saved, ...planningPdfSkills.filter((skill) => skill.key !== saved.key)] : planningPdfSkills;
+  }, [savedPlanningSkill]);
+  const visiblePlanningSkills = showAllSkins ? orderedPlanningSkills : orderedPlanningSkills.slice(0, 3);
 
   useEffect(() => {
     setName(profile?.name || "");
@@ -219,8 +227,20 @@ export default function ProfilePage() {
 
   return (
     <ProtectedPage title="Perfil" subtitle="Gerencie seus dados de conta e plano atual.">
-      <div className="grid gap-5 lg:grid-cols-[420px_1fr]">
-        <section className="panel p-5">
+      <nav className="panel mb-5 grid grid-cols-1 gap-1 p-1.5 sm:grid-cols-3" aria-label="Seções do perfil">
+        <ProfileTabButton active={activeTab === "personal"} icon={<UserRound size={17} />} onClick={() => setActiveTab("personal")}>
+          Informações pessoais
+        </ProfileTabButton>
+        <ProfileTabButton active={activeTab === "account"} icon={<CreditCard size={17} />} onClick={() => setActiveTab("account")}>
+          Informações da conta
+        </ProfileTabButton>
+        <ProfileTabButton active={activeTab === "theme"} icon={<Palette size={17} />} onClick={() => setActiveTab("theme")}>
+          Tema
+        </ProfileTabButton>
+      </nav>
+
+      <div className="space-y-5">
+        <section className={activeTab === "account" ? "panel p-5" : "hidden"}>
           <div className="mb-5 flex items-center gap-3">
             <AvatarPreview src={avatarPreview} name={profile?.name || user?.email || "Perfil"} />
             <div>
@@ -243,9 +263,16 @@ export default function ProfilePage() {
                 onSubmit={saveAccessSettings}
               />
             ) : null}
-            <ThemeSelector theme={theme} onThemeChange={setTheme} />
-            <Info label="Uso do ciclo" value={`${usage?.generated_count || 0}/${usage?.activity_limit || 0} atividades geradas`} />
-            <Info label="MATERIAL GERADO" value={printableMaterialUsageLabel(usage)} />
+            <div className="grid gap-3 sm:grid-cols-2">
+              <UsageTag label="Uso do ciclo" used={usage?.generated_count || 0} limit={usage?.activity_limit || 0} suffix="atividades geradas" />
+              <UsageTag
+                label="Material gerado"
+                used={usage?.printable_material_generated_count || 0}
+                limit={usage?.printable_material_limit || 0}
+                suffix="materiais gerados"
+                unavailable={!usage?.printable_material_enabled}
+              />
+            </div>
             <Info label="Vencimento" value={usage?.current_period_end ? new Date(usage.current_period_end).toLocaleDateString("pt-BR") : "-"} />
             <Info label="Acesso" value={profile?.is_admin ? "Admin" : "Usuário"} />
             <Info label="Data de cadastro" value={profile?.created_at ? new Date(profile.created_at).toLocaleDateString("pt-BR") : "-"} />
@@ -257,8 +284,12 @@ export default function ProfilePage() {
           </button>
         </section>
 
-        <section className="space-y-5">
-          <form onSubmit={saveProfile} className="panel h-fit space-y-4 p-5">
+        <section className="grid items-start gap-5 lg:grid-cols-2">
+          <form onSubmit={saveProfile} className={activeTab === "personal" ? "panel h-fit space-y-4 p-5" : "hidden"}>
+            <div>
+              <p className="label mb-2">Informações pessoais</p>
+              <h2 className="text-lg font-bold text-ink">Seu perfil</h2>
+            </div>
             <div>
               <span className="label mb-2 block">Foto</span>
               <label className="flex cursor-pointer items-center gap-3 rounded-lg border border-dashed border-ink/20 bg-white p-4 transition hover:border-leaf/40">
@@ -287,7 +318,7 @@ export default function ProfilePage() {
             </button>
           </form>
 
-          <section className="panel h-fit space-y-4 p-5">
+          <section className={activeTab === "account" ? "panel h-fit space-y-4 p-5 lg:col-span-2" : "hidden"}>
             <div>
               <p className="label mb-2">Skins do planejamento</p>
               <h2 className="text-lg font-bold text-ink">Modelo do PDF</h2>
@@ -299,20 +330,27 @@ export default function ProfilePage() {
             </div>
 
             <div className={`grid grid-cols-2 gap-3 sm:grid-cols-3 ${planningSkinsEnabled ? "" : "opacity-45"}`}>
-              {(showAllSkins ? planningPdfSkills : planningPdfSkills.slice(0, 3)).map((skill) => {
+              {visiblePlanningSkills.map((skill) => {
                 const active = planningSkill === skill.key;
+                const saved = savedPlanningSkill === skill.key;
                 return (
                   <button
                     key={skill.key}
                     type="button"
                     disabled={!planningSkinsEnabled}
                     onClick={() => selectPlanningSkill(skill.key)}
-                    className={`overflow-hidden rounded-lg border bg-white p-2 text-left transition ${
-                      active ? "border-leaf ring-2 ring-leaf/15" : "border-ink/10 hover:border-leaf/40"
+                    className={`relative overflow-hidden rounded-lg border bg-white p-2 text-left transition ${
+                      active ? "border-leaf ring-2 ring-leaf/20" : "border-ink/10 hover:border-leaf/40"
                     } disabled:cursor-not-allowed`}
                     title={skill.name}
                     aria-label={`Selecionar skin ${skill.name}`}
+                    aria-pressed={active}
                   >
+                    {saved ? (
+                      <span className="absolute right-3 top-3 z-10 grid h-7 w-7 place-items-center rounded-full bg-leaf text-white shadow" title="Modelo salvo">
+                        <Check size={16} strokeWidth={3} />
+                      </span>
+                    ) : null}
                     {skill.previewImage ? (
                       <img src={skill.previewImage} alt={skill.name} className="aspect-[4/3] w-full rounded-md object-cover" />
                     ) : (
@@ -334,14 +372,14 @@ export default function ProfilePage() {
                 </button>
               ) : null}
 
-              <button type="button" disabled={!planningSkinsEnabled || skinBusy || planningSkill === normalizePlanningPdfSkill(profile?.planning_pdf_skill)} onClick={savePlanningSkill} className="btn-primary disabled:cursor-not-allowed disabled:opacity-55">
+              <button type="button" disabled={!planningSkinsEnabled || skinBusy || planningSkill === savedPlanningSkill} onClick={savePlanningSkill} className="btn-primary disabled:cursor-not-allowed disabled:opacity-55">
                 <Save size={16} />
                 Salvar skin
               </button>
             </div>
           </section>
 
-          <form onSubmit={updatePassword} className="panel h-fit space-y-4 p-5">
+          <form onSubmit={updatePassword} className={activeTab === "personal" ? "panel h-fit space-y-4 p-5" : "hidden"}>
             <div>
               <p className="label mb-2">Segurança</p>
               <h2 className="text-lg font-bold text-ink">Alterar senha</h2>
@@ -398,7 +436,7 @@ export default function ProfilePage() {
             ) : null}
           </form>
 
-          <section className="panel h-fit space-y-4 p-5">
+          <section className={activeTab === "personal" ? "panel h-fit space-y-4 p-5 lg:col-span-2" : "hidden"}>
             <div>
               <p className="label mb-2">Canal de contato</p>
               <h2 className="flex items-center gap-2 text-lg font-bold text-ink">
@@ -427,6 +465,15 @@ export default function ProfilePage() {
               </a>{" "}
               (Obs: Apenas mensagens de texto)
             </p>
+          </section>
+
+          <section className={activeTab === "theme" ? "panel h-fit space-y-5 p-5 lg:col-span-2" : "hidden"}>
+            <div>
+              <p className="label mb-2">Personalização</p>
+              <h2 className="text-lg font-bold text-ink">Aparência do app</h2>
+              <p className="mt-2 text-sm leading-6 text-ink/60">Escolha o modo de fundo e uma cor de destaque inspirada no logotipo do Projeto Escola.</p>
+            </div>
+            <ThemeSelector theme={theme} accent={accent} onThemeChange={setTheme} onAccentChange={setAccent} />
           </section>
         </section>
       </div>
@@ -471,10 +518,54 @@ function Info({ label, value }: { label: string; value: string }) {
   );
 }
 
-function printableMaterialUsageLabel(usage: BillingUsage | null) {
-  if (!usage?.printable_material_enabled) return "Disponível no plano Completo";
+function ProfileTabButton({ active, children, icon, onClick }: { active: boolean; children: ReactNode; icon: ReactNode; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`flex min-h-11 items-center justify-center gap-2 rounded-md px-4 py-2.5 text-sm font-bold transition ${
+        active ? "bg-mint text-leaf" : "text-ink/60 hover:bg-mint/45 hover:text-leaf"
+      }`}
+      aria-current={active ? "page" : undefined}
+    >
+      {icon}
+      {children}
+    </button>
+  );
+}
 
-  return `${usage.printable_material_generated_count}/${usage.printable_material_limit} materiais gerados`;
+function UsageTag({
+  label,
+  used,
+  limit,
+  suffix,
+  unavailable = false
+}: {
+  label: string;
+  used: number;
+  limit: number;
+  suffix: string;
+  unavailable?: boolean;
+}) {
+  const percent = limit > 0 ? Math.min(100, Math.round((used / limit) * 100)) : 0;
+  const colorClass =
+    percent <= 40
+      ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+      : percent <= 70
+        ? "border-orange-200 bg-orange-50 text-orange-700"
+        : "border-red-200 bg-red-50 text-red-700";
+
+  return (
+    <div className="rounded-lg border border-ink/10 bg-white p-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="label">{label}</p>
+        <span className={`inline-flex rounded-full border px-3 py-1 text-xs font-bold ${colorClass}`}>
+          {used}/{limit} {suffix}
+        </span>
+      </div>
+      {unavailable ? <p className="mt-2 text-xs text-ink/55">Disponível no plano Completo.</p> : <p className="mt-2 text-xs font-semibold text-ink/55">{percent}% utilizado</p>}
+    </div>
+  );
 }
 
 function OwnerAccessPanel({
@@ -554,33 +645,84 @@ function isPaidPlanKey(value: unknown): value is PaidPlanKey {
   return typeof value === "string" && value in PLAN_DEFINITIONS;
 }
 
-function ThemeSelector({ theme, onThemeChange }: { theme: ThemeMode; onThemeChange: (theme: ThemeMode) => void }) {
+const themeAccentOptions: Array<{ key: ThemeAccent; name: string; color: string }> = [
+  { key: "teal", name: "Turquesa", color: "#00b3af" },
+  { key: "blue", name: "Azul", color: "#2f80ed" },
+  { key: "coral", name: "Coral", color: "#ff4f64" },
+  { key: "amber", name: "Âmbar", color: "#c98117" },
+  { key: "purple", name: "Lilás", color: "#7e57c2" },
+  { key: "green", name: "Verde", color: "#2f7d58" }
+];
+
+function ThemeSelector({
+  theme,
+  accent,
+  onThemeChange,
+  onAccentChange
+}: {
+  theme: ThemeMode;
+  accent: ThemeAccent;
+  onThemeChange: (theme: ThemeMode) => void;
+  onAccentChange: (accent: ThemeAccent) => void;
+}) {
   return (
-    <div className="rounded-lg border border-ink/10 bg-white p-4">
-      <p className="label">Tema do app</p>
-      <div className="mt-3 grid grid-cols-2 gap-2">
-        <button
-          type="button"
-          onClick={() => onThemeChange("light")}
-          className={`grid h-12 place-items-center rounded-md border transition ${
-            theme === "light" ? "border-leaf bg-mint text-leaf" : "border-ink/10 bg-white text-ink/60 hover:border-leaf/35 hover:text-leaf"
-          }`}
-          title="Modo claro"
-          aria-label="Ativar modo claro"
-        >
-          <Sun size={20} />
-        </button>
-        <button
-          type="button"
-          onClick={() => onThemeChange("dark")}
-          className={`grid h-12 place-items-center rounded-md border transition ${
-            theme === "dark" ? "border-leaf bg-mint text-leaf" : "border-ink/10 bg-white text-ink/60 hover:border-leaf/35 hover:text-leaf"
-          }`}
-          title="Modo escuro"
-          aria-label="Ativar modo escuro"
-        >
-          <Moon size={20} />
-        </button>
+    <div className="space-y-6">
+      <div>
+        <p className="label">Modo de fundo</p>
+        <div className="mt-3 grid max-w-md grid-cols-2 gap-2">
+          <button
+            type="button"
+            onClick={() => onThemeChange("light")}
+            className={`flex h-14 items-center justify-center gap-2 rounded-md border text-sm font-bold transition ${
+              theme === "light" ? "border-leaf bg-mint text-leaf" : "border-ink/10 bg-white text-ink/60 hover:border-leaf/35 hover:text-leaf"
+            }`}
+            title="Modo claro"
+            aria-label="Ativar modo claro"
+            aria-pressed={theme === "light"}
+          >
+            <Sun size={20} />
+            Claro
+          </button>
+          <button
+            type="button"
+            onClick={() => onThemeChange("dark")}
+            className={`flex h-14 items-center justify-center gap-2 rounded-md border text-sm font-bold transition ${
+              theme === "dark" ? "border-leaf bg-mint text-leaf" : "border-ink/10 bg-white text-ink/60 hover:border-leaf/35 hover:text-leaf"
+            }`}
+            title="Modo escuro"
+            aria-label="Ativar modo escuro"
+            aria-pressed={theme === "dark"}
+          >
+            <Moon size={20} />
+            Escuro
+          </button>
+        </div>
+      </div>
+
+      <div className="border-t border-ink/10 pt-5">
+        <p className="label">Cor de destaque</p>
+        <div className="mt-3 flex flex-wrap gap-3">
+          {themeAccentOptions.map((option) => {
+            const active = accent === option.key;
+            return (
+              <button
+                key={option.key}
+                type="button"
+                onClick={() => onAccentChange(option.key)}
+                className={`flex min-w-24 items-center gap-2 rounded-md border px-3 py-2 text-sm font-semibold transition ${
+                  active ? "border-leaf bg-mint text-ink ring-2 ring-leaf/15" : "border-ink/10 bg-white text-ink/65 hover:border-ink/25"
+                }`}
+                aria-label={`Usar destaque ${option.name}`}
+                aria-pressed={active}
+              >
+                <span className="grid h-6 w-6 place-items-center rounded-full" style={{ backgroundColor: option.color }}>
+                  {active ? <Check size={14} className="text-white" strokeWidth={3} /> : null}
+                </span>
+                {option.name}
+              </button>
+            );
+          })}
+        </div>
       </div>
     </div>
   );
