@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useState } from "react";
 import { Check, Eye, FolderKanban, Pencil, Plus, Trash2, X } from "lucide-react";
 import { ProtectedPage } from "@/components/layout/ProtectedPage";
 import { ActivityView } from "@/components/ui/ActivityView";
+import { UndoToast, useUndoableAction } from "@/components/ui/UndoToast";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { apiFetch } from "@/lib/api/client";
 import { collectionLimit } from "@/lib/billing/plans";
@@ -28,13 +29,12 @@ export default function CollectionsPage() {
   const [color, setColor] = useState(defaultCollectionColor);
   const [editingCollection, setEditingCollection] = useState<CollectionCard | null>(null);
   const [activityId, setActivityId] = useState("");
-  const [confirmDeleteCollection, setConfirmDeleteCollection] = useState(false);
-  const [confirmRemoveActivityId, setConfirmRemoveActivityId] = useState<string | null>(null);
   const [movingActivityId, setMovingActivityId] = useState<string | null>(null);
   const [moveTargetCollectionId, setMoveTargetCollectionId] = useState("");
   const [viewActivity, setViewActivity] = useState<Activity | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const { pendingAction, schedule: scheduleDeletion, undo: undoDeletion } = useUndoableAction();
 
   const pageColors = Array.from(
     new Set(collections.map((collection) => collection.color).filter((item): item is string => Boolean(item)))
@@ -82,7 +82,6 @@ export default function CollectionsPage() {
 
   useEffect(() => {
     if (selected?.id) {
-      setConfirmRemoveActivityId(null);
       setMovingActivityId(null);
       setMoveTargetCollectionId("");
       loadCollectionDetails(selected.id).catch(() => undefined);
@@ -163,22 +162,28 @@ export default function CollectionsPage() {
     }
   }
 
-  async function deleteCollection() {
-    if (!selected) return;
-    setBusy(true);
+  function deleteCollection(collection: CollectionCard) {
     setMessage(null);
-    try {
-      await apiFetch(supabase, `/api/collections/${selected.id}`, { method: "DELETE" });
-      setSelected(null);
+    const collectionsSnapshot = collections;
+    const selectedSnapshot = selected;
+    const activitiesSnapshot = collectionActivities;
+    const remaining = collections.filter((item) => item.id !== collection.id);
+
+    setCollections(remaining);
+    if (selected?.id === collection.id) {
+      setSelected(remaining[0] || null);
       setCollectionActivities([]);
-      setConfirmDeleteCollection(false);
-      await loadCollections();
-      setMessage("Coleção excluída.");
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Não foi possível excluir.");
-    } finally {
-      setBusy(false);
     }
+    scheduleDeletion({
+      message: "Coleção excluída.",
+      commit: () => apiFetch(supabase, `/api/collections/${collection.id}`, { method: "DELETE" }),
+      undo: () => {
+        setCollections(collectionsSnapshot);
+        setSelected(selectedSnapshot);
+        setCollectionActivities(activitiesSnapshot);
+      },
+      onError: (error) => setMessage(error instanceof Error ? error.message : "Não foi possível excluir.")
+    });
   }
 
   async function addActivity() {
@@ -201,21 +206,29 @@ export default function CollectionsPage() {
     }
   }
 
-  async function removeActivity(id: string) {
+  function removeActivity(id: string) {
     if (!selected) return;
-    setBusy(true);
     setMessage(null);
-    try {
-      await apiFetch(supabase, `/api/collections/${selected.id}/activities/${id}`, { method: "DELETE" });
-      setConfirmRemoveActivityId(null);
-      await loadCollectionDetails(selected.id);
-      await loadCollections();
-      setMessage("Atividade removida.");
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Não foi possível remover.");
-    } finally {
-      setBusy(false);
-    }
+    const selectedSnapshot = selected;
+    const activitiesSnapshot = collectionActivities;
+    const collectionsSnapshot = collections;
+    const collectionId = selected.id;
+
+    setCollectionActivities((current) => current.filter((activity) => activity.id !== id));
+    setSelected((current) => current ? { ...current, activity_count: Math.max(0, (current.activity_count || 0) - 1) } : current);
+    setCollections((current) => current.map((collection) => collection.id === collectionId
+      ? { ...collection, activity_count: Math.max(0, (collection.activity_count || 0) - 1) }
+      : collection));
+    scheduleDeletion({
+      message: "Atividade removida da coleção.",
+      commit: () => apiFetch(supabase, `/api/collections/${collectionId}/activities/${id}`, { method: "DELETE" }),
+      undo: () => {
+        setSelected(selectedSnapshot);
+        setCollectionActivities(activitiesSnapshot);
+        setCollections(collectionsSnapshot);
+      },
+      onError: (error) => setMessage(error instanceof Error ? error.message : "Não foi possível remover.")
+    });
   }
 
   function cancelMoveActivity() {
@@ -283,12 +296,10 @@ export default function CollectionsPage() {
                 role="button"
                 tabIndex={0}
                 onClick={() => {
-                  setConfirmDeleteCollection(false);
                   setSelected(collection);
                 }}
                 onKeyDown={(event) => {
                   if (event.key === "Enter" || event.key === " ") {
-                    setConfirmDeleteCollection(false);
                     setSelected(collection);
                   }
                 }}
@@ -320,19 +331,10 @@ export default function CollectionsPage() {
                       disabled={busy}
                       onClick={(event) => {
                         event.stopPropagation();
-                        if (selected?.id === collection.id && confirmDeleteCollection) {
-                          deleteCollection();
-                        } else {
-                          setSelected(collection);
-                          setConfirmDeleteCollection(true);
-                        }
+                        deleteCollection(collection);
                       }}
-                      className={`grid h-9 w-9 place-items-center rounded-md border transition ${
-                        selected?.id === collection.id && confirmDeleteCollection
-                          ? "border-clay/40 bg-clay/10 text-clay"
-                          : "border-ink/10 bg-white text-ink/60 hover:border-clay/40 hover:text-clay"
-                      }`}
-                      title={selected?.id === collection.id && confirmDeleteCollection ? "Confirmar exclusão" : "Excluir coleção"}
+                      className="grid h-9 w-9 place-items-center rounded-md border border-ink/10 bg-white text-ink/60 transition hover:border-clay/40 hover:text-clay"
+                      title="Excluir coleção"
                     >
                       <Trash2 size={16} />
                     </button>
@@ -402,7 +404,7 @@ export default function CollectionsPage() {
                             disabled={busy}
                             onClick={(event) => {
                               event.stopPropagation();
-                              setConfirmRemoveActivityId(activity.id);
+                              removeActivity(activity.id);
                             }}
                             className="grid h-7 w-7 shrink-0 place-items-center rounded-md border border-ink/10 bg-white text-ink/55 transition hover:border-clay/40 hover:text-clay lg:hidden"
                             title="Remover da coleção"
@@ -439,34 +441,17 @@ export default function CollectionsPage() {
                           </>
                         ) : null}
                       </div>
-                      {confirmRemoveActivityId === activity.id ? (
-                        <button
-                          type="button"
-                          disabled={busy}
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            removeActivity(activity.id);
-                          }}
-                          className="btn-danger justify-center text-xs lg:hidden"
-                        >
-                          Excluir atividade
-                        </button>
-                      ) : null}
                       <button
                         type="button"
                         disabled={busy}
                         onClick={(event) => {
                           event.stopPropagation();
-                          if (confirmRemoveActivityId === activity.id) {
-                            removeActivity(activity.id);
-                          } else {
-                            setConfirmRemoveActivityId(activity.id);
-                          }
+                          removeActivity(activity.id);
                         }}
-                        className={confirmRemoveActivityId === activity.id ? "hidden px-3 lg:inline-flex btn-danger" : "hidden px-3 lg:inline-flex btn-secondary"}
+                        className="hidden px-3 lg:inline-flex btn-secondary"
                         title="Remover da coleção"
                       >
-                        {confirmRemoveActivityId === activity.id ? "Confirmar" : <X size={17} />}
+                        <X size={17} />
                       </button>
                     </div>
                   ))}
@@ -518,6 +503,7 @@ export default function CollectionsPage() {
           </div>
         </div>
       ) : null}
+      <UndoToast action={pendingAction} onUndo={undoDeletion} />
     </ProtectedPage>
   );
 }

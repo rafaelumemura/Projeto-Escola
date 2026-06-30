@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight, FileDown, Plus, X } from "lucide-react";
 import { ProtectedPage } from "@/components/layout/ProtectedPage";
 import { ActivityView } from "@/components/ui/ActivityView";
+import { UndoToast, useUndoableAction } from "@/components/ui/UndoToast";
 import {
   initialManualActivityForm,
   ManualActivityFields,
@@ -55,6 +56,7 @@ export default function MonthlyPlanningPage() {
   const [message, setMessage] = useState<string | null>(null);
   const [appAlert, setAppAlert] = useState<string | null>(null);
   const [mobileSelectedDate, setMobileSelectedDate] = useState<string | null>(null);
+  const { pendingAction, schedule: scheduleDeletion, undo: undoDeletion } = useUndoableAction();
 
   const monthStartDate = useMemo(() => formatDate(monthStart(currentMonth)), [currentMonth]);
   const monthEndDate = useMemo(() => formatDate(monthEnd(currentMonth)), [currentMonth]);
@@ -249,18 +251,16 @@ export default function MonthlyPlanningPage() {
     }
   }
 
-  async function removeItem(item: PlanItem) {
-    setBusy(true);
+  function removeItem(item: PlanItem) {
     setMessage(null);
-    try {
-      await apiFetch(supabase, `/api/weekly-plans/${item.weekly_plan_id}/items/${item.id}`, { method: "DELETE" });
-      await loadMonth();
-      setMessage("Atividade removida do calendário.");
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Não foi possível remover a atividade.");
-    } finally {
-      setBusy(false);
-    }
+    const snapshot = items;
+    setItems((current) => current.filter((currentItem) => currentItem.id !== item.id));
+    scheduleDeletion({
+      message: "Atividade removida do planejamento.",
+      commit: () => apiFetch(supabase, `/api/weekly-plans/${item.weekly_plan_id}/items/${item.id}`, { method: "DELETE" }),
+      undo: () => setItems(snapshot),
+      onError: (error) => setMessage(error instanceof Error ? error.message : "Não foi possível remover a atividade.")
+    });
   }
 
   async function generatePdf(event: FormEvent<HTMLFormElement>) {
@@ -381,8 +381,8 @@ export default function MonthlyPlanningPage() {
                   key={day}
                   type="button"
                   onClick={() => setMobileSelectedDate(day)}
-                  className={`rounded-full px-1.5 py-2 text-center font-bold transition ${
-                    day === mobileSelectedDate ? "bg-leaf text-white" : "bg-white text-ink/65"
+                  className={`rounded-full border px-1.5 py-2 text-center font-bold transition ${
+                    day === mobileSelectedDate ? "border-leaf bg-leaf text-white" : day === formatDate(new Date()) ? "border-leaf bg-white text-leaf" : "border-transparent bg-white text-ink/65"
                   }`}
                 >
                   <span className="block text-[10px] uppercase">{weekdayShort(day)}</span>
@@ -510,9 +510,9 @@ export default function MonthlyPlanningPage() {
                     key={day}
                     type="button"
                     onClick={() => setMobileSelectedDate(day)}
-                    className="flex min-h-14 flex-col items-center border-b border-ink/10 px-1 py-2 text-center transition hover:bg-paper"
+                    className={`flex min-h-14 flex-col items-center border-b px-1 py-2 text-center transition hover:bg-paper ${isToday ? "border-2 border-leaf bg-mint/20" : "border-ink/10"}`}
                   >
-                    <span className={`grid h-8 w-8 place-items-center rounded-full text-lg font-bold ${isToday ? "bg-clay text-white" : "text-ink"}`}>
+                    <span className={`grid h-8 w-8 place-items-center rounded-full text-lg font-bold ${isToday ? "text-leaf" : "text-ink"}`}>
                       {Number(day.slice(-2))}
                     </span>
                     <span className="mt-auto flex h-3 max-w-full items-center justify-center gap-1 overflow-hidden">
@@ -543,8 +543,9 @@ export default function MonthlyPlanningPage() {
           <div className="grid grid-cols-7">
             {calendarDays.map((day, index) => {
               const dayItems = day ? groupedItems[day] || [] : [];
+              const isToday = day === formatDate(new Date());
               return (
-                <div key={day || `empty-${index}`} className="min-h-40 border-b border-r border-ink/10 bg-white p-2 [&:nth-child(7n)]:border-r-0">
+                <div key={day || `empty-${index}`} className={`min-h-40 border-b border-r p-2 [&:nth-child(7n)]:border-r-0 ${isToday ? "border-leaf bg-mint/20 ring-2 ring-inset ring-leaf" : "border-ink/10 bg-white"}`}>
                   {day ? (
                     <>
                       <div className="mb-2 flex items-center justify-between gap-2">
@@ -732,6 +733,7 @@ export default function MonthlyPlanningPage() {
           </div>
         </div>
       ) : null}
+      <UndoToast action={pendingAction} onUndo={undoDeletion} />
     </ProtectedPage>
   );
 }

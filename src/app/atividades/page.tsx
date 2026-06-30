@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ChevronLeft, ChevronRight, Eye, FileDown, Filter, FolderMinus, FolderPlus, Loader2, Pencil, Plus, Printer, Save, Trash2, X } from "lucide-react";
 import { ProtectedPage } from "@/components/layout/ProtectedPage";
 import { ActivityView } from "@/components/ui/ActivityView";
+import { UndoToast, useUndoableAction } from "@/components/ui/UndoToast";
 import {
   initialManualActivityForm,
   ManualActivityFields,
@@ -102,8 +103,6 @@ export default function ActivitiesPage() {
   const [edit, setEdit] = useState<EditState | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
-  const [plannedDeleteActivity, setPlannedDeleteActivity] = useState<ActivityWithCollections | null>(null);
   const [page, setPage] = useState(1);
   const [filters, setFilters] = useState({
     age_range: "",
@@ -117,6 +116,7 @@ export default function ActivitiesPage() {
   const [manualForm, setManualForm] = useState<ManualActivityForm>(initialManualActivityForm);
   const [printableProgress, setPrintableProgress] = useState<{ activityId: string; step: number } | null>(null);
   const printableProgressTimers = useRef<number[]>([]);
+  const { pendingAction, schedule: scheduleDeletion, undo: undoDeletion } = useUndoableAction();
 
   useEffect(() => {
     setHighlightedActivityId(new URLSearchParams(window.location.search).get("atividade"));
@@ -193,7 +193,6 @@ export default function ActivitiesPage() {
 
   useEffect(() => {
     setActionCollectionId(selected?.primary_collection_id || selected?.collection_ids?.[0] || "");
-    setPendingDeleteId(null);
   }, [selected?.id, selected?.primary_collection_id, selected?.collection_ids]);
 
   useEffect(() => () => {
@@ -313,40 +312,24 @@ export default function ActivitiesPage() {
     setMessage(null);
     try {
       const planningStatus = await apiFetch<{ planned: boolean; count: number }>(supabase, `/api/activities/${activity.id}/planning-status`);
+      const activitySnapshot = activities;
+      const selectedSnapshot = selected;
+      const editSnapshot = edit;
+      const remaining = activities.filter((item) => item.id !== activity.id);
 
-      if (planningStatus.planned) {
-        setPlannedDeleteActivity(activity);
-        setPendingDeleteId(null);
-        return;
-      } else if (pendingDeleteId !== activity.id) {
-        setPendingDeleteId(activity.id);
-        return;
-      }
-
-      await apiFetch(supabase, `/api/activities/${activity.id}${planningStatus.planned ? "?remove_planned=true" : ""}`, { method: "DELETE" });
-      setSelected(null);
+      setActivities(remaining);
+      setSelected((current) => current?.id === activity.id ? remaining[0] || null : current);
       setEdit(null);
-      await loadActivities();
-      setMessage("Atividade excluída.");
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Não foi possível excluir.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function confirmPlannedDelete() {
-    if (!plannedDeleteActivity) return;
-
-    setBusy(true);
-    setMessage(null);
-    try {
-      await apiFetch(supabase, `/api/activities/${plannedDeleteActivity.id}?remove_planned=true`, { method: "DELETE" });
-      setPlannedDeleteActivity(null);
-      setSelected(null);
-      setEdit(null);
-      await loadActivities();
-      setMessage("Atividade excluída.");
+      scheduleDeletion({
+        message: planningStatus.planned ? "Atividade excluída do planejamento e da sua lista." : "Atividade excluída.",
+        commit: () => apiFetch(supabase, `/api/activities/${activity.id}${planningStatus.planned ? "?remove_planned=true" : ""}`, { method: "DELETE" }),
+        undo: () => {
+          setActivities(activitySnapshot);
+          setSelected(selectedSnapshot);
+          setEdit(editSnapshot);
+        },
+        onError: (error) => setMessage(error instanceof Error ? error.message : "Não foi possível excluir.")
+      });
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Não foi possível excluir.");
     } finally {
@@ -372,19 +355,29 @@ export default function ActivitiesPage() {
     }
   }
 
-  async function removeFromCollection() {
+  function removeFromCollection() {
     if (!selected || !actionCollectionId) return setMessage("Escolha uma atividade e uma coleção.");
-    setBusy(true);
     setMessage(null);
-    try {
-      await apiFetch(supabase, `/api/collections/${actionCollectionId}/activities/${selected.id}`, { method: "DELETE" });
-      await loadActivities();
-      setMessage("Atividade removida da coleção.");
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Não foi possível remover da coleção.");
-    } finally {
-      setBusy(false);
-    }
+    const activitySnapshot = activities;
+    const selectedSnapshot = selected;
+    const collectionId = actionCollectionId;
+    const updated = {
+      ...selected,
+      collection_ids: (selected.collection_ids || []).filter((id) => id !== collectionId),
+      primary_collection_id: selected.primary_collection_id === collectionId ? null : selected.primary_collection_id
+    };
+
+    setActivities((current) => current.map((activity) => activity.id === selected.id ? updated : activity));
+    setSelected(updated);
+    scheduleDeletion({
+      message: "Atividade removida da coleção.",
+      commit: () => apiFetch(supabase, `/api/collections/${collectionId}/activities/${selected.id}`, { method: "DELETE" }),
+      undo: () => {
+        setActivities(activitySnapshot);
+        setSelected(selectedSnapshot);
+      },
+      onError: (error) => setMessage(error instanceof Error ? error.message : "Não foi possível remover da coleção.")
+    });
   }
 
   async function downloadPrintableMaterial(activity: ActivityWithCollections) {
@@ -578,9 +571,7 @@ export default function ActivitiesPage() {
                 const isGeneratingMaterial = printableProgress?.activityId === selected.id;
                 const printableButtonText = isGeneratingMaterial
                   ? printableProgressMessages[printableProgress.step] || printableProgressMessages[printableProgressMessages.length - 1]
-                  : materialGenerated
-                    ? "Baixar material"
-                    : "Gerar material";
+                  : "Gerar material";
 
                 return (
               <>
@@ -593,7 +584,7 @@ export default function ActivitiesPage() {
                   disabled={busy || isGeneratingMaterial || !canDownloadMaterial}
                   onClick={() => downloadPrintableMaterial(selected)}
                   className="btn-secondary col-span-2 sm:col-span-1 disabled:cursor-not-allowed disabled:opacity-50"
-                  title={canDownloadMaterial ? "Baixar material imprimível desta atividade." : materialReason}
+                  title={canDownloadMaterial ? "Gerar ou acessar o material imprimível desta atividade." : materialReason}
                 >
                   {isGeneratingMaterial ? <Loader2 size={16} className="animate-spin" /> : <Printer size={16} />}
                   {printableButtonText}
@@ -610,7 +601,7 @@ export default function ActivitiesPage() {
                   className="btn-danger"
                 >
                   <Trash2 size={16} />
-                  {pendingDeleteId === selected.id ? "Confirmar exclusão" : "Excluir"}
+                  Excluir
                 </button>
               </div>
               </>
@@ -688,26 +679,7 @@ export default function ActivitiesPage() {
         </section>
       </div>
 
-      {plannedDeleteActivity ? (
-        <div className="fixed inset-0 z-50 grid place-items-center bg-ink/45 px-4 py-6">
-          <div className="w-full max-w-md rounded-lg border border-ink/10 bg-white p-5 shadow-soft">
-            <p className="label mb-2">Confirmar exclusão</p>
-            <h2 className="text-lg font-bold text-ink">Atividade planejada</h2>
-            <p className="mt-3 text-sm leading-6 text-ink/70">
-              Essa atividade está planejada, se você excluir, ela sairá do planejamento, deseja excluir?
-            </p>
-            <div className="mt-5 flex flex-wrap justify-end gap-2">
-              <button type="button" disabled={busy} onClick={() => setPlannedDeleteActivity(null)} className="btn-secondary">
-                Cancelar
-              </button>
-              <button type="button" disabled={busy} onClick={confirmPlannedDelete} className="btn-danger">
-                <Trash2 size={16} />
-                Excluir
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
+      <UndoToast action={pendingAction} onUndo={undoDeletion} />
 
       {manualModalOpen ? (
         <div className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-ink/45 px-4 py-6">

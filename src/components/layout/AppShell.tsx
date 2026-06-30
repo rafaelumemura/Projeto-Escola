@@ -82,7 +82,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <Avatar src={profile?.avatar_url} name={profile?.name || profile?.email || "Perfil"} />
               <span className="min-w-0">
                 <span className="block truncate text-sm font-semibold text-ink">{profile?.name || "Professor(a)"}</span>
-                <span className="block truncate text-xs font-semibold text-ink/50">{usage?.plan_name || planLabel(profile?.plan)}</span>
+                <span className="mt-1 inline-flex max-w-full truncate rounded-full border border-leaf/20 bg-mint px-2 py-0.5 text-[10px] font-bold text-leaf">
+                  {usage?.plan_name || planLabel(profile?.plan)}
+                </span>
               </span>
             </Link>
             <button

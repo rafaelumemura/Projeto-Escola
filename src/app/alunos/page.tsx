@@ -3,9 +3,10 @@
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { FormEvent, Suspense, useEffect, useMemo, useState } from "react";
-import { CalendarDays, Check, Edit3, FileText, Plus, Save, Search, Trash2, UserPlus, UsersRound, X } from "lucide-react";
+import { CalendarDays, Edit3, FileText, Gift, Plus, Save, Search, Trash2, UserPlus, UsersRound, X } from "lucide-react";
 import { ProtectedPage } from "@/components/layout/ProtectedPage";
 import { ActivityView } from "@/components/ui/ActivityView";
+import { UndoToast, useUndoableAction } from "@/components/ui/UndoToast";
 import { useAuth } from "@/components/auth/AuthProvider";
 import type { Database } from "@/lib/database.types";
 
@@ -80,8 +81,8 @@ function StudentsPageContent() {
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
-  const [confirmDeleteClassId, setConfirmDeleteClassId] = useState<string | null>(null);
   const [studentPage, setStudentPage] = useState(1);
+  const { pendingAction, schedule: scheduleDeletion, undo: undoDeletion } = useUndoableAction();
 
   const [classForm, setClassForm] = useState({ name: "", shift: "", school_year: "", description: "" });
   const [studentForm, setStudentForm] = useState({ name: "", birth_date: "", general_notes: "" });
@@ -169,6 +170,9 @@ function StudentsPageContent() {
     () => observations.filter((observation) => observation.class_id === selectedClassId && recordYear(observation.date) === selectedYear),
     [observations, selectedClassId, selectedYear]
   );
+  const birthdayStudents = useMemo(() => students
+    .filter((student) => student.status === "active" && isBirthdayMonth(student.birth_date, new Date()))
+    .sort((left, right) => birthdayDay(left.birth_date) - birthdayDay(right.birth_date)), [students]);
   useEffect(() => {
     loadAll().catch((error) => setMessage(error instanceof Error ? error.message : "Não foi possível carregar alunos."));
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -326,22 +330,31 @@ function StudentsPageContent() {
     }
   }
 
-  async function deleteClass(classId: string) {
-    setBusy(true);
+  function deleteClass(classId: string) {
     setMessage(null);
-    try {
-      const { error } = await supabase.from("classes").delete().eq("id", classId);
-      if (error) throw error;
-      setConfirmDeleteClassId(null);
-      setSelectedClassId((current) => (current === classId ? "" : current));
+    const classesSnapshot = classes;
+    const selectedClassSnapshot = selectedClassId;
+    const selectedStudentSnapshot = selectedStudent;
+    const remaining = classes.filter((classItem) => classItem.id !== classId);
+
+    setClasses(remaining);
+    if (selectedClassId === classId) {
+      setSelectedClassId(remaining[0]?.id || "");
       setSelectedStudent(null);
-      await loadAll();
-      setMessage("Turma excluída.");
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Não foi possível excluir a turma.");
-    } finally {
-      setBusy(false);
     }
+    scheduleDeletion({
+      message: "Turma excluída.",
+      commit: async () => {
+        const { error } = await supabase.from("classes").delete().eq("id", classId);
+        if (error) throw error;
+      },
+      undo: () => {
+        setClasses(classesSnapshot);
+        setSelectedClassId(selectedClassSnapshot);
+        setSelectedStudent(selectedStudentSnapshot);
+      },
+      onError: (error) => setMessage(error instanceof Error ? error.message : "Não foi possível excluir a turma.")
+    });
   }
 
   async function addClassActivity() {
@@ -367,19 +380,19 @@ function StudentsPageContent() {
     }
   }
 
-  async function removeClassActivity(linkId: string) {
-    setBusy(true);
+  function removeClassActivity(linkId: string) {
     setMessage(null);
-    try {
-      const { error } = await supabase.from("class_activities").delete().eq("id", linkId);
-      if (error) throw error;
-      await loadAll();
-      setMessage("Atividade removida da turma.");
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Não foi possível remover a atividade.");
-    } finally {
-      setBusy(false);
-    }
+    const snapshot = classActivities;
+    setClassActivities((current) => current.filter((item) => item.id !== linkId));
+    scheduleDeletion({
+      message: "Atividade removida da turma.",
+      commit: async () => {
+        const { error } = await supabase.from("class_activities").delete().eq("id", linkId);
+        if (error) throw error;
+      },
+      undo: () => setClassActivities(snapshot),
+      onError: (error) => setMessage(error instanceof Error ? error.message : "Não foi possível remover a atividade.")
+    });
   }
 
   async function saveStudent(event: FormEvent<HTMLFormElement>) {
@@ -508,6 +521,8 @@ function StudentsPageContent() {
         </div>
       ) : null}
 
+      {pageView === "students" ? <StudentsBirthdayBanner students={birthdayStudents} today={new Date()} /> : null}
+
       <YearFilter years={years} selectedYear={selectedYear} onChange={setSelectedYear} />
 
       {pageView === "classes" ? (
@@ -531,43 +546,20 @@ function StudentsPageContent() {
                         {classItem.shift || "Turno não informado"} • {classCount} {classCount === 1 ? "aluno" : "alunos"} • {activityCount} {activityCount === 1 ? "atividade" : "atividades"}
                       </p>
                     </button>
-                    {confirmDeleteClassId === classItem.id ? (
-                      <div className="flex shrink-0 items-center gap-1">
-                        <button
-                          type="button"
-                          onClick={() => deleteClass(classItem.id)}
-                          className="grid h-8 w-8 place-items-center rounded-md border border-leaf/25 bg-mint text-leaf transition hover:bg-mint/80"
-                          disabled={busy}
-                          title="Confirmar exclusão"
-                        >
-                          <Check size={15} />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setConfirmDeleteClassId(null)}
-                          className="grid h-8 w-8 place-items-center rounded-md border border-clay/25 bg-clay/10 text-clay transition hover:bg-clay/15"
-                          disabled={busy}
-                          title="Cancelar exclusão"
-                        >
-                          <X size={15} />
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="flex shrink-0 items-center gap-1">
+                    <div className="flex shrink-0 items-center gap-1">
                         <button type="button" onClick={() => openClassModal(classItem)} className="grid h-8 w-8 place-items-center rounded-md border border-ink/10 text-ink/60 transition hover:border-leaf/40 hover:text-leaf" title="Editar turma">
                           <Edit3 size={15} />
                         </button>
                         <button
                           type="button"
-                          onClick={() => setConfirmDeleteClassId(classItem.id)}
+                          onClick={() => deleteClass(classItem.id)}
                           className="grid h-8 w-8 place-items-center rounded-md border border-clay/25 bg-clay/10 text-clay transition hover:bg-clay/15"
                           disabled={busy}
                           title="Excluir turma"
                         >
                           <Trash2 size={15} />
                         </button>
-                      </div>
-                    )}
+                    </div>
                   </div>
                 </article>
               );
@@ -877,6 +869,7 @@ function StudentsPageContent() {
           </div>
         </div>
       ) : null}
+      <UndoToast action={pendingAction} onUndo={undoDeletion} />
     </ProtectedPage>
   );
 }
@@ -996,13 +989,15 @@ function IndividualStudentsView({
           <div className="space-y-4">
             <section className="panel p-5">
               <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                <div>
-                  <p className="label">Perfil do aluno</p>
-                  <h2 className="mt-1 text-2xl font-bold text-ink">{selectedStudent.name}</h2>
-                  <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-sm font-semibold text-ink/55">
-                    <span>{selectedStudent.birth_date ? `${formatDate(selectedStudent.birth_date)} • ${studentAgeLabel(selectedStudent.birth_date)}` : "Nascimento não informado"}</span>
-                    <span>{selectedClass ? `${selectedClass.name}${selectedClass.shift ? ` - ${selectedClass.shift}` : ""}` : "Turma não informada"}</span>
-                    <span>{studentObservations.length} {studentObservations.length === 1 ? "observação" : "observações"}</span>
+                <div className="flex min-w-0 items-center gap-3">
+                  <span className="grid h-14 w-14 shrink-0 place-items-center rounded-full bg-leaf text-xl font-bold text-white">
+                    {studentInitials(selectedStudent.name)}
+                  </span>
+                  <div className="min-w-0">
+                    <h2 className="truncate text-2xl font-bold text-ink">{selectedStudent.name}</h2>
+                    <p className="mt-1 text-sm font-semibold text-ink/55">
+                      {selectedStudent.birth_date ? `Nascimento: ${formatDate(selectedStudent.birth_date)} • ${studentAgeLabel(selectedStudent.birth_date)}` : "Nascimento não informado"}
+                    </p>
                   </div>
                 </div>
                 <button type="button" onClick={() => onEditStudent(selectedStudent)} className="grid h-9 w-9 place-items-center rounded-md border border-ink/10 text-ink/55 hover:border-leaf/40 hover:text-leaf" title="Editar aluno">
@@ -1010,17 +1005,26 @@ function IndividualStudentsView({
                 </button>
               </div>
               {selectedStudent.general_notes ? <p className="mt-4 rounded-lg bg-paper p-3 text-sm leading-6 text-ink/65">{selectedStudent.general_notes}</p> : null}
-            </section>
 
-            <section className="panel flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <p className="label">Relatórios</p>
-                <p className="mt-1 text-sm font-semibold text-ink/55">{studentReports.length} {studentReports.length === 1 ? "relatório gerado" : "relatórios gerados"}</p>
+              <div className="mt-5 grid gap-3 md:grid-cols-3">
+                <div className="rounded-lg border border-ink/10 px-4 py-4">
+                  <p className="label">Turma</p>
+                  <p className="mt-3 truncate text-sm font-bold text-ink">
+                    {selectedClass ? `${selectedClass.name}${selectedClass.shift ? ` - ${selectedClass.shift}` : ""}` : "Turma não informada"}
+                  </p>
+                </div>
+                <div className="rounded-lg border border-ink/10 px-4 py-4 text-center">
+                  <p className="label">Observações</p>
+                  <p className="mt-2 text-3xl font-bold text-purple-600">{studentObservations.length}</p>
+                </div>
+                <div className="rounded-lg border border-ink/10 px-4 py-4 text-center">
+                  <p className="label">Relatórios</p>
+                  <Link href={`/relatorios?turma=${selectedStudent.class_id}&aluno=${selectedStudent.id}`} className="mt-3 inline-flex items-center gap-1 text-sm font-bold text-leaf underline underline-offset-4">
+                    Gerar <FileText size={14} />
+                  </Link>
+                  {studentReports.length ? <p className="mt-1 text-xs font-semibold text-ink/45">{studentReports.length} gerado{studentReports.length === 1 ? "" : "s"}</p> : null}
+                </div>
               </div>
-              <Link href={`/relatorios?turma=${selectedStudent.class_id}&aluno=${selectedStudent.id}`} className="btn-primary">
-                <FileText size={16} />
-                Gerar
-              </Link>
             </section>
 
             <section className="panel overflow-hidden">
@@ -1080,6 +1084,49 @@ function IndividualStudentsView({
       </div>
     </section>
   );
+}
+
+function StudentsBirthdayBanner({ students, today }: { students: StudentRow[]; today: Date }) {
+  const month = new Intl.DateTimeFormat("pt-BR", { month: "long" }).format(today);
+  return (
+    <section className="mb-4 flex flex-col gap-2 rounded-lg border border-sun/70 bg-sun/10 px-4 py-3 sm:flex-row sm:items-center">
+      <div className="flex shrink-0 items-center gap-2 text-sm font-bold text-ink">
+        <Gift size={17} className="text-amber-600" />
+        Aniversariantes de {month}
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {students.length ? students.map((student) => {
+          const birthdayToday = isBirthdayToday(student.birth_date, today);
+          return (
+            <span key={student.id} className={`rounded-full px-2.5 py-1 text-xs font-bold ${birthdayToday ? "bg-[#FF4F64] text-white" : "border border-sun/70 bg-white text-ink/65"}`}>
+              {student.name} • dia {birthdayDay(student.birth_date)}
+            </span>
+          );
+        }) : <span className="text-xs font-semibold text-ink/50">Nenhum aluno neste mês.</span>}
+      </div>
+    </section>
+  );
+}
+
+function isBirthdayMonth(value: string | null, todayDate: Date) {
+  if (!value) return false;
+  const [, month] = value.split("-").map(Number);
+  return month === todayDate.getMonth() + 1;
+}
+
+function birthdayDay(value: string | null) {
+  if (!value) return 0;
+  return Number(value.split("-")[2]) || 0;
+}
+
+function isBirthdayToday(value: string | null, todayDate: Date) {
+  if (!value) return false;
+  const [, month, day] = value.split("-").map(Number);
+  return month === todayDate.getMonth() + 1 && day === todayDate.getDate();
+}
+
+function studentInitials(name: string) {
+  return name.split(/\s+/).filter(Boolean).map((part) => part[0]).join("").slice(0, 2).toUpperCase();
 }
 
 function studentAgeLabel(birthDate: string) {

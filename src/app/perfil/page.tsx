@@ -227,7 +227,7 @@ export default function ProfilePage() {
 
   return (
     <ProtectedPage title="Perfil" subtitle="Gerencie seus dados de conta e plano atual.">
-      <nav className="panel mb-5 grid grid-cols-1 gap-1 p-1.5 sm:grid-cols-3" aria-label="Seções do perfil">
+      <nav className="mb-5 inline-flex w-full flex-col gap-1 rounded-xl bg-ink/5 p-1 sm:w-auto sm:flex-row" aria-label="Seções do perfil">
         <ProfileTabButton active={activeTab === "personal"} icon={<UserRound size={17} />} onClick={() => setActiveTab("personal")}>
           Informações pessoais
         </ProfileTabButton>
@@ -318,7 +318,7 @@ export default function ProfilePage() {
             </button>
           </form>
 
-          <section className={activeTab === "account" ? "panel h-fit space-y-4 p-5 lg:col-span-2" : "hidden"}>
+          <section className={activeTab === "theme" ? "order-2 panel h-fit space-y-4 p-5 lg:col-span-2" : "hidden"}>
             <div>
               <p className="label mb-2">Skins do planejamento</p>
               <h2 className="text-lg font-bold text-ink">Modelo do PDF</h2>
@@ -467,7 +467,7 @@ export default function ProfilePage() {
             </p>
           </section>
 
-          <section className={activeTab === "theme" ? "panel h-fit space-y-5 p-5 lg:col-span-2" : "hidden"}>
+          <section className={activeTab === "theme" ? "order-1 panel h-fit space-y-5 p-5 lg:col-span-2" : "hidden"}>
             <div>
               <p className="label mb-2">Personalização</p>
               <h2 className="text-lg font-bold text-ink">Aparência do app</h2>
@@ -523,8 +523,8 @@ function ProfileTabButton({ active, children, icon, onClick }: { active: boolean
     <button
       type="button"
       onClick={onClick}
-      className={`flex min-h-11 items-center justify-center gap-2 rounded-md px-4 py-2.5 text-sm font-bold transition ${
-        active ? "bg-mint text-leaf" : "text-ink/60 hover:bg-mint/45 hover:text-leaf"
+      className={`flex min-h-11 items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-bold transition ${
+        active ? "bg-white text-ink shadow-sm ring-1 ring-ink/5" : "text-ink/55 hover:text-ink"
       }`}
       aria-current={active ? "page" : undefined}
     >

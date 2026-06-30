@@ -3,13 +3,11 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import {
-  BarChart3,
   BookOpen,
   CalendarDays,
   PartyPopper,
   Sparkles,
-  Target,
-  UsersRound
+  Target
 } from "lucide-react";
 import { ProtectedPage } from "@/components/layout/ProtectedPage";
 import { useAuth } from "@/components/auth/AuthProvider";
@@ -129,39 +127,12 @@ export default function DashboardPage() {
         </section>
       ) : null}
 
-      <section className="mt-6 grid gap-6 lg:grid-cols-2 lg:items-start">
-        <UpcomingPanel items={nextPlannedItems} />
-        <MiniCalendar date={now} items={plannedItems} />
-      </section>
-
-      <section className="mt-8">
-        <div className="mb-4 flex items-center justify-between gap-3">
-          <h2 className="text-xl font-bold text-ink">Últimas atividades geradas</h2>
-          <Link href="/atividades" className="text-sm font-bold text-leaf">
-            Ver todas
-          </Link>
+      <section className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(260px,1fr)] lg:items-start">
+        <div className="space-y-6">
+          <UpcomingPanel items={nextPlannedItems} />
+          <RecentActivitiesPanel activities={activities} collections={collections} />
         </div>
-
-        {activities.length ? (
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {activities.map((activity, index) => (
-              <DashboardActivityCard
-                key={activity.id}
-                activity={activity}
-                collections={collections}
-                accent={activityAccent(activity, collections, index)}
-              />
-            ))}
-          </div>
-        ) : (
-          <div className="panel border-dashed p-8 text-center">
-            <p className="text-sm font-semibold text-ink/70">Nenhuma atividade salva ainda.</p>
-            <Link href="/gerar" className="mt-4 inline-flex btn-primary">
-              <Sparkles size={16} />
-              Criar primeira atividade
-            </Link>
-          </div>
-        )}
+        <MiniCalendar date={now} items={plannedItems} />
       </section>
     </ProtectedPage>
   );
@@ -182,35 +153,34 @@ function EvolutionPanel({
 }) {
   const total = series.reduce((sum, point) => sum + point.count, 0);
   const max = Math.max(1, ...series.map((point) => point.count));
+  const chartColor = view === "activities" ? "#00B3AF" : "#8B5CF6";
 
   return (
     <section className="panel overflow-hidden">
-      <div className="flex flex-col gap-4 border-b border-ink/10 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
-        <div className="inline-flex w-full rounded-lg border border-ink/10 bg-paper p-1 sm:w-auto">
+      <div className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
+        <div className="inline-flex w-full rounded-xl bg-ink/5 p-1 sm:w-auto">
           <button
             type="button"
             onClick={() => onViewChange("activities")}
-            className={`flex flex-1 items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-bold transition sm:flex-none ${
-              view === "activities" ? "bg-white text-leaf shadow-sm" : "text-ink/55 hover:text-ink"
+            className={`flex flex-1 items-center justify-center rounded-lg px-4 py-2 text-sm font-bold transition sm:flex-none ${
+              view === "activities" ? "bg-white text-ink shadow-sm ring-1 ring-ink/5" : "text-ink/55 hover:text-ink"
             }`}
           >
-            <BookOpen size={16} />
             Atividades geradas
           </button>
           <button
             type="button"
             onClick={() => onViewChange("students")}
-            className={`flex flex-1 items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-bold transition sm:flex-none ${
-              view === "students" ? "bg-white text-leaf shadow-sm" : "text-ink/55 hover:text-ink"
+            className={`flex flex-1 items-center justify-center rounded-lg px-4 py-2 text-sm font-bold transition sm:flex-none ${
+              view === "students" ? "bg-white text-ink shadow-sm ring-1 ring-ink/5" : "text-ink/55 hover:text-ink"
             }`}
           >
-            <UsersRound size={16} />
             Alunos
           </button>
         </div>
 
-        <label className="flex items-center gap-2">
-          <span className="label whitespace-nowrap">Período</span>
+        <label>
+          <span className="sr-only">Filtrar período</span>
           <select value={period} onChange={(event) => onPeriodChange(event.target.value as DashboardPeriod)} className="input min-w-40 py-2">
             <option value="week">Última semana</option>
             <option value="month">Últimos 30 dias</option>
@@ -218,43 +188,16 @@ function EvolutionPanel({
         </label>
       </div>
 
-      <div className="p-4 sm:p-5">
-        <div className="mb-5 flex items-end justify-between gap-4">
-          <div>
-            <p className="label">Evolução no período</p>
-            <p className="mt-1 text-3xl font-bold text-ink">{total}</p>
-            <p className="mt-1 text-sm font-semibold text-ink/50">
-              {view === "activities" ? "atividades geradas" : "alunos cadastrados"}
-            </p>
-          </div>
-          <BarChart3 size={24} className="text-leaf" />
+      <div>
+        <div className="flex items-end gap-4 px-5 pb-3">
+          <p className="text-4xl font-bold" style={{ color: chartColor }}>{total}</p>
+          <p className="pb-1 text-sm font-semibold text-ink/45">no período</p>
         </div>
 
-        <div className="overflow-x-auto pb-1">
-          <div
-            className="grid min-w-[520px] items-end gap-2 border-b border-ink/10"
-            style={{ gridTemplateColumns: `repeat(${series.length}, minmax(14px, 1fr))` }}
-          >
-            {series.map((point, index) => {
-              const showLabel = series.length <= 7 || index === 0 || index === series.length - 1 || index % 5 === 0;
-              const height = point.count ? Math.max(18, Math.round((point.count / max) * 150)) : 4;
-              return (
-                <div key={point.key} className="flex min-h-48 flex-col items-center justify-end gap-2">
-                  {point.count ? <span className="text-[11px] font-bold text-ink/50">{point.count}</span> : null}
-                  <span
-                    className={`w-full max-w-8 rounded-t-md ${point.count ? "bg-[#00B3AF]" : "bg-ink/10"}`}
-                    style={{ height }}
-                    title={`${point.label}: ${point.count}`}
-                  />
-                  <span className="h-5 text-[10px] font-semibold text-ink/40">{showLabel ? point.shortLabel : ""}</span>
-                </div>
-              );
-            })}
-          </div>
-        </div>
+        <EvolutionLineChart series={series} max={max} color={chartColor} />
 
         {!total ? (
-          <p className="mt-4 text-sm font-semibold text-ink/50">
+          <p className="px-5 pb-4 text-sm font-semibold text-ink/50">
             Nenhum registro encontrado neste período.
           </p>
         ) : null}
@@ -408,7 +351,30 @@ function MiniCalendar({ date, items }: { date: Date; items: PlannedItem[] }) {
   );
 }
 
-function DashboardActivityCard({
+function RecentActivitiesPanel({ activities, collections }: { activities: Activity[]; collections: Collection[] }) {
+  return (
+    <section className="panel overflow-hidden">
+      <div className="flex items-center justify-between gap-3 border-b border-ink/10 px-5 py-4">
+        <h2 className="text-xl font-bold text-ink">Últimas atividades geradas</h2>
+        <Link href="/atividades" className="text-sm font-bold text-leaf">Ver todas</Link>
+      </div>
+      {activities.length ? (
+        <div className="divide-y divide-ink/10">
+          {activities.map((activity, index) => (
+            <DashboardActivityRow key={activity.id} activity={activity} collections={collections} accent={activityAccent(activity, collections, index)} />
+          ))}
+        </div>
+      ) : (
+        <div className="p-6 text-center">
+          <p className="text-sm font-semibold text-ink/65">Nenhuma atividade salva ainda.</p>
+          <Link href="/gerar" className="mt-4 inline-flex btn-primary"><Sparkles size={16} />Criar primeira atividade</Link>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function DashboardActivityRow({
   activity,
   collections,
   accent
@@ -420,14 +386,16 @@ function DashboardActivityCard({
   const activityCollections = activityCollectionsFor(activity, collections);
   const summary = firstParagraph(activity.description);
   return (
-    <Link href={`/atividades?atividade=${activity.id}`} className="panel group overflow-hidden p-5 transition hover:-translate-y-0.5 hover:border-leaf/35">
-      <div className="mb-4 h-1.5 rounded-full" style={{ backgroundColor: accent }} />
-      <p className="text-xs font-bold uppercase tracking-wide text-ink/40">
-        {activityCollections.length ? activityCollections.map((collection) => collection.name).join(", ") : activity.development_area || "Sem coleção"}
-      </p>
-      <h3 className="mt-4 line-clamp-3 text-xl font-bold leading-7 text-ink">{activity.title}</h3>
-      {summary ? <p className="mt-3 line-clamp-2 text-sm leading-6 text-ink/60">{summary}</p> : null}
-      <div className="mt-4 flex flex-wrap items-center gap-3 text-sm font-semibold text-ink/52">
+    <Link href={`/atividades?atividade=${activity.id}`} className="group block border-l-4 px-5 py-4 transition hover:bg-mint/20" style={{ borderLeftColor: accent }}>
+      <div className="flex flex-wrap gap-2">
+        <span className="rounded bg-paper px-2 py-1 text-[11px] font-bold uppercase text-ink/50">{activity.age_range || "Faixa etária"}</span>
+        <span className="rounded bg-paper px-2 py-1 text-[11px] font-bold uppercase text-ink/50">
+          {activityCollections.length ? activityCollections.map((collection) => collection.name).join(", ") : activity.development_area || "Sem coleção"}
+        </span>
+      </div>
+      <h3 className="mt-2 text-base font-bold leading-6 text-ink group-hover:text-leaf">{activity.title}</h3>
+      {summary ? <p className="mt-1 line-clamp-2 text-sm leading-6 text-ink/60">{summary}</p> : null}
+      <div className="mt-2 flex flex-wrap items-center gap-3 text-xs font-semibold text-ink/52">
         <span className="inline-flex items-center gap-2">
           <BookOpen size={14} className="shrink-0 text-ink/35" />
           {activity.age_range || "Faixa etária"}
@@ -441,6 +409,60 @@ function DashboardActivityCard({
       </div>
     </Link>
   );
+}
+
+function EvolutionLineChart({ series, max, color }: { series: EvolutionPoint[]; max: number; color: string }) {
+  const width = 700;
+  const height = 170;
+  const chartTop = 12;
+  const chartBottom = 142;
+  const points = series.map((point, index) => ({
+    x: series.length === 1 ? width / 2 : (index / (series.length - 1)) * width,
+    y: chartBottom - (point.count / max) * (chartBottom - chartTop),
+    point
+  }));
+  const line = smoothPath(points);
+  const area = points.length ? `${line} L ${points[points.length - 1].x} ${chartBottom} L ${points[0].x} ${chartBottom} Z` : "";
+  const gradientId = color === "#00B3AF" ? "activity-chart-gradient" : "student-chart-gradient";
+
+  return (
+    <div className="overflow-x-auto">
+      <div className="min-w-[620px]">
+        <svg viewBox={`0 0 ${width} ${height}`} className="h-52 w-full" role="img" aria-label="Evolução no período">
+          <defs>
+            <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={color} stopOpacity="0.2" />
+              <stop offset="100%" stopColor={color} stopOpacity="0.02" />
+            </linearGradient>
+          </defs>
+          {[36, 72, 108, 142].map((y) => <line key={y} x1="0" y1={y} x2={width} y2={y} stroke="currentColor" className="text-ink/10" strokeWidth="1" />)}
+          {area ? <path d={area} fill={`url(#${gradientId})`} /> : null}
+          {line ? <path d={line} fill="none" stroke={color} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" /> : null}
+          {points.map(({ x, y, point }) => (
+            <circle key={point.key} cx={x} cy={y} r={point.count ? 4 : 2.5} fill={color} stroke="white" strokeWidth="2">
+              <title>{point.label}: {point.count}</title>
+            </circle>
+          ))}
+        </svg>
+        <div className="grid -mt-8 px-1 pb-4" style={{ gridTemplateColumns: `repeat(${series.length}, minmax(0, 1fr))` }}>
+          {series.map((point, index) => {
+            const show = series.length <= 7 || index === 0 || index === series.length - 1 || index % 5 === 0;
+            return <span key={point.key} className="text-center text-[10px] font-semibold text-ink/40">{show ? point.shortLabel : ""}</span>;
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function smoothPath(points: Array<{ x: number; y: number }>) {
+  if (!points.length) return "";
+  if (points.length === 1) return `M ${points[0].x} ${points[0].y}`;
+  return points.slice(1).reduce((path, point, index) => {
+    const previous = points[index];
+    const middle = (previous.x + point.x) / 2;
+    return `${path} C ${middle} ${previous.y}, ${middle} ${point.y}, ${point.x} ${point.y}`;
+  }, `M ${points[0].x} ${points[0].y}`);
 }
 
 function buildEvolutionSeries(items: Array<{ created_at: string }>, now: Date, days: number): EvolutionPoint[] {
