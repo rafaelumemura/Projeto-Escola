@@ -18,22 +18,24 @@ import { useTheme } from "@/components/theme/ThemeProvider";
 
 const nav = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/atividades", label: "Atividades", icon: BookOpen },
   { href: "/colecoes", label: "Coleções", icon: FolderKanban },
-  { href: "/alunos?view=students", label: "Alunos", icon: UsersRound },
+  { href: "/atividades", label: "Atividades", icon: BookOpen },
   { href: "/alunos?view=classes", label: "Turmas", icon: School },
+  { href: "/alunos?view=students", label: "Alunos", icon: UsersRound },
   { href: "/relatorios", label: "Relatórios", icon: FileText },
-  { href: "/planejamento", label: "Planejamento", icon: CalendarDays }
+  { href: "/planejamento", label: "Planejamento", icon: CalendarDays },
+  { href: "/perfil", label: "Perfil", icon: UserRound }
 ];
 
 const mobileNav = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/atividades", label: "Atividades", icon: BookOpen },
   { href: "/colecoes", label: "Coleções", icon: FolderKanban },
-  { href: "/alunos?view=students", label: "Alunos", icon: UsersRound },
+  { href: "/atividades", label: "Atividades", icon: BookOpen },
   { href: "/alunos?view=classes", label: "Turmas", icon: School },
+  { href: "/alunos?view=students", label: "Alunos", icon: UsersRound },
   { href: "/relatorios", label: "Relatórios", icon: FileText },
-  { href: "/planejamento", label: "Planejar", icon: CalendarDays }
+  { href: "/planejamento", label: "Planejamento", icon: CalendarDays },
+  { href: "/perfil", label: "Perfil", icon: UserRound }
 ];
 
 export function AppShell({ children }: { children: React.ReactNode }) {

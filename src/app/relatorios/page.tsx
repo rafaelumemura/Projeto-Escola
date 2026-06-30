@@ -91,8 +91,12 @@ export default function ReportsPage() {
     const params = new URLSearchParams(window.location.search);
     const turma = params.get("turma");
     const aluno = params.get("aluno");
+    const tipo = params.get("tipo");
+    const periodo = params.get("periodo");
     if (turma) setClassId(turma);
     if (aluno) setStudentId(aluno);
+    if (tipo === "individual") setSelectedType("Relatório individual");
+    if (periodo && periodOptions.some((option) => option.value === periodo)) setPeriodKind(periodo);
   }, []);
 
   useEffect(() => {

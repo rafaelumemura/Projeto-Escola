@@ -3,6 +3,12 @@ import { z } from "zod";
 import { fail, ok, readJson } from "@/lib/api/http";
 import type { Database, Json } from "@/lib/database.types";
 import { getAnthropicModel, requireServerEnv } from "@/lib/env";
+import {
+  assessmentTypeLabel,
+  calculateAssessmentMetrics,
+  deliveryStatusLabel,
+  participationLevelLabel
+} from "@/lib/students/assessments";
 import { createSupabaseUserClient, getAuthenticatedUser } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -11,6 +17,7 @@ type ClassRow = Database["public"]["Tables"]["classes"]["Row"];
 type StudentRow = Database["public"]["Tables"]["students"]["Row"];
 type ObservationRow = Database["public"]["Tables"]["student_observations"]["Row"];
 type ReportRow = Database["public"]["Tables"]["student_reports"]["Row"];
+type AssessmentRow = Database["public"]["Tables"]["student_assessments"]["Row"];
 type SupabaseUserClient = ReturnType<typeof createSupabaseUserClient>;
 
 type AnthropicTextBlock = {
@@ -150,6 +157,20 @@ async function generateForStudent(input: {
       updated_at: observation.updated_at,
       content: observation.content,
       tags: observation.tags
+    })),
+    assessments: context.assessments.map((assessment) => ({
+      id: assessment.id,
+      updated_at: assessment.updated_at,
+      assessment_date: assessment.assessment_date,
+      assessment_type: assessment.assessment_type,
+      title: assessment.title,
+      description: assessment.description,
+      score: assessment.score,
+      max_score: assessment.max_score,
+      delivery_status: assessment.delivery_status,
+      participation_level: assessment.participation_level,
+      comments: assessment.comments,
+      criteria: context.criteriaByAssessment[assessment.id] || []
     })),
     previous_reports: context.previousReports.map((report) => ({
       id: report.id,
@@ -295,6 +316,44 @@ async function buildStudentReportContext(input: {
     return linkedObservationIds.has(observation.id);
   });
 
+  const { data: assessments, error: assessmentsError } = await input.supabase
+    .from("student_assessments")
+    .select("*")
+    .eq("user_id", input.userId)
+    .eq("class_id", input.classData.id)
+    .eq("student_id", input.student.id)
+    .lte("assessment_date", input.periodEnd)
+    .gte("assessment_date", input.periodStart)
+    .order("assessment_date", { ascending: true });
+
+  if (assessmentsError) throw assessmentsError;
+  const assessmentIds = (assessments || []).map((assessment) => assessment.id);
+  const { data: assessmentLinks, error: assessmentLinksError } = assessmentIds.length
+    ? await input.supabase
+      .from("student_assessment_criteria")
+      .select("assessment_id, criterion_id")
+      .in("assessment_id", assessmentIds)
+    : { data: [], error: null };
+
+  if (assessmentLinksError) throw assessmentLinksError;
+  const criterionIds = Array.from(new Set((assessmentLinks || []).map((link) => link.criterion_id)));
+  const { data: criteria, error: criteriaError } = criterionIds.length
+    ? await input.supabase
+      .from("assessment_criteria")
+      .select("id, name")
+      .in("id", criterionIds)
+    : { data: [], error: null };
+
+  if (criteriaError) throw criteriaError;
+  const criterionNames = new Map((criteria || []).map((criterion) => [criterion.id, criterion.name]));
+  const criteriaByAssessment = (assessmentLinks || []).reduce<Record<string, string[]>>((acc, link) => {
+    const name = criterionNames.get(link.criterion_id);
+    if (!name) return acc;
+    acc[link.assessment_id] = [...(acc[link.assessment_id] || []), name];
+    return acc;
+  }, {});
+  const assessmentMetrics = calculateAssessmentMetrics(assessments || []);
+
   const { data: previousReports, error: previousReportsError } = await input.supabase
     .from("student_reports")
     .select("*")
@@ -309,6 +368,9 @@ async function buildStudentReportContext(input: {
     relevantObservations,
     classObservations: relevantObservations.filter((observation) => observation.applies_to === "all_class"),
     individualObservations: relevantObservations.filter((observation) => linkedObservationIds.has(observation.id)),
+    assessments: assessments || [],
+    criteriaByAssessment,
+    assessmentMetrics,
     previousReports: previousReports || []
   };
 }
@@ -324,16 +386,20 @@ async function callClaudeForReport(input: {
     relevantObservations: ObservationRow[];
     classObservations: ObservationRow[];
     individualObservations: ObservationRow[];
+    assessments: AssessmentRow[];
+    criteriaByAssessment: Record<string, string[]>;
+    assessmentMetrics: ReturnType<typeof calculateAssessmentMetrics>;
     previousReports: ReportRow[];
   };
 }) {
-  if (!input.context.relevantObservations.length) {
+  if (!input.context.relevantObservations.length && !input.context.assessments.length) {
     return {
       content:
         "Ainda há poucos registros para gerar um relatório consistente. Você pode adicionar mais observações ou gerar uma versão inicial com base nos dados disponíveis.",
       structuredContent: {
         warning: "insufficient_records",
-        observations_count: 0
+        observations_count: 0,
+        assessments_count: 0
       },
       inputTokens: null,
       outputTokens: null
@@ -375,7 +441,9 @@ async function callClaudeForReport(input: {
       report_type: input.reportType,
       tone: input.tone,
       observations_count: input.context.relevantObservations.length,
-      generated_notice: "Relatório gerado a partir das observações registradas pela professora."
+      assessments_count: input.context.assessments.length,
+      assessment_metrics: input.context.assessmentMetrics,
+      generated_notice: "Relatório gerado a partir dos registros pedagógicos salvos pela professora."
     },
     inputTokens: data.usage?.input_tokens ?? null,
     outputTokens: data.usage?.output_tokens ?? null
@@ -403,6 +471,17 @@ ${formatObservations(input.context.individualObservations)}
 Observações gerais da turma no período, apenas como contexto:
 ${formatObservations(input.context.classObservations)}
 
+Avaliações estruturadas do aluno no período:
+${formatAssessments(input.context.assessments, input.context.criteriaByAssessment)}
+
+Indicadores objetivos das avaliações:
+- Quantidade de avaliações: ${input.context.assessmentMetrics.assessmentCount}
+- Média proporcional das notas: ${formatPercentage(input.context.assessmentMetrics.averageScorePercentage)}
+- Entregas no prazo: ${formatPercentage(input.context.assessmentMetrics.onTimePercentage)}
+- Quantidade de provas: ${input.context.assessmentMetrics.examCount}
+- Quantidade de trabalhos: ${input.context.assessmentMetrics.workCount}
+- Indicadores de participação: ${formatParticipationIndicators(input.context.assessmentMetrics.participationIndicators)}
+
 Relatórios anteriores, se úteis:
 ${input.context.previousReports.map((report) => `- ${report.generated_at}: ${report.content.slice(0, 600)}`).join("\n") || "Nenhum relatório anterior."}
 
@@ -411,15 +490,41 @@ Regras obrigatórias:
 - Inclua avanços observados.
 - Inclua pontos que ainda precisam de acompanhamento, se houver base nos registros.
 - Aborde participação, autonomia, socialização e desenvolvimento nas atividades quando houver evidências.
+- Use as avaliações e seus indicadores para complementar as observações, sem transformar o relatório em um boletim numérico.
+- Não invente conclusões quando um indicador não estiver disponível.
 - Sugestões pedagógicas só podem aparecer se forem personalizadas para este aluno e conectadas às observações.
 - Não gere sugestões genéricas.
 - Evite linguagem diagnóstica.
 - Não use estes termos: ${forbiddenTerms.join(", ")}.
 - Prefira expressões como "necessita de mediação", "vem desenvolvendo", "demonstra evolução", "beneficia-se de", "responde melhor quando", "ainda precisa de apoio em".
-- Deixe claro ao final: "Relatório gerado a partir das observações registradas pela professora."
+- Deixe claro ao final: "Relatório gerado a partir dos registros pedagógicos salvos pela professora."
 - Escreva em português brasileiro.
 - Não invente fatos, datas ou comportamentos que não estejam nos registros.
 `;
+}
+
+function formatAssessments(assessments: AssessmentRow[], criteriaByAssessment: Record<string, string[]>) {
+  if (!assessments.length) return "Nenhuma avaliação registrada no período.";
+  return assessments
+    .map((assessment) => {
+      const score = assessment.score === null
+        ? "sem nota"
+        : `${assessment.score}${assessment.max_score === null ? "" : `/${assessment.max_score}`}`;
+      const delivery = deliveryStatusLabel(assessment.delivery_status) || "não informada";
+      const participation = participationLevelLabel(assessment.participation_level) || "não avaliada";
+      const criteria = criteriaByAssessment[assessment.id]?.join(", ") || "não informados";
+      return `- ${assessment.assessment_date} [${assessmentTypeLabel(assessment.assessment_type)}] ${assessment.title || "Sem título"}. Nota: ${score}. Entrega: ${delivery}. Participação: ${participation}. Critérios: ${criteria}. Descrição: ${assessment.description || "não informada"}. Comentários: ${assessment.comments || "não informados"}.`;
+    })
+    .join("\n");
+}
+
+function formatPercentage(value: number | null) {
+  return value === null ? "não disponível" : `${Math.round(value)}%`;
+}
+
+function formatParticipationIndicators(indicators: Record<string, number>) {
+  const visible = Object.entries(indicators).filter(([, count]) => count > 0);
+  return visible.length ? visible.map(([label, count]) => `${label}: ${count}`).join(", ") : "não disponíveis";
 }
 
 function formatObservations(observations: ObservationRow[]) {

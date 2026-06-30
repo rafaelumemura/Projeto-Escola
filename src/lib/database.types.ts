@@ -14,6 +14,9 @@ type UiFontScale = "small" | "default" | "large" | "extra_large";
 type StudentStatus = "active" | "inactive";
 type ObservationType = "individual" | "activity" | "class" | "weekly" | "biweekly" | "free";
 type ObservationAppliesTo = "all_class" | "selected_students" | "individual_student" | "none";
+type AssessmentType = "exam" | "work" | "evaluative_activity" | "homework" | "project" | "participation" | "reading" | "other";
+type AssessmentDeliveryStatus = "on_time" | "late" | "not_delivered" | "not_applicable";
+type AssessmentParticipationLevel = "excellent" | "good" | "regular" | "low" | "not_evaluated";
 
 type ActivityRow = {
   id: string;
@@ -295,6 +298,101 @@ type ReportGenerationLogInsert = {
   created_at?: string;
 };
 
+type AssessmentCriterionRow = {
+  id: string;
+  user_id: string | null;
+  name: string;
+  slug: string;
+  is_active: boolean;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+};
+
+type AssessmentCriterionInsert = {
+  id?: string;
+  user_id?: string | null;
+  name: string;
+  slug: string;
+  is_active?: boolean;
+  sort_order?: number;
+  created_at?: string;
+  updated_at?: string;
+};
+
+type AssessmentCriterionUpdate = {
+  name?: string;
+  slug?: string;
+  is_active?: boolean;
+  sort_order?: number;
+  updated_at?: string;
+};
+
+type StudentAssessmentRow = {
+  id: string;
+  student_id: string;
+  class_id: string;
+  user_id: string;
+  title: string | null;
+  description: string | null;
+  assessment_type: AssessmentType;
+  assessment_date: string;
+  score: number | null;
+  max_score: number | null;
+  delivery_status: AssessmentDeliveryStatus | null;
+  participation_level: AssessmentParticipationLevel | null;
+  comments: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+type StudentAssessmentInsert = {
+  id?: string;
+  student_id: string;
+  class_id: string;
+  user_id: string;
+  title?: string | null;
+  description?: string | null;
+  assessment_type: AssessmentType;
+  assessment_date: string;
+  score?: number | null;
+  max_score?: number | null;
+  delivery_status?: AssessmentDeliveryStatus | null;
+  participation_level?: AssessmentParticipationLevel | null;
+  comments?: string | null;
+  created_at?: string;
+  updated_at?: string;
+};
+
+type StudentAssessmentUpdate = {
+  student_id?: string;
+  class_id?: string;
+  title?: string | null;
+  description?: string | null;
+  assessment_type?: AssessmentType;
+  assessment_date?: string;
+  score?: number | null;
+  max_score?: number | null;
+  delivery_status?: AssessmentDeliveryStatus | null;
+  participation_level?: AssessmentParticipationLevel | null;
+  comments?: string | null;
+  updated_at?: string;
+};
+
+type StudentAssessmentCriterionRow = {
+  id: string;
+  assessment_id: string;
+  criterion_id: string;
+  created_at: string;
+};
+
+type StudentAssessmentCriterionInsert = {
+  id?: string;
+  assessment_id: string;
+  criterion_id: string;
+  created_at?: string;
+};
+
 export type Database = {
   public: {
     Tables: {
@@ -483,6 +581,21 @@ export type Database = {
       report_generation_logs: {
         Row: ReportGenerationLogRow;
         Insert: ReportGenerationLogInsert;
+        Update: Record<string, never>;
+      };
+      assessment_criteria: {
+        Row: AssessmentCriterionRow;
+        Insert: AssessmentCriterionInsert;
+        Update: AssessmentCriterionUpdate;
+      };
+      student_assessments: {
+        Row: StudentAssessmentRow;
+        Insert: StudentAssessmentInsert;
+        Update: StudentAssessmentUpdate;
+      };
+      student_assessment_criteria: {
+        Row: StudentAssessmentCriterionRow;
+        Insert: StudentAssessmentCriterionInsert;
         Update: Record<string, never>;
       };
       printable_assets: {

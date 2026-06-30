@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { FormEvent, Suspense, useEffect, useMemo, useState } from "react";
 import { CalendarDays, Edit3, FileText, Gift, Plus, Save, Search, Trash2, UserPlus, UsersRound, X } from "lucide-react";
 import { ProtectedPage } from "@/components/layout/ProtectedPage";
+import { StudentAssessmentsPanel } from "@/components/students/StudentAssessmentsPanel";
 import { ActivityView } from "@/components/ui/ActivityView";
 import { UndoToast, useUndoableAction } from "@/components/ui/UndoToast";
 import { useAuth } from "@/components/auth/AuthProvider";
@@ -715,6 +716,7 @@ function StudentsPageContent() {
           selectedYear={selectedYear}
           onAddObservation={openObservationModal}
           onEditStudent={openStudentModal}
+          onMessage={setMessage}
         />
       )}
 
@@ -882,7 +884,8 @@ function IndividualStudentsView({
   reports,
   selectedYear,
   onAddObservation,
-  onEditStudent
+  onEditStudent,
+  onMessage
 }: {
   students: StudentRow[];
   classes: ClassRow[];
@@ -892,11 +895,13 @@ function IndividualStudentsView({
   selectedYear: number;
   onAddObservation: (student: StudentRow) => void;
   onEditStudent: (student: StudentRow) => void;
+  onMessage: (message: string) => void;
 }) {
   const [search, setSearch] = useState("");
   const [classFilter, setClassFilter] = useState("");
   const [selectedStudentId, setSelectedStudentId] = useState("");
   const [tagFilter, setTagFilter] = useState("");
+  const [activeTab, setActiveTab] = useState<"summary" | "observations" | "assessments">("summary");
   const classIds = useMemo(() => new Set(classes.map((classItem) => classItem.id)), [classes]);
   const filteredStudents = useMemo(() => {
     const normalizedSearch = normalizeSearch(search);
@@ -938,6 +943,11 @@ function IndividualStudentsView({
       setSelectedStudentId(filteredStudents[0].id);
     }
   }, [filteredStudents, selectedStudentId]);
+
+  useEffect(() => {
+    setActiveTab("summary");
+    setTagFilter("");
+  }, [selectedStudent?.id]);
 
   return (
     <section className="space-y-4">
@@ -987,6 +997,28 @@ function IndividualStudentsView({
 
         {selectedStudent ? (
           <div className="space-y-4">
+            <div className="flex w-full gap-1 overflow-x-auto rounded-lg border border-ink/10 bg-paper p-1 sm:w-fit" role="tablist" aria-label="Acompanhamento do aluno">
+              {([
+                ["summary", "Resumo"],
+                ["observations", "Observações"],
+                ["assessments", "Avaliações"]
+              ] as const).map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  role="tab"
+                  aria-selected={activeTab === value}
+                  onClick={() => setActiveTab(value)}
+                  className={`min-h-10 whitespace-nowrap rounded-md px-4 py-2 text-sm font-bold transition ${
+                    activeTab === value ? "bg-white text-ink shadow-sm ring-1 ring-ink/5" : "text-ink/55 hover:text-ink"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            {activeTab === "summary" ? (
             <section className="panel p-5">
               <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                 <div className="flex min-w-0 items-center gap-3">
@@ -1000,9 +1032,15 @@ function IndividualStudentsView({
                     </p>
                   </div>
                 </div>
-                <button type="button" onClick={() => onEditStudent(selectedStudent)} className="grid h-9 w-9 place-items-center rounded-md border border-ink/10 text-ink/55 hover:border-leaf/40 hover:text-leaf" title="Editar aluno">
-                  <Edit3 size={16} />
-                </button>
+                <div className="flex shrink-0 flex-wrap gap-2">
+                  <Link href={`/relatorios?tipo=individual&turma=${selectedStudent.class_id}&aluno=${selectedStudent.id}&periodo=bimester`} className="btn-secondary">
+                    <FileText size={16} />
+                    Gerar relatório
+                  </Link>
+                  <button type="button" onClick={() => onEditStudent(selectedStudent)} className="grid h-10 w-10 place-items-center rounded-md border border-ink/10 text-ink/55 hover:border-leaf/40 hover:text-leaf" title="Editar aluno">
+                    <Edit3 size={16} />
+                  </button>
+                </div>
               </div>
               {selectedStudent.general_notes ? <p className="mt-4 rounded-lg bg-paper p-3 text-sm leading-6 text-ink/65">{selectedStudent.general_notes}</p> : null}
 
@@ -1019,14 +1057,16 @@ function IndividualStudentsView({
                 </div>
                 <div className="rounded-lg border border-ink/10 px-4 py-4 text-center">
                   <p className="label">Relatórios</p>
-                  <Link href={`/relatorios?turma=${selectedStudent.class_id}&aluno=${selectedStudent.id}`} className="mt-3 inline-flex items-center gap-1 text-sm font-bold text-leaf underline underline-offset-4">
+                  <Link href={`/relatorios?tipo=individual&turma=${selectedStudent.class_id}&aluno=${selectedStudent.id}&periodo=bimester`} className="mt-3 inline-flex items-center gap-1 text-sm font-bold text-leaf underline underline-offset-4">
                     Gerar <FileText size={14} />
                   </Link>
                   {studentReports.length ? <p className="mt-1 text-xs font-semibold text-ink/45">{studentReports.length} gerado{studentReports.length === 1 ? "" : "s"}</p> : null}
                 </div>
               </div>
             </section>
+            ) : null}
 
+            {activeTab === "observations" ? (
             <section className="panel overflow-hidden">
               <div className="flex flex-col gap-3 border-b border-ink/10 p-4 sm:flex-row sm:items-end sm:justify-between">
                 <div>
@@ -1077,6 +1117,11 @@ function IndividualStudentsView({
                 </div>
               )}
             </section>
+            ) : null}
+
+            {activeTab === "assessments" ? (
+              <StudentAssessmentsPanel student={selectedStudent} selectedYear={selectedYear} onMessage={onMessage} />
+            ) : null}
           </div>
         ) : (
           <div className="panel p-8 text-center text-sm font-semibold text-ink/55">Selecione um aluno para acompanhar.</div>
