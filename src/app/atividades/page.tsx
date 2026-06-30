@@ -2,8 +2,9 @@
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { ChevronLeft, ChevronRight, Eye, FileDown, Filter, FolderMinus, FolderPlus, Loader2, Pencil, Plus, Printer, Save, Trash2, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Eye, FileDown, Filter, FolderMinus, FolderPlus, Loader2, Pencil, Plus, Printer, Save, Sparkles, Trash2, X } from "lucide-react";
 import { ProtectedPage } from "@/components/layout/ProtectedPage";
+import { AiActivityCreator } from "@/components/activities/AiActivityCreator";
 import { ActivityView } from "@/components/ui/ActivityView";
 import { UndoToast, useUndoableAction } from "@/components/ui/UndoToast";
 import {
@@ -30,6 +31,7 @@ type EditState = Partial<Activity> & {
   teacher_tips_text?: string;
   variations_text?: string;
 };
+type ActivitiesMode = "list" | "ai";
 
 const pageSize = 10;
 const printableProgressMessages = [
@@ -113,13 +115,18 @@ export default function ActivitiesPage() {
   });
   const [actionCollectionId, setActionCollectionId] = useState("");
   const [manualModalOpen, setManualModalOpen] = useState(false);
+  const [createChoiceOpen, setCreateChoiceOpen] = useState(false);
+  const [mode, setMode] = useState<ActivitiesMode>("list");
+  const [createdAiActivityId, setCreatedAiActivityId] = useState<string | null>(null);
   const [manualForm, setManualForm] = useState<ManualActivityForm>(initialManualActivityForm);
   const [printableProgress, setPrintableProgress] = useState<{ activityId: string; step: number } | null>(null);
   const printableProgressTimers = useRef<number[]>([]);
   const { pendingAction, schedule: scheduleDeletion, undo: undoDeletion } = useUndoableAction();
 
   useEffect(() => {
-    setHighlightedActivityId(new URLSearchParams(window.location.search).get("atividade"));
+    const params = new URLSearchParams(window.location.search);
+    setHighlightedActivityId(params.get("atividade"));
+    if (params.get("criar") === "ia") setMode("ai");
   }, []);
 
   const query = useMemo(() => {
@@ -137,10 +144,10 @@ export default function ActivitiesPage() {
     return activities.slice(start, start + pageSize);
   }, [activities, page, totalPages]);
 
-  async function loadActivities() {
+  async function loadActivities(focusActivityId = highlightedActivityId) {
     const data = await apiFetch<{ activities: ActivityWithCollections[] }>(supabase, query);
-    const highlightedIndex = highlightedActivityId
-      ? data.activities.findIndex((activity) => activity.id === highlightedActivityId)
+    const highlightedIndex = focusActivityId
+      ? data.activities.findIndex((activity) => activity.id === focusActivityId)
       : -1;
 
     setActivities(data.activities);
@@ -222,6 +229,33 @@ export default function ActivitiesPage() {
     setManualForm(initialManualActivityForm);
     setManualModalOpen(true);
     setMessage(null);
+  }
+
+  function openCreateChoice() {
+    setCreateChoiceOpen(true);
+    setMessage(null);
+  }
+
+  function openAiCreator() {
+    setCreateChoiceOpen(false);
+    setCreatedAiActivityId(null);
+    setMode("ai");
+    window.history.replaceState(null, "", "/atividades?criar=ia");
+  }
+
+  function openManualCreator() {
+    setCreateChoiceOpen(false);
+    openManualModal();
+  }
+
+  async function backToActivities() {
+    const nextUrl = createdAiActivityId ? `/atividades?atividade=${createdAiActivityId}` : "/atividades";
+    setMode("list");
+    window.history.replaceState(null, "", nextUrl);
+    if (createdAiActivityId) {
+      setHighlightedActivityId(createdAiActivityId);
+      await loadActivities(createdAiActivityId).catch((error) => setMessage(error instanceof Error ? error.message : "Não foi possível atualizar as atividades."));
+    }
   }
 
   function closeManualModal() {
@@ -444,15 +478,19 @@ export default function ActivitiesPage() {
 
   return (
     <ProtectedPage
-      title="Atividades"
-      subtitle="Consulte, filtre, edite e reutilize atividades salvas."
-      actions={
-        <button type="button" onClick={openManualModal} className="btn-primary">
+      title={mode === "ai" ? "Criar atividade com IA" : "Atividades"}
+      subtitle={mode === "ai" ? "Informe o contexto pedagógico e gere uma atividade estruturada dentro do seu acervo." : "Consulte, filtre, edite e reutilize atividades salvas."}
+      actions={mode === "list" ? (
+        <button type="button" onClick={openCreateChoice} className="btn-primary">
           <Plus size={17} />
           Criar atividade
         </button>
-      }
+      ) : undefined}
     >
+      {mode === "ai" ? (
+        <AiActivityCreator onBack={() => void backToActivities()} onActivityCreated={(activity) => setCreatedAiActivityId(activity.id)} />
+      ) : (
+      <>
       <section className="panel mb-5 p-4">
         <div className="mb-3 flex items-center gap-2 font-bold">
           <Filter size={18} className="text-leaf" />
@@ -680,6 +718,37 @@ export default function ActivitiesPage() {
       </div>
 
       <UndoToast action={pendingAction} onUndo={undoDeletion} />
+      </>
+      )}
+
+      {createChoiceOpen ? (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-ink/45 px-4 py-6">
+          <div className="w-full max-w-lg rounded-lg border border-ink/10 bg-white p-5 shadow-soft">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="label mb-2">Nova atividade</p>
+                <h2 className="text-xl font-bold text-ink">Como você deseja criar?</h2>
+              </div>
+              <button type="button" onClick={() => setCreateChoiceOpen(false)} className="grid h-9 w-9 place-items-center rounded-md border border-ink/10 text-ink/55 hover:text-ink" title="Fechar">
+                <X size={17} />
+              </button>
+            </div>
+
+            <div className="mt-5 grid gap-3 sm:grid-cols-2">
+              <button type="button" onClick={openAiCreator} className="group rounded-lg border border-ink/10 bg-white p-4 text-left transition hover:border-leaf hover:bg-mint/25">
+                <span className="grid h-10 w-10 place-items-center rounded-md bg-mint text-leaf"><Sparkles size={19} /></span>
+                <span className="mt-4 block font-bold text-ink group-hover:text-leaf">Criar com IA</span>
+                <span className="mt-1 block text-sm leading-6 text-ink/55">A IA organiza uma atividade completa a partir do seu objetivo.</span>
+              </button>
+              <button type="button" onClick={openManualCreator} className="group rounded-lg border border-ink/10 bg-white p-4 text-left transition hover:border-leaf hover:bg-mint/25">
+                <span className="grid h-10 w-10 place-items-center rounded-md bg-paper text-ink/60"><Pencil size={19} /></span>
+                <span className="mt-4 block font-bold text-ink group-hover:text-leaf">Criar manualmente</span>
+                <span className="mt-1 block text-sm leading-6 text-ink/55">Preencha os campos da atividade do seu jeito.</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {manualModalOpen ? (
         <div className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-ink/45 px-4 py-6">

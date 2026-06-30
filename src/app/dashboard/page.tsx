@@ -367,7 +367,7 @@ function RecentActivitiesPanel({ activities, collections }: { activities: Activi
       ) : (
         <div className="p-6 text-center">
           <p className="text-sm font-semibold text-ink/65">Nenhuma atividade salva ainda.</p>
-          <Link href="/gerar" className="mt-4 inline-flex btn-primary"><Sparkles size={16} />Criar primeira atividade</Link>
+          <Link href="/atividades?criar=ia" className="mt-4 inline-flex btn-primary"><Sparkles size={16} />Criar primeira atividade</Link>
         </div>
       )}
     </section>
