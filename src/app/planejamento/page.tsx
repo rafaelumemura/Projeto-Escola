@@ -1,8 +1,9 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight, FileDown, Plus, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, ClipboardCheck, FileDown, Plus, X } from "lucide-react";
 import { ProtectedPage } from "@/components/layout/ProtectedPage";
+import { LessonRecordModal } from "@/components/planning/LessonRecordModal";
 import { ActivityView } from "@/components/ui/ActivityView";
 import { UndoToast, useUndoableAction } from "@/components/ui/UndoToast";
 import {
@@ -25,6 +26,7 @@ type ActivityWithCollections = Activity & {
 type Collection = Database["public"]["Tables"]["collections"]["Row"];
 type PlanItem = Database["public"]["Tables"]["weekly_plan_items"]["Row"] & {
   activities?: Activity | null;
+  plan_class_id?: string | null;
 };
 
 const weekdays = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
@@ -48,6 +50,8 @@ export default function MonthlyPlanningPage() {
   const [manualMode, setManualMode] = useState(false);
   const [manualForm, setManualForm] = useState<ManualActivityForm>(initialManualActivityForm);
   const [viewActivity, setViewActivity] = useState<Activity | null>(null);
+  const [viewPlanItem, setViewPlanItem] = useState<PlanItem | null>(null);
+  const [lessonRecordItem, setLessonRecordItem] = useState<PlanItem | null>(null);
   const [pdfModalOpen, setPdfModalOpen] = useState(false);
   const [pdfTitle, setPdfTitle] = useState("Planejamento");
   const [pdfStartDate, setPdfStartDate] = useState(formatDate(monthStart(new Date())));
@@ -70,6 +74,8 @@ export default function MonthlyPlanningPage() {
       return acc;
     }, {});
   }, [items]);
+  const lessonRecordClass = classes.find((classItem) => classItem.id === lessonRecordItem?.plan_class_id) || null;
+  const lessonRecordActivity = lessonRecordItem?.activities || null;
 
   useEffect(() => {
     Promise.all([
@@ -109,17 +115,24 @@ export default function MonthlyPlanningPage() {
           return planStart <= monthEndDate && planEnd >= monthStartDate;
         });
         const details = await Promise.all(
-          plans.map((plan) => apiFetch<{ items: PlanItem[] }>(supabase, `/api/weekly-plans/${plan.id}`).catch(() => ({ items: [] })))
+          plans.map(async (plan) => ({
+            plan,
+            detail: await apiFetch<{ items: PlanItem[] }>(supabase, `/api/weekly-plans/${plan.id}`).catch(() => ({ items: [] }))
+          }))
         );
         setMonthlyPlan(null);
-        setItems(details.flatMap((detail) => detail.items).filter((item) => item.date >= monthStartDate && item.date <= monthEndDate));
+        setItems(
+          details
+            .flatMap(({ plan, detail }) => detail.items.map((item) => ({ ...item, plan_class_id: plan.class_id })))
+            .filter((item) => item.date >= monthStartDate && item.date <= monthEndDate)
+        );
         return;
       }
 
       const plan = await ensureMonthlyPlan();
       const details = await apiFetch<{ weekly_plan: MonthlyPlan; items: PlanItem[] }>(supabase, `/api/weekly-plans/${plan.id}`);
       setMonthlyPlan(details.weekly_plan);
-      setItems(details.items || []);
+      setItems((details.items || []).map((item) => ({ ...item, plan_class_id: details.weekly_plan.class_id })));
     } finally {
       setBusy(false);
     }
@@ -315,6 +328,27 @@ export default function MonthlyPlanningPage() {
     return collections.find((collection) => collection.id === collectionId)?.color || defaultColor;
   }
 
+  function openPlannedActivity(item: PlanItem) {
+    if (!item.activities) return;
+    setViewPlanItem(item);
+    setViewActivity(item.activities);
+  }
+
+  function openLessonRecord(item: PlanItem) {
+    if (!item.activities) {
+      setMessage("Esta atividade não está mais disponível.");
+      return;
+    }
+    const classId = item.plan_class_id || (selectedClassId !== "all" ? selectedClassId : monthlyPlan?.class_id);
+    if (!classId || !classes.some((classItem) => classItem.id === classId)) {
+      setMessage("Vincule uma turma a este planejamento antes de registrar a aula.");
+      return;
+    }
+    setViewActivity(null);
+    setViewPlanItem(null);
+    setLessonRecordItem({ ...item, plan_class_id: classId });
+  }
+
   function updateManualField<K extends keyof ManualActivityForm>(key: K, value: ManualActivityForm[K]) {
     setManualForm((current) => ({ ...current, [key]: value }));
   }
@@ -411,13 +445,13 @@ export default function MonthlyPlanningPage() {
                               key={item.id}
                               role="button"
                               tabIndex={0}
-                              onClick={() => item.activities && setViewActivity(item.activities)}
+                              onClick={() => openPlannedActivity(item)}
                               onKeyDown={(event) => {
                                 if ((event.key === "Enter" || event.key === " ") && item.activities) {
-                                  setViewActivity(item.activities);
+                                  openPlannedActivity(item);
                                 }
                               }}
-                              className="grid grid-cols-[5px_1fr_auto] items-center gap-2 rounded-lg bg-paper px-2 py-2 text-sm"
+                              className="grid grid-cols-[5px_1fr_auto_auto] items-center gap-2 rounded-lg bg-paper px-2 py-2 text-sm"
                               style={{ borderColor: color }}
                             >
                               <span className="h-full min-h-10 rounded-full" style={{ backgroundColor: color }} />
@@ -425,6 +459,18 @@ export default function MonthlyPlanningPage() {
                                 <span className="block truncate font-bold text-ink">{item.activities?.title || "Atividade removida"}</span>
                                 <span className="block text-xs font-semibold text-ink/55">{formatTime(item.start_time)}</span>
                               </span>
+                              <button
+                                type="button"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  openLessonRecord(item);
+                                }}
+                                className="grid h-8 w-8 place-items-center rounded-md text-leaf hover:bg-mint"
+                                title="Registrar aula"
+                                aria-label={`Registrar aula: ${item.activities?.title || "atividade"}`}
+                              >
+                                <ClipboardCheck size={15} />
+                              </button>
                               <button
                                 type="button"
                                 onClick={(event) => {
@@ -563,17 +609,29 @@ export default function MonthlyPlanningPage() {
                               key={item.id}
                               role="button"
                               tabIndex={0}
-                              onClick={() => item.activities && setViewActivity(item.activities)}
+                              onClick={() => openPlannedActivity(item)}
                               onKeyDown={(event) => {
                                 if ((event.key === "Enter" || event.key === " ") && item.activities) {
-                                  setViewActivity(item.activities);
+                                  openPlannedActivity(item);
                                 }
                               }}
-                              className="grid w-full grid-cols-[5px_1fr_auto_auto] items-center gap-2 rounded-md px-1.5 py-1 text-left text-xs transition hover:bg-paper"
+                              className="grid w-full grid-cols-[5px_1fr_auto_auto_auto] items-center gap-2 rounded-md px-1.5 py-1 text-left text-xs transition hover:bg-paper"
                             >
                               <span className="h-5 rounded-full" style={{ backgroundColor: color }} />
                               <span className="truncate font-semibold text-ink">{item.activities?.title || "Atividade removida"}</span>
                               <span className="font-semibold text-ink/55">{formatTime(item.start_time)}</span>
+                              <button
+                                type="button"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  openLessonRecord(item);
+                                }}
+                                className="text-leaf hover:text-leaf/75"
+                                title="Registrar aula"
+                                aria-label={`Registrar aula: ${item.activities?.title || "atividade"}`}
+                              >
+                                <ClipboardCheck size={14} />
+                              </button>
                               <button
                                 type="button"
                                 onClick={(event) => {
@@ -704,10 +762,19 @@ export default function MonthlyPlanningPage() {
       {viewActivity ? (
         <div className="fixed inset-0 z-50 overflow-y-auto bg-ink/45 px-4 py-6">
           <div className="mx-auto w-full max-w-4xl">
-            <div className="mb-3 flex justify-end">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              {viewPlanItem ? (
+                <button type="button" onClick={() => openLessonRecord(viewPlanItem)} className="btn-primary">
+                  <ClipboardCheck size={16} />
+                  Registrar aula
+                </button>
+              ) : <span />}
               <button
                 type="button"
-                onClick={() => setViewActivity(null)}
+                onClick={() => {
+                  setViewActivity(null);
+                  setViewPlanItem(null);
+                }}
                 className="grid h-10 w-10 place-items-center rounded-md border border-ink/10 bg-white text-ink/60 shadow-soft hover:text-ink"
                 title="Fechar"
               >
@@ -717,6 +784,18 @@ export default function MonthlyPlanningPage() {
             <ActivityView activity={viewActivity} />
           </div>
         </div>
+      ) : null}
+
+      {lessonRecordItem && lessonRecordActivity && lessonRecordClass ? (
+        <LessonRecordModal
+          weeklyPlanItemId={lessonRecordItem.id}
+          activity={lessonRecordActivity}
+          classItem={lessonRecordClass}
+          lessonDate={lessonRecordItem.date}
+          onClose={() => setLessonRecordItem(null)}
+          onSaved={(nextMessage) => setMessage(nextMessage)}
+          onError={(nextMessage) => setMessage(nextMessage)}
+        />
       ) : null}
 
       {appAlert ? (

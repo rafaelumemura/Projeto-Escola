@@ -393,6 +393,59 @@ type StudentAssessmentCriterionInsert = {
   created_at?: string;
 };
 
+type LessonMetricDefinitionRow = {
+  id: string;
+  user_id: string | null;
+  name: string;
+  slug: string;
+  is_active: boolean;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+};
+
+type LessonMetricOptionRow = {
+  id: string;
+  metric_definition_id: string;
+  label: string;
+  value: string;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+};
+
+type LessonRecordRow = {
+  id: string;
+  user_id: string;
+  weekly_plan_item_id: string | null;
+  class_id: string;
+  activity_id: string | null;
+  lesson_date: string;
+  activity_title: string;
+  development_area: string | null;
+  methodology: string | null;
+  source: "planning";
+  created_at: string;
+  updated_at: string;
+};
+
+type LessonRecordStudentRow = {
+  id: string;
+  lesson_record_id: string;
+  student_id: string;
+  observation: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+type LessonRecordMetricRow = {
+  id: string;
+  lesson_record_student_id: string;
+  metric_definition_id: string;
+  metric_option_id: string;
+  created_at: string;
+};
+
 export type Database = {
   public: {
     Tables: {
@@ -596,6 +649,97 @@ export type Database = {
       student_assessment_criteria: {
         Row: StudentAssessmentCriterionRow;
         Insert: StudentAssessmentCriterionInsert;
+        Update: Record<string, never>;
+      };
+      lesson_metric_definitions: {
+        Row: LessonMetricDefinitionRow;
+        Insert: {
+          id?: string;
+          user_id?: string | null;
+          name: string;
+          slug: string;
+          is_active?: boolean;
+          sort_order?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          name?: string;
+          slug?: string;
+          is_active?: boolean;
+          sort_order?: number;
+          updated_at?: string;
+        };
+      };
+      lesson_metric_options: {
+        Row: LessonMetricOptionRow;
+        Insert: {
+          id?: string;
+          metric_definition_id: string;
+          label: string;
+          value: string;
+          sort_order?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          label?: string;
+          value?: string;
+          sort_order?: number;
+          updated_at?: string;
+        };
+      };
+      lesson_records: {
+        Row: LessonRecordRow;
+        Insert: {
+          id?: string;
+          user_id: string;
+          weekly_plan_item_id?: string | null;
+          class_id: string;
+          activity_id?: string | null;
+          lesson_date: string;
+          activity_title: string;
+          development_area?: string | null;
+          methodology?: string | null;
+          source?: "planning";
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          class_id?: string;
+          weekly_plan_item_id?: string | null;
+          activity_id?: string | null;
+          lesson_date?: string;
+          activity_title?: string;
+          development_area?: string | null;
+          methodology?: string | null;
+          updated_at?: string;
+        };
+      };
+      lesson_record_students: {
+        Row: LessonRecordStudentRow;
+        Insert: {
+          id?: string;
+          lesson_record_id: string;
+          student_id: string;
+          observation?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          observation?: string | null;
+          updated_at?: string;
+        };
+      };
+      lesson_record_metrics: {
+        Row: LessonRecordMetricRow;
+        Insert: {
+          id?: string;
+          lesson_record_student_id: string;
+          metric_definition_id: string;
+          metric_option_id: string;
+          created_at?: string;
+        };
         Update: Record<string, never>;
       };
       printable_assets: {
@@ -862,7 +1006,15 @@ export type Database = {
       };
     };
     Views: Record<string, never>;
-    Functions: Record<string, never>;
+    Functions: {
+      save_lesson_record: {
+        Args: {
+          p_weekly_plan_item_id: string;
+          p_students: Json;
+        };
+        Returns: string;
+      };
+    };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;
   };

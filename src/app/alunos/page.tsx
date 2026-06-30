@@ -5,7 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { FormEvent, Suspense, useEffect, useMemo, useState } from "react";
 import { CalendarDays, Edit3, FileText, Gift, Plus, Save, Search, Trash2, UserPlus, UsersRound, X } from "lucide-react";
 import { ProtectedPage } from "@/components/layout/ProtectedPage";
-import { StudentAssessmentsPanel } from "@/components/students/StudentAssessmentsPanel";
+import { StudentEvidencePanel } from "@/components/students/StudentEvidencePanel";
 import { ActivityView } from "@/components/ui/ActivityView";
 import { UndoToast, useUndoableAction } from "@/components/ui/UndoToast";
 import { useAuth } from "@/components/auth/AuthProvider";
@@ -901,7 +901,7 @@ function IndividualStudentsView({
   const [classFilter, setClassFilter] = useState("");
   const [selectedStudentId, setSelectedStudentId] = useState("");
   const [tagFilter, setTagFilter] = useState("");
-  const [activeTab, setActiveTab] = useState<"summary" | "observations" | "assessments">("summary");
+  const [activeTab, setActiveTab] = useState<"summary" | "observations" | "evidence">("summary");
   const classIds = useMemo(() => new Set(classes.map((classItem) => classItem.id)), [classes]);
   const filteredStudents = useMemo(() => {
     const normalizedSearch = normalizeSearch(search);
@@ -1001,7 +1001,7 @@ function IndividualStudentsView({
               {([
                 ["summary", "Resumo"],
                 ["observations", "Observações"],
-                ["assessments", "Avaliações"]
+                ["evidence", "Evidências"]
               ] as const).map(([value, label]) => (
                 <button
                   key={value}
@@ -1119,8 +1119,8 @@ function IndividualStudentsView({
             </section>
             ) : null}
 
-            {activeTab === "assessments" ? (
-              <StudentAssessmentsPanel student={selectedStudent} selectedYear={selectedYear} onMessage={onMessage} />
+            {activeTab === "evidence" ? (
+              <StudentEvidencePanel student={selectedStudent} selectedYear={selectedYear} onMessage={onMessage} />
             ) : null}
           </div>
         ) : (
