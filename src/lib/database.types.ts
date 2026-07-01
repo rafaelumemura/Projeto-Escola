@@ -410,8 +410,31 @@ type LessonMetricOptionRow = {
   label: string;
   value: string;
   sort_order: number;
+  performance_level: number;
+  color: string;
   created_at: string;
   updated_at: string;
+};
+
+type LessonMetricPresetRow = {
+  id: string;
+  user_id: string | null;
+  name: string;
+  slug: string;
+  match_terms: string[];
+  is_default: boolean;
+  is_active: boolean;
+  priority: number;
+  created_at: string;
+  updated_at: string;
+};
+
+type LessonMetricPresetItemRow = {
+  id: string;
+  preset_id: string;
+  metric_definition_id: string;
+  sort_order: number;
+  created_at: string;
 };
 
 type LessonRecordRow = {
@@ -424,7 +447,7 @@ type LessonRecordRow = {
   activity_title: string;
   development_area: string | null;
   methodology: string | null;
-  source: "planning";
+  source: "planning" | "class";
   created_at: string;
   updated_at: string;
 };
@@ -679,6 +702,8 @@ export type Database = {
           label: string;
           value: string;
           sort_order?: number;
+          performance_level?: number;
+          color?: string;
           created_at?: string;
           updated_at?: string;
         };
@@ -686,7 +711,46 @@ export type Database = {
           label?: string;
           value?: string;
           sort_order?: number;
+          performance_level?: number;
+          color?: string;
           updated_at?: string;
+        };
+      };
+      lesson_metric_presets: {
+        Row: LessonMetricPresetRow;
+        Insert: {
+          id?: string;
+          user_id?: string | null;
+          name: string;
+          slug: string;
+          match_terms?: string[];
+          is_default?: boolean;
+          is_active?: boolean;
+          priority?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          name?: string;
+          slug?: string;
+          match_terms?: string[];
+          is_default?: boolean;
+          is_active?: boolean;
+          priority?: number;
+          updated_at?: string;
+        };
+      };
+      lesson_metric_preset_items: {
+        Row: LessonMetricPresetItemRow;
+        Insert: {
+          id?: string;
+          preset_id: string;
+          metric_definition_id: string;
+          sort_order?: number;
+          created_at?: string;
+        };
+        Update: {
+          sort_order?: number;
         };
       };
       lesson_records: {
@@ -701,7 +765,7 @@ export type Database = {
           activity_title: string;
           development_area?: string | null;
           methodology?: string | null;
-          source?: "planning";
+          source?: "planning" | "class";
           created_at?: string;
           updated_at?: string;
         };
@@ -1007,6 +1071,15 @@ export type Database = {
     };
     Views: Record<string, never>;
     Functions: {
+      save_class_lesson_record: {
+        Args: {
+          p_class_id: string;
+          p_activity_id: string;
+          p_lesson_date: string;
+          p_students: Json;
+        };
+        Returns: string;
+      };
       save_lesson_record: {
         Args: {
           p_weekly_plan_item_id: string;

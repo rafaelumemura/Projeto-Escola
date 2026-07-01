@@ -3,8 +3,9 @@
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { FormEvent, Suspense, useEffect, useMemo, useState } from "react";
-import { CalendarDays, Edit3, FileText, Gift, Plus, Save, Search, Trash2, UserPlus, UsersRound, X } from "lucide-react";
+import { CalendarDays, ClipboardCheck, Edit3, FileText, Gift, Plus, Save, Search, Trash2, UserPlus, UsersRound, X } from "lucide-react";
 import { ProtectedPage } from "@/components/layout/ProtectedPage";
+import { ClassLessonRecordModal } from "@/components/classes/ClassLessonRecordModal";
 import { StudentEvidencePanel } from "@/components/students/StudentEvidencePanel";
 import { ActivityView } from "@/components/ui/ActivityView";
 import { UndoToast, useUndoableAction } from "@/components/ui/UndoToast";
@@ -76,6 +77,7 @@ function StudentsPageContent() {
   const [selectedStudent, setSelectedStudent] = useState<StudentRow | null>(null);
   const [selectedActivityId, setSelectedActivityId] = useState("");
   const [viewActivity, setViewActivity] = useState<ActivityRow | null>(null);
+  const [lessonRecordClass, setLessonRecordClass] = useState<ClassRow | null>(null);
   const [modal, setModal] = useState<ModalMode>(null);
   const [editingClass, setEditingClass] = useState<ClassRow | null>(null);
   const [editingStudent, setEditingStudent] = useState<StudentRow | null>(null);
@@ -266,6 +268,19 @@ function StudentsPageContent() {
       general_notes: student?.general_notes || ""
     });
     setModal("student");
+  }
+
+  function openClassLessonRecord() {
+    if (!selectedClass) return;
+    if (!selectedClassAssignedActivities.length) {
+      setMessage("Atribua uma atividade à turma antes de registrar a aula.");
+      return;
+    }
+    if (!activeClassStudents.length) {
+      setMessage("Cadastre alunos nesta turma antes de registrar a aula.");
+      return;
+    }
+    setLessonRecordClass(selectedClass);
   }
 
   function openObservationModal(student?: StudentRow) {
@@ -586,10 +601,16 @@ function StudentsPageContent() {
                     </h2>
                     <p className="mt-1 text-sm text-ink/60">{selectedClass.description || "Sem descrição."}</p>
                   </div>
-                  <button type="button" onClick={() => openStudentModal()} className="btn-primary">
-                    <UserPlus size={17} />
-                    Adicionar aluno
-                  </button>
+                  <div className="flex flex-wrap gap-2">
+                    <button type="button" onClick={openClassLessonRecord} className="btn-primary">
+                      <ClipboardCheck size={17} />
+                      Registrar Aula
+                    </button>
+                    <button type="button" onClick={() => openStudentModal()} className="btn-secondary">
+                      <UserPlus size={17} />
+                      Adicionar aluno
+                    </button>
+                  </div>
                 </div>
               </section>
 
@@ -871,6 +892,16 @@ function StudentsPageContent() {
           </div>
         </div>
       ) : null}
+
+      {lessonRecordClass ? (
+        <ClassLessonRecordModal
+          classItem={lessonRecordClass}
+          activities={selectedClassAssignedActivities.map((item) => item.activity)}
+          onClose={() => setLessonRecordClass(null)}
+          onSaved={setMessage}
+          onError={setMessage}
+        />
+      ) : null}
       <UndoToast action={pendingAction} onUndo={undoDeletion} />
     </ProtectedPage>
   );
@@ -901,7 +932,7 @@ function IndividualStudentsView({
   const [classFilter, setClassFilter] = useState("");
   const [selectedStudentId, setSelectedStudentId] = useState("");
   const [tagFilter, setTagFilter] = useState("");
-  const [activeTab, setActiveTab] = useState<"summary" | "observations" | "evidence">("summary");
+  const [activeTab, setActiveTab] = useState<"summary" | "observations" | "performance">("summary");
   const classIds = useMemo(() => new Set(classes.map((classItem) => classItem.id)), [classes]);
   const filteredStudents = useMemo(() => {
     const normalizedSearch = normalizeSearch(search);
@@ -1001,7 +1032,7 @@ function IndividualStudentsView({
               {([
                 ["summary", "Resumo"],
                 ["observations", "Observações"],
-                ["evidence", "Evidências"]
+                ["performance", "Desempenho"]
               ] as const).map(([value, label]) => (
                 <button
                   key={value}
@@ -1119,8 +1150,8 @@ function IndividualStudentsView({
             </section>
             ) : null}
 
-            {activeTab === "evidence" ? (
-              <StudentEvidencePanel student={selectedStudent} selectedYear={selectedYear} onMessage={onMessage} />
+            {activeTab === "performance" ? (
+              <StudentEvidencePanel student={selectedStudent} classes={classes} selectedYear={selectedYear} onMessage={onMessage} />
             ) : null}
           </div>
         ) : (

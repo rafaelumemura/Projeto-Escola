@@ -13,13 +13,16 @@ import type {
 } from "@/lib/students/lesson-records";
 
 type Student = Database["public"]["Tables"]["students"]["Row"];
+type ClassRow = Database["public"]["Tables"]["classes"]["Row"];
 
 export function StudentEvidencePanel({
   student,
+  classes,
   selectedYear,
   onMessage
 }: {
   student: Student;
+  classes: ClassRow[];
   selectedYear: number;
   onMessage: (message: string) => void;
 }) {
@@ -92,7 +95,7 @@ export function StudentEvidencePanel({
       setDefinitions(definitionsResponse.data || []);
       setOptions(optionsResponse.data || []);
     } catch (error) {
-      onMessage(error instanceof Error ? error.message : "Não foi possível carregar as evidências.");
+      onMessage(error instanceof Error ? error.message : "Não foi possível carregar o desempenho.");
     } finally {
       setLoading(false);
     }
@@ -102,11 +105,11 @@ export function StudentEvidencePanel({
     <section className="panel overflow-hidden">
       <div className="border-b border-ink/10 p-4">
         <p className="label">Histórico individual</p>
-        <h3 className="mt-1 text-lg font-bold text-ink">Evidências</h3>
+        <h3 className="mt-1 text-lg font-bold text-ink">Desempenho</h3>
       </div>
 
       {loading ? (
-        <p className="p-8 text-center text-sm font-semibold text-ink/55">Carregando evidências...</p>
+        <p className="p-8 text-center text-sm font-semibold text-ink/55">Carregando desempenho...</p>
       ) : evidence.length ? (
         <div className="divide-y divide-ink/10">
           {evidence.map(({ record, recordStudent, indicators }) => (
@@ -118,10 +121,13 @@ export function StudentEvidencePanel({
                     <CalendarDays size={13} />
                     {formatDate(record.lesson_date)}
                   </p>
+                  <p className="mt-1 text-xs font-semibold text-ink/45">
+                    Turma: {classes.find((classItem) => classItem.id === record.class_id)?.name || "Turma não encontrada"}
+                  </p>
                 </div>
                 <span className="inline-flex w-fit items-center gap-1.5 rounded-full bg-mint px-2.5 py-1 text-[11px] font-bold text-leaf">
                   <ClipboardCheck size={12} />
-                  Aula registrada em Planejamento
+                  {record.source === "class" ? "Registro da aula em Turmas" : "Registro da aula em Planejamento"}
                 </span>
               </div>
 
@@ -147,7 +153,7 @@ export function StudentEvidencePanel({
       ) : (
         <div className="p-8 text-center">
           <ClipboardCheck size={24} className="mx-auto text-ink/30" />
-          <p className="mt-3 text-sm font-semibold text-ink/55">Nenhuma evidência recebida de aulas registradas em {selectedYear}.</p>
+          <p className="mt-3 text-sm font-semibold text-ink/55">Nenhum registro de desempenho em {selectedYear}.</p>
         </div>
       )}
     </section>

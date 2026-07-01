@@ -2,6 +2,8 @@ import type { Database } from "@/lib/database.types";
 
 export type LessonMetricDefinition = Database["public"]["Tables"]["lesson_metric_definitions"]["Row"];
 export type LessonMetricOption = Database["public"]["Tables"]["lesson_metric_options"]["Row"];
+export type LessonMetricPreset = Database["public"]["Tables"]["lesson_metric_presets"]["Row"];
+export type LessonMetricPresetItem = Database["public"]["Tables"]["lesson_metric_preset_items"]["Row"];
 export type LessonRecord = Database["public"]["Tables"]["lesson_records"]["Row"];
 export type LessonRecordStudent = Database["public"]["Tables"]["lesson_record_students"]["Row"];
 export type LessonRecordMetric = Database["public"]["Tables"]["lesson_record_metrics"]["Row"];
@@ -15,7 +17,7 @@ export type LessonStudentDraft = {
 export function optionsForMetric(options: LessonMetricOption[], metricId: string) {
   return options
     .filter((option) => option.metric_definition_id === metricId)
-    .sort((left, right) => left.sort_order - right.sort_order || left.label.localeCompare(right.label));
+    .sort((left, right) => left.performance_level - right.performance_level || left.sort_order - right.sort_order);
 }
 
 export function buildLessonMetricSummary(
