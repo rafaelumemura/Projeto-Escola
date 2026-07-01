@@ -19,24 +19,27 @@ import {
 type Activity = Database["public"]["Tables"]["activities"]["Row"];
 type ClassRow = Database["public"]["Tables"]["classes"]["Row"];
 type Student = Database["public"]["Tables"]["students"]["Row"];
-type LessonRecord = Database["public"]["Tables"]["lesson_records"]["Row"];
 
-export function ClassLessonRecordModal({
+export function ClassLessonRecordEditor({
   classItem,
   activities,
-  onClose,
+  initialActivityId,
+  initialLessonDate,
   onSaved,
   onError
 }: {
   classItem: ClassRow;
   activities: Activity[];
-  onClose: () => void;
+  initialActivityId?: string;
+  initialLessonDate?: string;
   onSaved: (message: string) => void;
   onError: (message: string) => void;
 }) {
-  const { supabase } = useAuth();
-  const lessonDate = localDateValue(new Date());
-  const [selectedActivityId, setSelectedActivityId] = useState(activities[0]?.id || "");
+  const { supabase, user } = useAuth();
+  const lessonDate = initialLessonDate || localDateValue(new Date());
+  const [selectedActivityId, setSelectedActivityId] = useState(
+    activities.some((activity) => activity.id === initialActivityId) ? initialActivityId || "" : activities[0]?.id || ""
+  );
   const [students, setStudents] = useState<Student[]>([]);
   const [definitions, setDefinitions] = useState<LessonMetricDefinition[]>([]);
   const [options, setOptions] = useState<LessonMetricOption[]>([]);
@@ -44,10 +47,14 @@ export function ClassLessonRecordModal({
   const [presetItems, setPresetItems] = useState<LessonMetricPresetItem[]>([]);
   const [selectedMetricIds, setSelectedMetricIds] = useState<string[]>([]);
   const [drafts, setDrafts] = useState<Record<string, LessonStudentDraft>>({});
-  const [existingRecord, setExistingRecord] = useState<LessonRecord | null>(null);
+  const [savedRecord, setSavedRecord] = useState(false);
   const [openComments, setOpenComments] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [customCriterionOpen, setCustomCriterionOpen] = useState(false);
+  const [customName, setCustomName] = useState("");
+  const [customLevelCount, setCustomLevelCount] = useState(3);
+  const [customLabels, setCustomLabels] = useState(defaultCustomLabels(3));
 
   const activity = activities.find((item) => item.id === selectedActivityId) || activities[0] || null;
   const selectedDefinitions = useMemo(
@@ -60,20 +67,20 @@ export function ClassLessonRecordModal({
     () => definitions.filter((definition) => definition.is_active && !selectedMetricIds.includes(definition.id)),
     [definitions, selectedMetricIds]
   );
-  const desktopColumns = `minmax(180px, 1.2fr) repeat(${Math.max(selectedDefinitions.length, 1)}, minmax(150px, 1fr)) 56px`;
+  const desktopColumns = `220px repeat(${Math.max(selectedDefinitions.length, 1)}, 190px) 64px`;
+  const desktopTableWidth = 220 + (Math.max(selectedDefinitions.length, 1) * 190) + 64 + ((selectedDefinitions.length + 1) * 12) + 32;
+
+  useEffect(() => {
+    const nextActivityId = activities.some((item) => item.id === initialActivityId)
+      ? initialActivityId || ""
+      : activities[0]?.id || "";
+    setSelectedActivityId(nextActivityId);
+  }, [activities, initialActivityId]);
 
   useEffect(() => {
     void loadForm();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [classItem.id, selectedActivityId]);
-
-  useEffect(() => {
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && !busy) onClose();
-    };
-    document.addEventListener("keydown", closeOnEscape);
-    return () => document.removeEventListener("keydown", closeOnEscape);
-  }, [busy, onClose]);
 
   async function loadForm() {
     if (!activity) return;
@@ -155,12 +162,11 @@ export function ClassLessonRecordModal({
       setPresets(nextPresets);
       setPresetItems(nextPresetItems);
       setSelectedMetricIds(nextSelectedMetricIds.length ? nextSelectedMetricIds : fallbackMetricIds);
-      setExistingRecord(record);
+      setSavedRecord(Boolean(record));
       setDrafts(nextDrafts);
       setOpenComments(new Set(recordStudents.filter((item) => item.observation).map((item) => item.student_id)));
     } catch (error) {
       onError(error instanceof Error ? error.message : "Não foi possível carregar o registro da aula.");
-      onClose();
     } finally {
       setLoading(false);
     }
@@ -195,6 +201,51 @@ export function ClassLessonRecordModal({
     setSelectedMetricIds((current) => [...current, metricId]);
   }
 
+  function changeCustomLevelCount(nextCount: number) {
+    setCustomLevelCount(nextCount);
+    setCustomLabels((current) => Array.from(
+      { length: nextCount },
+      (_, index) => current[index] || defaultCustomLabels(nextCount)[index]
+    ));
+  }
+
+  async function createCustomCriterion() {
+    if (!user) return;
+    if (!customName.trim() || customLabels.some((label) => !label.trim())) {
+      onError("Informe o nome do critério e a legenda de todos os níveis.");
+      return;
+    }
+
+    setBusy(true);
+    try {
+      const { data: metricId, error } = await supabase.rpc("create_lesson_metric_definition", {
+        p_name: customName.trim(),
+        p_labels: customLabels.map((label) => label.trim())
+      });
+      if (error) throw error;
+
+      const [definitionResponse, optionsResponse] = await Promise.all([
+        supabase.from("lesson_metric_definitions").select("*").eq("id", metricId).single(),
+        supabase.from("lesson_metric_options").select("*").eq("metric_definition_id", metricId).order("performance_level")
+      ]);
+      if (definitionResponse.error) throw definitionResponse.error;
+      if (optionsResponse.error) throw optionsResponse.error;
+
+      setDefinitions((current) => [...current, definitionResponse.data]);
+      setOptions((current) => [...current, ...(optionsResponse.data || [])]);
+      setSelectedMetricIds((current) => [...current, metricId]);
+      setCustomName("");
+      setCustomLevelCount(3);
+      setCustomLabels(defaultCustomLabels(3));
+      setCustomCriterionOpen(false);
+      onSaved("Critério personalizado adicionado.");
+    } catch (error) {
+      onError(error instanceof Error ? error.message : "Não foi possível criar o critério personalizado.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   function toggleComment(studentId: string) {
     setOpenComments((current) => {
       const next = new Set(current);
@@ -226,8 +277,8 @@ export function ClassLessonRecordModal({
           })
         }
       });
-      onSaved(existingRecord ? "Registro da aula atualizado." : "Aula registrada para todos os alunos.");
-      onClose();
+      onSaved(savedRecord ? "Registro da aula atualizado." : "Aula registrada para todos os alunos.");
+      setSavedRecord(true);
     } catch (error) {
       onError(error instanceof Error ? error.message : "Não foi possível salvar o registro da aula.");
     } finally {
@@ -236,9 +287,8 @@ export function ClassLessonRecordModal({
   }
 
   return (
-    <div className="fixed inset-0 z-[70] overflow-y-auto bg-ink/45 px-2 py-3 sm:px-5 sm:py-6" role="dialog" aria-modal="true" aria-labelledby="class-lesson-title">
-      <div className="mx-auto w-full max-w-7xl overflow-hidden rounded-lg border border-ink/10 bg-white shadow-soft">
-        <header className="sticky top-0 z-20 border-b border-ink/10 bg-white px-4 py-4 sm:px-6">
+    <section className="overflow-hidden rounded-lg border border-ink/10 bg-white shadow-soft" aria-labelledby="class-lesson-title">
+        <header className="border-b border-ink/10 bg-white px-4 py-4 sm:px-6">
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0">
               <p className="label mb-1">Registro da aula</p>
@@ -252,9 +302,6 @@ export function ClassLessonRecordModal({
                 </div>
               ) : null}
             </div>
-            <button type="button" onClick={onClose} disabled={busy} className="grid h-10 w-10 shrink-0 place-items-center rounded-md border border-ink/10 text-ink/55 hover:text-ink disabled:opacity-50" title="Fechar" aria-label="Fechar">
-              <X size={18} />
-            </button>
           </div>
         </header>
 
@@ -297,30 +344,74 @@ export function ClassLessonRecordModal({
                       ))}
                     </div>
                   </div>
-                  {availableDefinitions.length ? (
-                    <div className="lg:max-w-xl">
-                      <p className="label">Adicionar critério</p>
-                      <div className="mt-2 flex flex-wrap gap-2">
-                        {availableDefinitions.map((definition) => (
-                          <button key={definition.id} type="button" onClick={() => addCriterion(definition.id)} className="inline-flex items-center gap-1 rounded-full border border-ink/10 bg-white px-3 py-1.5 text-xs font-bold text-ink/60 hover:border-leaf/35 hover:text-leaf">
-                            <Plus size={13} />
-                            {definition.name}
-                          </button>
-                        ))}
+                  <div className="lg:max-w-xl">
+                    <p className="label">Adicionar critério</p>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {availableDefinitions.map((definition) => (
+                        <button key={definition.id} type="button" onClick={() => addCriterion(definition.id)} className="inline-flex items-center gap-1 rounded-full border border-ink/10 bg-white px-3 py-1.5 text-xs font-bold text-ink/60 hover:border-leaf/35 hover:text-leaf">
+                          <Plus size={13} />
+                          {definition.name}
+                        </button>
+                      ))}
+                      <button type="button" onClick={() => setCustomCriterionOpen((current) => !current)} className="inline-flex items-center gap-1 rounded-full border border-leaf/25 bg-white px-3 py-1.5 text-xs font-bold text-leaf hover:bg-mint">
+                        <Plus size={13} />
+                        Critério personalizado
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {customCriterionOpen ? (
+                  <div className="mt-4 rounded-lg border border-leaf/20 bg-white p-4">
+                    <div className="grid gap-4 lg:grid-cols-[minmax(220px,1fr)_auto]">
+                      <label className="block">
+                        <span className="label mb-2 block">Nome do critério</span>
+                        <input value={customName} maxLength={80} onChange={(event) => setCustomName(event.target.value)} className="input" placeholder="Ex.: Colaboração" />
+                      </label>
+                      <div>
+                        <span className="label mb-2 block">Quantidade de níveis</span>
+                        <div className="flex gap-2" role="group" aria-label="Quantidade de níveis">
+                          {[2, 3, 4, 5].map((count) => (
+                            <button key={count} type="button" onClick={() => changeCustomLevelCount(count)} className={`grid h-10 w-10 place-items-center rounded-md border text-sm font-bold ${customLevelCount === count ? "border-leaf bg-mint text-leaf" : "border-ink/10 bg-white text-ink/55"}`}>
+                              {count}
+                            </button>
+                          ))}
+                        </div>
                       </div>
                     </div>
-                  ) : null}
-                </div>
+                    <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+                      {customLabels.map((label, index) => (
+                        <label key={index} className="block">
+                          <span className="mb-2 flex items-center gap-2 text-xs font-bold text-ink/55">
+                            <span className="h-3 w-3 rounded-full" style={{ backgroundColor: customLevelColors(customLevelCount)[index] }} />
+                            Legenda {index + 1}
+                          </span>
+                          <input
+                            value={label}
+                            maxLength={60}
+                            onChange={(event) => setCustomLabels((current) => current.map((item, itemIndex) => itemIndex === index ? event.target.value : item))}
+                            className="input py-2 text-sm"
+                            placeholder={`Nível ${index + 1}`}
+                          />
+                        </label>
+                      ))}
+                    </div>
+                    <div className="mt-4 flex justify-end gap-2">
+                      <button type="button" onClick={() => setCustomCriterionOpen(false)} className="btn-secondary">Cancelar</button>
+                      <button type="button" onClick={() => void createCustomCriterion()} disabled={busy} className="btn-primary">Adicionar critério</button>
+                    </div>
+                  </div>
+                ) : null}
               </section>
 
               <section className="hidden overflow-x-auto rounded-lg border border-ink/10 lg:block">
-                <div className="min-w-[980px]">
-                  <div className="sticky top-[105px] z-10 grid gap-3 border-b border-ink/10 bg-paper px-4 py-3" style={{ gridTemplateColumns: desktopColumns }}>
+                <div style={{ minWidth: `${desktopTableWidth}px` }}>
+                  <div className="grid gap-3 border-b border-ink/10 bg-paper px-4 py-4" style={{ gridTemplateColumns: desktopColumns }}>
                     <span className="label self-center">Aluno</span>
                     {selectedDefinitions.map((definition) => (
-                      <MetricLegend key={definition.id} definition={definition} options={optionsForMetric(options, definition.id)} compact />
+                      <span key={definition.id} className="label self-center text-center">{definition.name}</span>
                     ))}
-                    <span className="label self-center text-center">Nota</span>
+                    <span className="label self-center text-center">Obs.</span>
                   </div>
 
                   <div className="divide-y divide-ink/10">
@@ -357,10 +448,6 @@ export function ClassLessonRecordModal({
               </section>
 
               <section className="space-y-3 lg:hidden">
-                <div className="rounded-lg border border-ink/10 bg-paper p-3">
-                  <p className="label mb-3">Legenda de desempenho</p>
-                  <GlobalLegend options={options} />
-                </div>
                 {students.map((student) => {
                   const draft = drafts[student.id] || { student_id: student.id, observation: "", metrics: {} };
                   return (
@@ -386,6 +473,15 @@ export function ClassLessonRecordModal({
                   );
                 })}
               </section>
+
+              <section className="rounded-lg border border-ink/10 bg-paper/55 p-4 sm:p-5">
+                <p className="label mb-4">Legendas dos critérios</p>
+                <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-3">
+                  {selectedDefinitions.map((definition) => (
+                    <MetricLegend key={definition.id} definition={definition} options={optionsForMetric(options, definition.id)} />
+                  ))}
+                </div>
+              </section>
             </>
           ) : (
             <div className="py-16 text-center">
@@ -394,15 +490,13 @@ export function ClassLessonRecordModal({
           )}
         </div>
 
-        <footer className="sticky bottom-0 z-20 flex flex-col-reverse gap-2 border-t border-ink/10 bg-white px-4 py-4 sm:flex-row sm:justify-end sm:px-6">
-          <button type="button" onClick={onClose} disabled={busy} className="btn-secondary">Cancelar</button>
+        <footer className="flex justify-end border-t border-ink/10 bg-white px-4 py-4 sm:px-6">
           <button type="button" onClick={() => void saveLessonRecord()} disabled={busy || loading || !students.length || !activity} className="btn-primary disabled:opacity-50">
-            {existingRecord ? <Save size={16} /> : <ClipboardCheck size={16} />}
-            {busy ? "Salvando..." : existingRecord ? "Atualizar registro" : "Salvar registro da aula"}
+            {savedRecord ? <Save size={16} /> : <ClipboardCheck size={16} />}
+            {busy ? "Salvando..." : savedRecord ? "Atualizar registro" : "Salvar registro da aula"}
           </button>
         </footer>
-      </div>
-    </div>
+    </section>
   );
 }
 
@@ -441,36 +535,18 @@ function PerformanceDots({
   );
 }
 
-function MetricLegend({ definition, options, compact = false }: { definition: LessonMetricDefinition; options: LessonMetricOption[]; compact?: boolean }) {
+function MetricLegend({ definition, options }: { definition: LessonMetricDefinition; options: LessonMetricOption[] }) {
   return (
     <div>
-      <p className="label text-center">{definition.name}</p>
-      <div className={`mt-2 flex flex-wrap justify-center ${compact ? "gap-x-2 gap-y-1" : "gap-2"}`}>
+      <p className="label">{definition.name}</p>
+      <div className="mt-3 flex flex-col gap-2">
         {options.map((option) => (
-          <span key={option.id} className="inline-flex items-center gap-1 text-[10px] font-semibold text-ink/55" title={option.label}>
-            <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: option.color }} />
-            <span className={compact ? "max-w-[64px] truncate" : ""}>{option.label}</span>
+          <span key={option.id} className="inline-flex items-center gap-2 text-xs font-semibold text-ink/60" title={option.label}>
+            <span className="h-3.5 w-3.5 shrink-0 rounded-full" style={{ backgroundColor: option.color }} />
+            <span>{option.label}</span>
           </span>
         ))}
       </div>
-    </div>
-  );
-}
-
-function GlobalLegend({ options }: { options: LessonMetricOption[] }) {
-  const uniqueLevels = Array.from(new Map(
-    options
-      .sort((left, right) => left.performance_level - right.performance_level)
-      .map((option) => [option.performance_level, option])
-  ).values());
-  return (
-    <div className="grid gap-2 sm:grid-cols-2">
-      {uniqueLevels.map((option) => (
-        <span key={option.performance_level} className="flex items-center gap-2 text-xs font-semibold text-ink/65">
-          <span className="h-4 w-4 rounded-full" style={{ backgroundColor: option.color }} />
-          {performanceLevelLabel(option.performance_level)}
-        </span>
-      ))}
     </div>
   );
 }
@@ -491,8 +567,25 @@ function normalizeText(value: string) {
   return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 }
 
-function performanceLevelLabel(level: number) {
-  return ["", "Necessita muita atenção", "Abaixo do esperado", "Em desenvolvimento", "Bom desempenho", "Excelente desempenho"][level] || "Desempenho";
+
+function defaultCustomLabels(count: number) {
+  const labelsByCount: Record<number, string[]> = {
+    2: ["Precisa de apoio", "Realiza com autonomia"],
+    3: ["Precisa de apoio", "Em desenvolvimento", "Realiza com autonomia"],
+    4: ["Precisa de apoio", "Abaixo do esperado", "Bom desempenho", "Excelente desempenho"],
+    5: ["Precisa de apoio", "Abaixo do esperado", "Em desenvolvimento", "Bom desempenho", "Excelente desempenho"]
+  };
+  return labelsByCount[count] || labelsByCount[3];
+}
+
+function customLevelColors(count: number) {
+  const colorsByCount: Record<number, string[]> = {
+    2: ["#E45757", "#219653"],
+    3: ["#E45757", "#F2C94C", "#219653"],
+    4: ["#E45757", "#F2994A", "#6FCF97", "#219653"],
+    5: ["#E45757", "#F2994A", "#F2C94C", "#6FCF97", "#219653"]
+  };
+  return colorsByCount[count] || colorsByCount[3];
 }
 
 function localDateValue(date: Date) {

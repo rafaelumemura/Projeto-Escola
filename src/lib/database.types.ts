@@ -1071,6 +1071,13 @@ export type Database = {
     };
     Views: Record<string, never>;
     Functions: {
+      create_lesson_metric_definition: {
+        Args: {
+          p_name: string;
+          p_labels: string[];
+        };
+        Returns: string;
+      };
       save_class_lesson_record: {
         Args: {
           p_class_id: string;

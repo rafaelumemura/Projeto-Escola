@@ -106,6 +106,7 @@ function pageHeaderAccent(pathname: string) {
   if (pathname.startsWith("/atividades")) return "#00B3AF";
   if (pathname.startsWith("/gerar")) return "#2F80ED";
   if (pathname.startsWith("/alunos")) return "#7E57C2";
+  if (pathname.startsWith("/diario")) return "#2F80ED";
   if (pathname.startsWith("/relatorios")) return "#00B3AF";
   if (pathname.startsWith("/colecoes")) return "#C98117";
   if (pathname.startsWith("/planejamento")) return "#FF4F64";

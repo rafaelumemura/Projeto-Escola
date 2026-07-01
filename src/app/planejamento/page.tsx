@@ -1,7 +1,8 @@
 "use client";
 
+import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight, FileDown, Plus, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, ClipboardCheck, FileDown, Plus, X } from "lucide-react";
 import { ProtectedPage } from "@/components/layout/ProtectedPage";
 import { ActivityView } from "@/components/ui/ActivityView";
 import { UndoToast, useUndoableAction } from "@/components/ui/UndoToast";
@@ -25,6 +26,7 @@ type ActivityWithCollections = Activity & {
 type Collection = Database["public"]["Tables"]["collections"]["Row"];
 type PlanItem = Database["public"]["Tables"]["weekly_plan_items"]["Row"] & {
   activities?: Activity | null;
+  plan_class_id?: string | null;
 };
 
 const weekdays = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
@@ -117,7 +119,7 @@ export default function MonthlyPlanningPage() {
         setMonthlyPlan(null);
         setItems(
           details
-            .flatMap(({ detail }) => detail.items)
+            .flatMap(({ plan, detail }) => detail.items.map((item) => ({ ...item, plan_class_id: plan.class_id })))
             .filter((item) => item.date >= monthStartDate && item.date <= monthEndDate)
         );
         return;
@@ -126,7 +128,7 @@ export default function MonthlyPlanningPage() {
       const plan = await ensureMonthlyPlan();
       const details = await apiFetch<{ weekly_plan: MonthlyPlan; items: PlanItem[] }>(supabase, `/api/weekly-plans/${plan.id}`);
       setMonthlyPlan(details.weekly_plan);
-      setItems(details.items || []);
+      setItems((details.items || []).map((item) => ({ ...item, plan_class_id: details.weekly_plan.class_id })));
     } finally {
       setBusy(false);
     }
@@ -327,6 +329,14 @@ export default function MonthlyPlanningPage() {
     setViewActivity(item.activities);
   }
 
+  function journalHref(item: PlanItem) {
+    if (!item.activity_id) return null;
+    const classId = item.plan_class_id || (selectedClassId !== "all" ? selectedClassId : monthlyPlan?.class_id);
+    if (!classId) return null;
+    const query = new URLSearchParams({ turma: classId, atividade: item.activity_id, data: item.date });
+    return `/diario?${query.toString()}`;
+  }
+
   function updateManualField<K extends keyof ManualActivityForm>(key: K, value: ManualActivityForm[K]) {
     setManualForm((current) => ({ ...current, [key]: value }));
   }
@@ -429,7 +439,7 @@ export default function MonthlyPlanningPage() {
                                   openPlannedActivity(item);
                                 }
                               }}
-                              className="grid grid-cols-[5px_1fr_auto] items-center gap-2 rounded-lg bg-paper px-2 py-2 text-sm"
+                              className="grid grid-cols-[5px_1fr_auto_auto] items-center gap-2 rounded-lg bg-paper px-2 py-2 text-sm"
                               style={{ borderColor: color }}
                             >
                               <span className="h-full min-h-10 rounded-full" style={{ backgroundColor: color }} />
@@ -437,6 +447,17 @@ export default function MonthlyPlanningPage() {
                                 <span className="block truncate font-bold text-ink">{item.activities?.title || "Atividade removida"}</span>
                                 <span className="block text-xs font-semibold text-ink/55">{formatTime(item.start_time)}</span>
                               </span>
+                              {journalHref(item) ? (
+                                <Link
+                                  href={journalHref(item) || "/diario"}
+                                  onClick={(event) => event.stopPropagation()}
+                                  className="grid h-8 w-8 place-items-center rounded-md text-leaf hover:bg-mint"
+                                  title="Registrar aula no Diário"
+                                  aria-label={`Registrar aula no Diário: ${item.activities?.title || "atividade"}`}
+                                >
+                                  <ClipboardCheck size={15} />
+                                </Link>
+                              ) : null}
                               <button
                                 type="button"
                                 onClick={(event) => {
@@ -581,11 +602,22 @@ export default function MonthlyPlanningPage() {
                                   openPlannedActivity(item);
                                 }
                               }}
-                              className="grid w-full grid-cols-[5px_1fr_auto_auto] items-center gap-2 rounded-md px-1.5 py-1 text-left text-xs transition hover:bg-paper"
+                              className="grid w-full grid-cols-[5px_1fr_auto_auto_auto] items-center gap-2 rounded-md px-1.5 py-1 text-left text-xs transition hover:bg-paper"
                             >
                               <span className="h-5 rounded-full" style={{ backgroundColor: color }} />
                               <span className="truncate font-semibold text-ink">{item.activities?.title || "Atividade removida"}</span>
                               <span className="font-semibold text-ink/55">{formatTime(item.start_time)}</span>
+                              {journalHref(item) ? (
+                                <Link
+                                  href={journalHref(item) || "/diario"}
+                                  onClick={(event) => event.stopPropagation()}
+                                  className="text-leaf hover:text-leaf/75"
+                                  title="Registrar aula no Diário"
+                                  aria-label={`Registrar aula no Diário: ${item.activities?.title || "atividade"}`}
+                                >
+                                  <ClipboardCheck size={14} />
+                                </Link>
+                              ) : null}
                               <button
                                 type="button"
                                 onClick={(event) => {

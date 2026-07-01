@@ -9,6 +9,7 @@ import {
   FolderKanban,
   LayoutDashboard,
   LogOut,
+  NotebookPen,
   School,
   UserRound,
   UsersRound
@@ -22,9 +23,9 @@ const nav = [
   { href: "/atividades", label: "Atividades", icon: BookOpen },
   { href: "/alunos?view=classes", label: "Turmas", icon: School },
   { href: "/alunos?view=students", label: "Alunos", icon: UsersRound },
+  { href: "/diario", label: "Diário", icon: NotebookPen },
   { href: "/relatorios", label: "Relatórios", icon: FileText },
-  { href: "/planejamento", label: "Planejamento", icon: CalendarDays },
-  { href: "/perfil", label: "Perfil", icon: UserRound }
+  { href: "/planejamento", label: "Planejamento", icon: CalendarDays }
 ];
 
 const mobileNav = [
@@ -33,9 +34,9 @@ const mobileNav = [
   { href: "/atividades", label: "Atividades", icon: BookOpen },
   { href: "/alunos?view=classes", label: "Turmas", icon: School },
   { href: "/alunos?view=students", label: "Alunos", icon: UsersRound },
+  { href: "/diario", label: "Diário", icon: NotebookPen },
   { href: "/relatorios", label: "Relatórios", icon: FileText },
-  { href: "/planejamento", label: "Planejamento", icon: CalendarDays },
-  { href: "/perfil", label: "Perfil", icon: UserRound }
+  { href: "/planejamento", label: "Planejamento", icon: CalendarDays }
 ];
 
 export function AppShell({ children }: { children: React.ReactNode }) {
