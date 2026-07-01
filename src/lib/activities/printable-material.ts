@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { getAnthropicApiKey } from "@/lib/admin/system-settings";
 
 type AnthropicTextBlock = {
   type: "text";
@@ -673,12 +674,12 @@ async function refinePrintableCandidate(
 }
 
 async function callClaudeForJson(prompt: string, system: string, maxTokens: number) {
-  const { getAnthropicModel, requireServerEnv } = await import("@/lib/env");
+  const { getAnthropicModel } = await import("@/lib/env");
   const response = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
       "content-type": "application/json",
-      "x-api-key": requireServerEnv("ANTHROPIC_API_KEY"),
+      "x-api-key": await getAnthropicApiKey(),
       "anthropic-version": "2023-06-01"
     },
     body: JSON.stringify({

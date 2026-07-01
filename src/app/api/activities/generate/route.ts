@@ -2,7 +2,6 @@ import { fail, ok, readJson } from "@/lib/api/http";
 import { generateActivityWithClaude } from "@/lib/activities/claude";
 import { attachPrintableMaterialPlan } from "@/lib/activities/printable-material";
 import { activityGenerationInputSchema } from "@/lib/activities/types";
-import { canUsePrintableMaterial } from "@/lib/billing/plans";
 import {
   releaseActivityGeneration,
   reserveActivityGeneration,
@@ -26,7 +25,7 @@ export async function POST(request: Request) {
     const input = activityGenerationInputSchema.parse(body);
     reservation = await reserveActivityGeneration(user.id);
     const activity = await generateActivityWithClaude(input);
-    const printableMaterial = canUsePrintableMaterial(reservation.usage.plan_key)
+    const printableMaterial = reservation.usage.printable_material_enabled
       ? createPrintableAiMaterialMarker(activity)
       : null;
     const rawAiResponse = printableMaterial

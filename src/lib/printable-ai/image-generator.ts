@@ -5,12 +5,7 @@ export type GeneratedPrintableImage = {
 };
 
 export async function generatePrintableImage(prompt: string): Promise<GeneratedPrintableImage> {
-  const apiKey = process.env.OPENAI_API_KEY || process.env.IMAGE_GENERATION_API_KEY;
-  if (!apiKey) {
-    throw Object.assign(new Error("OPENAI_API_KEY ou IMAGE_GENERATION_API_KEY ausente para gerar Material Imprimível V2."), {
-      status: 503
-    });
-  }
+  const apiKey = await getImageGenerationApiKey();
 
   const endpoint = process.env.IMAGE_GENERATION_ENDPOINT || "https://api.openai.com/v1/images/generations";
   const model = process.env.IMAGE_GENERATION_MODEL || "gpt-image-2";
@@ -81,3 +76,4 @@ export async function generatePrintableImage(prompt: string): Promise<GeneratedP
 
   throw Object.assign(new Error("A GPT Image nao retornou PNG."), { status: 502 });
 }
+import { getImageGenerationApiKey } from "@/lib/admin/system-settings";

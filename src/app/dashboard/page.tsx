@@ -97,7 +97,7 @@ export default function DashboardPage() {
 
   return (
     <ProtectedPage title="Dashboard" hideHeader>
-      <section className="mb-8">
+      <section className="sticky top-[69px] z-10 -mx-4 mb-8 border-b border-ink/5 bg-white/95 px-4 pb-4 pt-1 backdrop-blur sm:-mx-6 sm:px-6 lg:top-0 lg:-mx-8 lg:px-8">
         <p className="text-xs font-bold uppercase tracking-[0.18em] text-leaf sm:text-sm">{formatHeroDate(now)}</p>
         <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>

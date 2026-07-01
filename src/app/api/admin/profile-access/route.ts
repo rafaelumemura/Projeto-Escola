@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { fail, ok, readJson } from "@/lib/api/http";
 import { planLimit, planPeriodDays } from "@/lib/billing/plans";
+import { getPlanConfiguration } from "@/lib/billing/plan-config";
 import { getBillingUsage } from "@/lib/billing/usage";
 import { createSupabaseAdminClient, getAuthenticatedUser } from "@/lib/supabase/server";
 
@@ -32,7 +33,8 @@ export async function PUT(request: Request) {
     }
 
     const now = new Date();
-    const periodDays = planPeriodDays(payload.plan_key);
+    const configuration = await getPlanConfiguration(payload.plan_key);
+    const periodDays = configuration?.period_days || planPeriodDays(payload.plan_key);
     const periodEnd = new Date(now.getTime() + periodDays * dayMs);
     const graceEnd = new Date(now.getTime() + (periodDays + 1) * dayMs);
     const { data: current, error: currentError } = await supabase
@@ -47,12 +49,12 @@ export async function PUT(request: Request) {
     if (currentError) throw currentError;
 
     const currentCycle = current?.current_period_end && new Date(current.current_period_end) > now ? current : null;
-    const activityLimit = planLimit(payload.plan_key);
+    const activityLimit = configuration?.activity_limit ?? planLimit(payload.plan_key);
     const subscriptionPayload = {
       plan_key: payload.plan_key,
       status: "active",
       activity_limit: activityLimit,
-      generated_count: currentCycle ? Math.min(currentCycle.generated_count || 0, activityLimit) : 0,
+      generated_count: currentCycle ? currentCycle.generated_count || 0 : 0,
       current_period_start: currentCycle ? currentCycle.current_period_start : now.toISOString(),
       current_period_end: currentCycle ? currentCycle.current_period_end : periodEnd.toISOString(),
       grace_ends_at: currentCycle ? currentCycle.grace_ends_at || graceEnd.toISOString() : graceEnd.toISOString(),

@@ -942,6 +942,85 @@ export type Database = {
           error_message?: string | null;
         };
       };
+      plan_configurations: {
+        Row: {
+          plan_key: "free" | "basic" | "complete" | "pro";
+          activity_limit: number;
+          collection_limit: number | null;
+          printable_material_limit: number;
+          period_days: number;
+          printable_material_enabled: boolean;
+          planning_skins_enabled: boolean;
+          updated_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          plan_key: "free" | "basic" | "complete" | "pro";
+          activity_limit: number;
+          collection_limit?: number | null;
+          printable_material_limit?: number;
+          period_days: number;
+          printable_material_enabled?: boolean;
+          planning_skins_enabled?: boolean;
+          updated_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          activity_limit?: number;
+          collection_limit?: number | null;
+          printable_material_limit?: number;
+          period_days?: number;
+          printable_material_enabled?: boolean;
+          planning_skins_enabled?: boolean;
+          updated_by?: string | null;
+          updated_at?: string;
+        };
+      };
+      admin_system_settings: {
+        Row: {
+          setting_key: string;
+          encrypted_value: string | null;
+          is_secret: boolean;
+          updated_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          setting_key: string;
+          encrypted_value?: string | null;
+          is_secret?: boolean;
+          updated_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          encrypted_value?: string | null;
+          is_secret?: boolean;
+          updated_by?: string | null;
+          updated_at?: string;
+        };
+      };
+      admin_setting_audit_logs: {
+        Row: {
+          id: string;
+          admin_user_id: string | null;
+          action: string;
+          target_key: string;
+          metadata: Json;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          admin_user_id?: string | null;
+          action: string;
+          target_key: string;
+          metadata?: Json;
+          created_at?: string;
+        };
+        Update: Record<string, never>;
+      };
       billing_subscriptions: {
         Row: {
           id: string;

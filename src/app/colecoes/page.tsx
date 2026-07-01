@@ -7,7 +7,6 @@ import { ActivityView } from "@/components/ui/ActivityView";
 import { UndoToast, useUndoableAction } from "@/components/ui/UndoToast";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { apiFetch } from "@/lib/api/client";
-import { collectionLimit } from "@/lib/billing/plans";
 import type { Database } from "@/lib/database.types";
 
 type Collection = Database["public"]["Tables"]["collections"]["Row"];
@@ -39,7 +38,7 @@ export default function CollectionsPage() {
   const pageColors = Array.from(
     new Set(collections.map((collection) => collection.color).filter((item): item is string => Boolean(item)))
   );
-  const limit = collectionLimit(usage?.plan_key);
+  const limit = usage?.collection_limit;
   const hasCollectionLimit = typeof limit === "number";
   const canCreateCollection = !usage || !hasCollectionLimit || collections.length < limit;
   const collectionLimitLabel = usage

@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, type ReactNode, useEffect, useMemo, useState } from "react";
-import { Camera, Check, CreditCard, LogOut, Mail, Moon, Palette, Save, Sun, UserRound } from "lucide-react";
+import { Camera, Check, CreditCard, LogOut, Mail, Moon, Palette, Save, Settings2, Sun, UserRound } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ProtectedPage } from "@/components/layout/ProtectedPage";
@@ -9,7 +9,7 @@ import { useAuth } from "@/components/auth/AuthProvider";
 import { useTheme } from "@/components/theme/ThemeProvider";
 import type { ThemeAccent, ThemeMode, UiFontFamily, UiFontScale } from "@/components/theme/ThemeProvider";
 import { apiFetch } from "@/lib/api/client";
-import { PLAN_DEFINITIONS, canUsePlanningSkins, planName, type PaidPlanKey } from "@/lib/billing/plans";
+import { PLAN_DEFINITIONS, planName, type PaidPlanKey } from "@/lib/billing/plans";
 import { normalizePlanningPdfSkill, planningPdfSkills, type PlanningPdfSkillKey } from "@/lib/planning/pdf-skills";
 
 type AccessRole = "admin" | "user";
@@ -51,7 +51,7 @@ export default function ProfilePage() {
   const [passwordBusy, setPasswordBusy] = useState(false);
   const [accessBusy, setAccessBusy] = useState(false);
   const canManageOwnAccess = (profile?.email || user?.email || "").toLowerCase() === ownerEmail;
-  const planningSkinsEnabled = canUsePlanningSkins(usage?.plan_key || profile?.plan);
+  const planningSkinsEnabled = Boolean(usage?.planning_skins_enabled);
   const savedPlanningSkill = normalizePlanningPdfSkill(profile?.planning_pdf_skill);
   const orderedPlanningSkills = useMemo(() => {
     const saved = planningPdfSkills.find((skill) => skill.key === savedPlanningSkill);
@@ -307,6 +307,13 @@ export default function ProfilePage() {
               <p className="text-sm text-ink/60">{profile?.email || user?.email}</p>
             </div>
           </div>
+
+          {profile?.is_admin ? (
+            <Link href="/admin" className="btn-primary mb-5 w-full sm:w-fit">
+              <Settings2 size={16} />
+              Abrir painel administrativo
+            </Link>
+          ) : null}
 
           <div className="grid gap-3">
             <Info label="E-mail" value={profile?.email || user?.email || "-"} />

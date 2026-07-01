@@ -1,4 +1,5 @@
-import { getAnthropicModel, requireServerEnv } from "@/lib/env";
+import { getAnthropicModel } from "@/lib/env";
+import { getAnthropicApiKey } from "@/lib/admin/system-settings";
 import { activitySchema, type ActivityGenerationInput, type ActivityPayload } from "@/lib/activities/types";
 
 type AnthropicTextBlock = {
@@ -138,7 +139,7 @@ export async function generateActivityWithClaude(input: ActivityGenerationInput)
     method: "POST",
     headers: {
       "content-type": "application/json",
-      "x-api-key": requireServerEnv("ANTHROPIC_API_KEY"),
+      "x-api-key": await getAnthropicApiKey(),
       "anthropic-version": "2023-06-01"
     },
     body: JSON.stringify({

@@ -1,4 +1,5 @@
-import { getAnthropicModel, requireServerEnv } from "@/lib/env";
+import { getAnthropicModel } from "@/lib/env";
+import { getAnthropicApiKey } from "@/lib/admin/system-settings";
 import { createSupabaseAdminClient } from "@/lib/supabase/server";
 import type { Json } from "@/lib/database.types";
 import {
@@ -121,7 +122,7 @@ async function validateSimilarMaterialWithClaude(
       method: "POST",
       headers: {
         "content-type": "application/json",
-        "x-api-key": requireServerEnv("ANTHROPIC_API_KEY"),
+        "x-api-key": await getAnthropicApiKey(),
         "anthropic-version": "2023-06-01"
       },
       body: JSON.stringify({

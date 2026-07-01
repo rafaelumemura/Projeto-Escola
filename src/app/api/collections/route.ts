@@ -1,6 +1,5 @@
 import { collectionCreateSchema } from "@/lib/api/schemas";
 import { created, fail, ok, readJson } from "@/lib/api/http";
-import { collectionLimit } from "@/lib/billing/plans";
 import { getBillingUsage } from "@/lib/billing/usage";
 import { getAuthenticatedUser } from "@/lib/supabase/server";
 
@@ -47,7 +46,7 @@ export async function POST(request: Request) {
     const { user, supabase } = await getAuthenticatedUser(request);
     const payload = collectionCreateSchema.parse(await readJson<unknown>(request));
     const usage = await getBillingUsage(user.id);
-    const limit = collectionLimit(usage.plan_key);
+    const limit = usage.collection_limit;
 
     if (typeof limit === "number") {
       const { count, error: countError } = await supabase

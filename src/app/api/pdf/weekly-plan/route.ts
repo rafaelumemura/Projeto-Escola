@@ -1,6 +1,5 @@
 import { z } from "zod";
 import { fail, readJson } from "@/lib/api/http";
-import { canUsePlanningSkins } from "@/lib/billing/plans";
 import { getBillingUsage } from "@/lib/billing/usage";
 import { buildWeeklyPlanPdf } from "@/lib/pdf/builders";
 import { normalizePlanningPdfSkill } from "@/lib/planning/pdf-skills";
@@ -58,7 +57,7 @@ export async function POST(request: Request) {
         .single(),
       getBillingUsage(user.id)
     ]);
-    const skill = canUsePlanningSkins(usage.plan_key)
+    const skill = usage.planning_skins_enabled
       ? normalizePlanningPdfSkill(payload.skill || profile?.planning_pdf_skill)
       : "grade";
 

@@ -2,7 +2,8 @@ import { createHash } from "crypto";
 import { z } from "zod";
 import { fail, ok, readJson } from "@/lib/api/http";
 import type { Database, Json } from "@/lib/database.types";
-import { getAnthropicModel, requireServerEnv } from "@/lib/env";
+import { getAnthropicModel } from "@/lib/env";
+import { getAnthropicApiKey } from "@/lib/admin/system-settings";
 import {
   buildLessonMetricSummary,
   type LessonMetricDefinition,
@@ -422,7 +423,7 @@ async function callClaudeForReport(input: {
     method: "POST",
     headers: {
       "content-type": "application/json",
-      "x-api-key": requireServerEnv("ANTHROPIC_API_KEY"),
+      "x-api-key": await getAnthropicApiKey(),
       "anthropic-version": "2023-06-01"
     },
     body: JSON.stringify({

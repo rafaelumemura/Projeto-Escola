@@ -16,7 +16,6 @@ import {
 import { useAuth } from "@/components/auth/AuthProvider";
 import { apiFetch, downloadPdf } from "@/lib/api/client";
 import { activityTypes, methodologies } from "@/lib/activities/types";
-import { canUsePrintableMaterial } from "@/lib/billing/plans";
 import type { Database, Json } from "@/lib/database.types";
 import type { PrintableMaterialPlan } from "@/lib/activities/printable-material";
 
@@ -437,14 +436,14 @@ export default function ActivitiesPage() {
   }
 
   async function downloadPrintableMaterial(activity: ActivityWithCollections) {
-    if (!canUsePrintableMaterial(usage?.plan_key)) {
+    if (!usage?.printable_material_enabled) {
       setMessage("Material imprimível disponível nos planos Completo e Pro.");
       return;
     }
 
     setBusy(true);
     setMessage(null);
-    const materialV2Enabled = canUsePrintableMaterial(usage?.plan_key);
+    const materialV2Enabled = Boolean(usage?.printable_material_enabled);
     const savedMaterial = getSavedPrintableMaterialPlan(activity.raw_ai_response);
     const willGenerateV2Material = materialV2Enabled && !hasGeneratedPrintableFile(savedMaterial);
     const minimumProgressMs = printableProgressDurations.reduce((total, duration) => total + duration, 0) + 1500;
@@ -634,9 +633,9 @@ export default function ActivitiesPage() {
 
               {(() => {
                 const material = getSavedPrintableMaterialPlan(selected.raw_ai_response);
-                const materialV2Enabled = canUsePrintableMaterial(usage?.plan_key);
+                const materialV2Enabled = Boolean(usage?.printable_material_enabled);
                 const materialGenerated = materialV2Enabled ? hasGeneratedPrintableFile(material) : Boolean(material?.has_material);
-                const materialAllowed = canUsePrintableMaterial(usage?.plan_key);
+                const materialAllowed = Boolean(usage?.printable_material_enabled);
                 const materialReason = !materialAllowed
                   ? "Material imprimível disponível nos planos Completo e Pro."
                   : printableMaterialReason(material, "Esta atividade ainda não possui análise de material imprimível salva.");
@@ -682,7 +681,7 @@ export default function ActivitiesPage() {
                 );
               })()}
 
-              {selected && usage && !canUsePrintableMaterial(usage.plan_key) ? (
+              {selected && usage && !usage.printable_material_enabled ? (
                 <p className="rounded-lg border border-ink/10 bg-white px-4 py-3 text-sm text-ink/65">
                   Material imprimível disponível nos planos Completo e Pro.{" "}
                   <Link href="/planos" className="font-bold text-leaf underline decoration-leaf/35 underline-offset-2">
@@ -691,7 +690,7 @@ export default function ActivitiesPage() {
                 </p>
               ) : null}
 
-              {selected && canUsePrintableMaterial(usage?.plan_key) && !getSavedPrintableMaterialPlan(selected.raw_ai_response) ? (
+              {selected && usage?.printable_material_enabled && !getSavedPrintableMaterialPlan(selected.raw_ai_response) ? (
                 <p className="rounded-lg border border-ink/10 bg-white px-4 py-3 text-sm text-ink/65">
                   Esta atividade ainda não possui material salvo. Use o botão “Gerar material” para criar o arquivo imprimível.
                 </p>

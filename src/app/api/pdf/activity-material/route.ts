@@ -5,12 +5,10 @@ import {
   getSavedPrintableMaterialPlan,
   type PrintableMaterialPlan
 } from "@/lib/activities/printable-material";
-import { canUsePrintableMaterial } from "@/lib/billing/plans";
 import { getBillingUsage } from "@/lib/billing/usage";
 import type { Json } from "@/lib/database.types";
 import { buildActivityMaterialPdf } from "@/lib/pdf/builders";
 import {
-  PRINTABLE_AI_MONTHLY_LIMIT,
   activityToVisualBriefing,
   createPrintableAiMaterialMarker,
   getPrintableAiMonthlyUsage,
@@ -38,7 +36,7 @@ export async function POST(request: Request) {
     const { user, supabase } = await getAuthenticatedUser(request);
     const usage = await getBillingUsage(user.id);
 
-    if (!canUsePrintableMaterial(usage.plan_key)) {
+    if (!usage.printable_material_enabled) {
       throw Object.assign(new Error("Material imprimível disponível nos planos Completo e Pro."), { status: 403 });
     }
 
@@ -54,7 +52,7 @@ export async function POST(request: Request) {
 
     const materialPlan = getSavedPrintableMaterialPlan(activity.raw_ai_response);
 
-    if (canUsePrintableMaterial(usage.plan_key)) {
+    if (usage.printable_material_enabled) {
       const existingFile = getGeneratedPrintableFile(materialPlan);
 
       if (existingFile) {
@@ -74,7 +72,7 @@ export async function POST(request: Request) {
       }
 
       const monthlyUsage = await getPrintableAiMonthlyUsage(user.id, usage.current_period_start);
-      if (monthlyUsage >= PRINTABLE_AI_MONTHLY_LIMIT) {
+      if (monthlyUsage >= usage.printable_material_limit) {
         await logPrintableAiGeneration({
           userId: user.id,
           activityId: activity.id,
@@ -82,10 +80,10 @@ export async function POST(request: Request) {
           generationTime: 0,
           status: "failed",
           eventType: "blocked",
-          errorMessage: `Limite mensal de ${PRINTABLE_AI_MONTHLY_LIMIT} materiais imprimiveis atingido.`
+          errorMessage: `Limite mensal de ${usage.printable_material_limit} materiais imprimiveis atingido.`
         });
         throw Object.assign(
-          new Error(`Você atingiu o limite mensal de ${PRINTABLE_AI_MONTHLY_LIMIT} materiais imprimíveis. Os materiais já gerados continuam disponíveis para download.`),
+          new Error(`Você atingiu o limite mensal de ${usage.printable_material_limit} materiais imprimíveis. Os materiais já gerados continuam disponíveis para download.`),
           { status: 429 }
         );
       }

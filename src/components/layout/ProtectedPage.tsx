@@ -85,7 +85,7 @@ export function ProtectedPage({
     <Suspense fallback={null}>
       <AppShell>
         {!hideHeader ? (
-          <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+          <div className="sticky top-[69px] z-10 -mx-4 mb-6 flex flex-col gap-4 border-b border-ink/5 bg-white/95 px-4 pb-4 pt-1 backdrop-blur sm:-mx-6 sm:flex-row sm:items-end sm:justify-between sm:px-6 lg:top-0 lg:-mx-8 lg:px-8">
             <div className="min-w-0">
               <h1 className="text-2xl font-bold text-ink sm:text-3xl">
                 {title}
@@ -107,6 +107,7 @@ function pageHeaderAccent(pathname: string) {
   if (pathname.startsWith("/gerar")) return "#2F80ED";
   if (pathname.startsWith("/alunos")) return "#7E57C2";
   if (pathname.startsWith("/diario")) return "#2F80ED";
+  if (pathname.startsWith("/admin")) return "#7E57C2";
   if (pathname.startsWith("/relatorios")) return "#00B3AF";
   if (pathname.startsWith("/colecoes")) return "#C98117";
   if (pathname.startsWith("/planejamento")) return "#FF4F64";

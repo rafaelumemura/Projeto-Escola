@@ -1,4 +1,5 @@
-import { getAnthropicModel, requireServerEnv } from "@/lib/env";
+import { getAnthropicModel } from "@/lib/env";
+import { getAnthropicApiKey } from "@/lib/admin/system-settings";
 import type { PrintableMaterialPlan } from "@/lib/activities/printable-material";
 import type { Json } from "@/lib/database.types";
 import { createSupabaseAdminClient } from "@/lib/supabase/server";
@@ -13,7 +14,6 @@ type AnthropicResponse = {
 };
 
 export const PRINTABLE_AI_PROMPT_VERSION = "printable-system-prompt-v3";
-export const PRINTABLE_AI_MONTHLY_LIMIT = 50;
 
 export type ActivityForVisualBriefing = {
   id?: string | null;
@@ -110,7 +110,7 @@ export async function activityToVisualBriefing(activity: ActivityForVisualBriefi
       method: "POST",
       headers: {
         "content-type": "application/json",
-        "x-api-key": requireServerEnv("ANTHROPIC_API_KEY"),
+        "x-api-key": await getAnthropicApiKey(),
         "anthropic-version": "2023-06-01"
       },
       body: JSON.stringify({

@@ -12,9 +12,9 @@ import {
   type SubscriptionStatus
 } from "@/lib/billing/plans";
 import {
-  PRINTABLE_AI_MONTHLY_LIMIT,
   getPrintableAiMonthlyUsage
 } from "@/lib/printable-ai/activity-to-visual-briefing";
+import { getPlanConfiguration } from "@/lib/billing/plan-config";
 
 type SubscriptionRow = {
   id: string;
@@ -68,14 +68,15 @@ async function createUsageFromProfilePlan(userId: string) {
   }
 
   const now = profile.plan === "free" && profile.created_at ? new Date(profile.created_at) : new Date();
-  const periodDays = planPeriodDays(profile.plan);
+  const configuration = await getPlanConfiguration(profile.plan);
+  const periodDays = configuration?.period_days || planPeriodDays(profile.plan);
   const { data, error: insertError } = await supabase
     .from("billing_subscriptions")
     .insert({
       user_id: userId,
       plan_key: profile.plan,
       status: "active",
-      activity_limit: planLimit(profile.plan),
+      activity_limit: configuration?.activity_limit ?? planLimit(profile.plan),
       generated_count: 0,
       current_period_start: now.toISOString(),
       current_period_end: new Date(now.getTime() + periodDays * dayMs).toISOString(),
@@ -157,7 +158,11 @@ async function reconcileGeneratedCount(subscription: SubscriptionRow) {
     subscription.current_period_start,
     subscription.current_period_end
   );
-  const cappedGeneratedCount = Math.min(subscription.activity_limit || planLimit(subscription.plan_key), actualGeneratedCount);
+  const configuration = await getPlanConfiguration(subscription.plan_key);
+  const cappedGeneratedCount = Math.min(
+    configuration?.activity_limit ?? (subscription.activity_limit || planLimit(subscription.plan_key)),
+    actualGeneratedCount
+  );
 
   if (cappedGeneratedCount <= subscription.generated_count) {
     return subscription;
@@ -242,14 +247,15 @@ async function updateSubscriptionStatus(subscription: SubscriptionRow, status: "
 
 async function subscriptionToUsage(subscription: SubscriptionRow): Promise<BillingUsage> {
   const planKey = isPlanKey(subscription.plan_key) ? subscription.plan_key : null;
-  const limit = subscription.activity_limit || planLimit(planKey);
+  const configuration = await getPlanConfiguration(planKey);
+  const limit = configuration?.activity_limit ?? (subscription.activity_limit || planLimit(planKey));
   const generated = Math.max(0, subscription.generated_count || 0);
   const remaining = Math.max(0, limit - generated);
-  const printableMaterialEnabled = canUsePrintableMaterial(planKey);
+  const printableMaterialEnabled = configuration?.printable_material_enabled ?? canUsePrintableMaterial(planKey);
   const printableMaterialGenerated = printableMaterialEnabled
     ? await getPrintableAiMonthlyUsage(subscription.user_id, subscription.current_period_start)
     : 0;
-  const printableMaterialLimit = printableMaterialEnabled ? PRINTABLE_AI_MONTHLY_LIMIT : 0;
+  const printableMaterialLimit = printableMaterialEnabled ? configuration?.printable_material_limit || 0 : 0;
   const now = new Date();
   const periodEnd = new Date(subscription.current_period_end);
   const canGenerate = subscription.status === "active" && remaining > 0 && now <= periodEnd;
@@ -261,11 +267,13 @@ async function subscriptionToUsage(subscription: SubscriptionRow): Promise<Billi
     status: subscription.status,
     generated_count: generated,
     activity_limit: limit,
+    collection_limit: configuration?.collection_limit ?? null,
     remaining,
     printable_material_generated_count: printableMaterialGenerated,
     printable_material_limit: printableMaterialLimit,
     printable_material_remaining: Math.max(0, printableMaterialLimit - printableMaterialGenerated),
     printable_material_enabled: printableMaterialEnabled,
+    planning_skins_enabled: configuration?.planning_skins_enabled ?? false,
     current_period_start: subscription.current_period_start,
     current_period_end: subscription.current_period_end,
     grace_ends_at: subscription.grace_ends_at,

@@ -3,7 +3,6 @@ import {
   attachPrintableMaterialPlan,
   getSavedPrintableMaterialPlan
 } from "@/lib/activities/printable-material";
-import { canUsePrintableMaterial } from "@/lib/billing/plans";
 import { getBillingUsage } from "@/lib/billing/usage";
 import type { Json } from "@/lib/database.types";
 import { createPrintableAiMaterialMarker } from "@/lib/printable-ai/activity-to-visual-briefing";
@@ -17,7 +16,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const { user, supabase } = await getAuthenticatedUser(request);
     const usage = await getBillingUsage(user.id);
 
-    if (!canUsePrintableMaterial(usage.plan_key)) {
+    if (!usage.printable_material_enabled) {
       throw Object.assign(new Error("Material imprimível disponível nos planos Completo e Pro."), { status: 403 });
     }
 
